@@ -2,10 +2,15 @@
 	import { onMount } from 'svelte';
 	import Viewport from '../lib/components/viewport.svelte';
 	import LNB from '../lib/components/LNB.svelte';
-
+	let viewportRef;
 	let glbFile = null;
 	function handleGLBImport(event) {
 		glbFile = event.detail.file;
+	}
+
+	function handleSelectAsset(event) {
+		const { assetName } = event.detail;
+		viewportRef.loadNewModel(assetName);
 	}
 
 	onMount(() => {
@@ -15,10 +20,10 @@
 
 <main>
 	<section id="LNB">
-		<LNB on:importGLB={handleGLBImport} />
+		<LNB on:importGLB={handleGLBImport} on:selectAsset={handleSelectAsset} />
 	</section>
 	<section id="Viewport">
-		<Viewport {glbFile} />
+		<Viewport {glbFile} bind:this={viewportRef} />
 	</section>
 </main>
 
@@ -30,6 +35,7 @@
 
 		height: 100%;
 		width: 100%;
+		overflow: hidden;
 	}
 
 	section {
@@ -38,7 +44,7 @@
 	}
 
 	#LNB {
-		width: 20vmin; /* 30% of the smaller viewport dimension */
+		width: 30vmin; /* 30% of the smaller viewport dimension */
 		border: 1px solid black;
 		background-color: lightgreen;
 	}

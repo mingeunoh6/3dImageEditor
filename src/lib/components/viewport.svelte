@@ -24,6 +24,7 @@
 	let currentSelectedObj = null;
 
 	$: if (glbFile) {
+		clearScene();
 		glbImporter
 			.importGLB(glbFile)
 			.then((model) => {
@@ -32,6 +33,63 @@
 			})
 			.catch((error) => {
 				console.error('Error importing GLB file', error);
+			});
+
+		glbFile = null;
+	}
+
+	function clearScene() {
+		//reset glb imported outside
+
+		//reset scene
+		while (scene.children.length > 0) {
+			scene.remove(scene.children[0]);
+		}
+
+		//reset scene1
+		while (scene1.children.length > 0) {
+			scene1.remove(scene1.children[0]);
+		}
+
+		//reset scene2
+		while (scene2.children.length > 0) {
+			scene2.remove(scene2.children[0]);
+		}
+
+		//clean up renderers
+
+		if (renderer) {
+			renderer.dispose();
+		}
+
+		if (renderRenderer) {
+			renderRenderer.dispose();
+		}
+
+		if (passRenderer) {
+			passRenderer.dispose();
+		}
+
+		if (addedModel.length > 0) {
+			addedModel = [];
+		}
+	}
+
+	// Function to load a new GLB model
+	function loadNewModel(assetName) {
+		clearScene();
+		const filePath = `glb/${assetName}`; // Update this path as needed
+		fetch(filePath)
+			.then((res) => res.blob())
+			.then((blob) => {
+				const file = new File([blob], assetName);
+				glbImporter
+					.importGLB(file)
+					.then((model) => {
+						console.log('GLB model added to the scene', model);
+						addedModel.push(model);
+					})
+					.catch((error) => console.error('Error loading model:', error));
 			});
 	}
 
@@ -104,6 +162,13 @@
 			console.error('Error loading HDR:', error);
 		}
 
+		//background
+		// // Load background texture
+		// const textureLoader = new THREE.TextureLoader();
+		// const backgroundTexture = await textureLoader.loadAsync('/bg/bg_1.jpeg');
+		// backgroundTexture.colorSpace = THREE.SRGBColorSpace;
+		// scene.background = backgroundTexture;
+
 		// Add custom directional lights
 		const directionalLight1 = new CustomDirectionalLight(0xffffff, 1, [0, 1, -3]);
 		const directionalLight2 = new CustomDirectionalLight(0xffffff, 0.5, [-2, 3, 2]);
@@ -155,16 +220,32 @@
 		}
 
 		// Create off-screen renderers
-		const offscreenRenderRenderer = new THREE.WebGLRenderer({ antialias: true });
-		offscreenRenderRenderer.setSize(1024, 1024);
-		const offscreenPassRenderer = new THREE.WebGLRenderer({ antialias: true });
-		offscreenPassRenderer.setSize(1024, 1024);
-		const offscreenMainRenderer = new THREE.WebGLRenderer({ antialias: true });
-		offscreenMainRenderer.setSize(1024, 1024);
+		// Reuse or create off-screen renderers
+		if (!this.offscreenRenderRenderer) {
+			this.offscreenRenderRenderer = new THREE.WebGLRenderer({ antialias: true });
+			this.offscreenRenderRenderer.setSize(1024, 1024);
+		} else {
+			this.offscreenRenderRenderer.clear();
+		}
+
+		if (!this.offscreenPassRenderer) {
+			this.offscreenPassRenderer = new THREE.WebGLRenderer({ antialias: true });
+			this.offscreenPassRenderer.setSize(1024, 1024);
+		} else {
+			this.offscreenPassRenderer.clear();
+		}
+
+		if (!this.offscreenMainRenderer) {
+			this.offscreenMainRenderer = new THREE.WebGLRenderer({ antialias: true });
+			this.offscreenMainRenderer.setSize(1024, 1024);
+		} else {
+			this.offscreenMainRenderer.clear();
+		}
 
 		// Clone object for render pass 1
 		const maskMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-
+		maskMat.side = THREE.DoubleSide;
+		maskMat.alphaTest = 0.5;
 		renderpass1obj = addedModel[0].clone();
 		renderpass1obj.traverse((child) => {
 			if (child.isMesh) {
@@ -175,7 +256,7 @@
 		scene1.add(renderpass1obj);
 		console.log('Image output render');
 		renderRenderer.render(scene1, camera);
-		offscreenRenderRenderer.render(scene1, camera);
+		this.offscreenRenderRenderer.render(scene1, camera);
 
 		// Clone object for render pass 2
 		renderpass2obj = addedModel[0].clone();
@@ -216,21 +297,26 @@
 		scene2.add(renderpass2obj);
 		console.log('Pass output render');
 		passRenderer.render(scene2, camera);
-		offscreenPassRenderer.render(scene2, camera);
+		this.offscreenPassRenderer.render(scene2, camera);
 
 		// Render the main scene to the off-screen renderer
-		offscreenMainRenderer.render(scene, camera);
+		this.offscreenMainRenderer.render(scene, camera);
 
 		// Save rendered scenes as PNG images from off-screen renderers
-		const renderDataUrl = offscreenRenderRenderer.domElement.toDataURL('image/png');
-		const passDataUrl = offscreenPassRenderer.domElement.toDataURL('image/png');
-		const viewportDataUrl = offscreenMainRenderer.domElement.toDataURL('image/png');
+		const renderDataUrl = this.offscreenRenderRenderer.domElement.toDataURL('image/png');
+		const passDataUrl = this.offscreenPassRenderer.domElement.toDataURL('image/png');
+		const viewportDataUrl = this.offscreenMainRenderer.domElement.toDataURL('image/png');
 
 		// Create download links
 		setTimeout(() => {
 			downloadImage(viewportDataUrl, 'viewport_scene.png');
 			downloadImage(renderDataUrl, 'rendered_scene.png');
 			downloadImage(passDataUrl, 'pass_scene.png');
+
+			// Clean up off-screen renderers
+			this.offscreenRenderRenderer.dispose();
+			this.offscreenPassRenderer.dispose();
+			this.offscreenMainRenderer.dispose();
 		}, 1000);
 	}
 	function downloadImage(dataUrl, fileName) {
@@ -262,6 +348,8 @@
 			controls.dispose();
 		};
 	});
+
+	export { loadNewModel };
 </script>
 
 <div id="viewport-main-wrapper">
@@ -308,6 +396,7 @@
 		width: 70vmin; /* 50% of the smaller viewport dimension */
 		height: 70vmin;
 		border: 1px solid black;
+		background-color: var(--background-color);
 	}
 
 	#preview-wrapper {

@@ -11,69 +11,157 @@
 		}
 	}
 
+	function handleAssetSelection(assetName) {
+		dispatch('selectAsset', { assetName });
+	}
+
 	onMount(() => {
 		console.log('Hello LNB component');
 	});
 </script>
 
 <section>
-	<div class="main-title">
-		<h5>3D Masking Prototype</h5>
-	</div>
-	<div class="sub-title-lv1">
-		<p>ver 0.1.2</p>
-	</div>
-	<div class="sub-title-lv1">
-		<p>by MIN GEUN</p>
-	</div>
-	<div class="sub-title">
-		<h5>제품 GLB 업로드</h5>
-	</div>
-	<div class="sub-card">
-		<input
-			type="file"
-			id="glb-import"
-			accept=".glb,.gltf"
-			style="display: none;"
-			on:change={handleGLBImport}
-		/>
-		<button on:click={() => document.getElementById('glb-import').click()}>GLB 불러오기</button>
-	</div>
-	<div class="sub-title">
-		<h5>사용법</h5>
-	</div>
-	<div class="sub-card">
-		<p>
-			1. 위 버튼을 클릭해 GLB 파일을 불러옵니다.<br /><br />
+	<div class="sectionWrapper">
+		<div class="main-title">
+			<h5>3D Masking Prototype</h5>
+		</div>
+		<div class="sub-title-lv1">
+			<p>ver 0.1.2</p>
+		</div>
+		<div class="sub-title-lv1">
+			<p>by MIN GEUN</p>
+		</div>
+		<div class="sub-title">
+			<h5>제품 GLB 업로드</h5>
+		</div>
+		<div class="sub-card">
+			<input
+				type="file"
+				id="glb-import"
+				accept=".glb,.gltf"
+				style="display: none;"
+				on:change={handleGLBImport}
+			/>
+			<button on:click={() => document.getElementById('glb-import').click()}>GLB 불러오기</button>
+		</div>
+		<div class="sub-title">
+			<h5>테스트 어셋 목록</h5>
+		</div>
+		<div class="sub-card">
+			<ul class="product-asset-list">
+				<li>
+					<div class="asset-item">
+						<p>식기세척기</p>
+						<button on:click={() => handleAssetSelection('dishwasher_Web_10_1024_png.glb')}
+							>사용하기</button
+						>
+					</div>
+				</li>
+				<li>
+					<div class="asset-item">
+						<p>벽걸이 에어컨</p>
+						<button on:click={() => handleAssetSelection('rac_s1_Web_6_1024_png.glb')}
+							>사용하기</button
+						>
+					</div>
+				</li>
+				<li>
+					<div class="asset-item">
+						<p>로봇클리너</p>
+						<button on:click={() => handleAssetSelection('robotcleaner_Web_20_1024_png_rS1.glb')}
+							>사용하기</button
+						>
+					</div>
+				</li>
+				<li>
+					<div class="asset-item">
+						<p>스타일러</p>
+						<button on:click={() => handleAssetSelection('styler_Web_10_1024_png.glb')}
+							>사용하기</button
+						>
+					</div>
+				</li>
+				<li>
+					<div class="asset-item">
+						<p>얼음정수기 냉장고</p>
+						<button
+							on:click={() => handleAssetSelection('SXS_VS_GSLV70MCT_00101_Web_10_1024_png.glb')}
+							>사용하기</button
+						>
+					</div>
+				</li>
+				<li>
+					<div class="asset-item">
+						<p>진공청소기</p>
+						<button on:click={() => handleAssetSelection('vacuumcleaner_Web_10_1024_png.glb')}
+							>사용하기</button
+						>
+					</div>
+				</li>
+				<li>
+					<div class="asset-item">
+						<p>프라엘 더마세라 BLQ1</p>
+						<button on:click={() => handleAssetSelection('BLQ1_blend_export.glb')}>사용하기</button>
+					</div>
+				</li>
+				<li>
+					<div class="asset-item">
+						<p>2018-벤츠-AMG G65 블랙</p>
+						<button on:click={() => handleAssetSelection('2018_mercedes-amg_g65_final_edition.glb')}
+							>사용하기</button
+						>
+					</div>
+				</li>
+			</ul>
+		</div>
+		<div class="sub-title">
+			<h5>사용법</h5>
+		</div>
+		<div class="sub-card">
+			<p>
+				1. 테스트 어셋 중에 선택하거나 GLB 불러오기 버튼을 클릭해 파일을 불러옵니다.<br />
+				<span style="color: red;"
+					>파일이 50MB 이상으로 너무 크면 불러오는데 오래걸려요, 기다려주세요</span
+				><br /><br />
 
-			2. 불러온 GLB 파일은 중앙의 뷰포트에 표시됩니다.<br /><br />
+				2. 불러온 GLB 파일은 중앙의 뷰포트에 표시됩니다.<br /><br />
 
-			3. 뷰포트에서 마우스 드래그로 회전, 확대, 이동이 가능합니다.<br /><br />
+				3. 뷰포트에서 마우스 왼쪽 드래그로 회전, 오른족 드래그로 이동이 가능합니다. 마우스 휠로
+				확대/축소 하세요.<br /><br />
 
-			4. 원하는 각도로 조정한 뒤 뷰포트 아래의 마스크 다운로드 버튼을 클릭하세요.<br /><br />
+				4. 원하는 각도로 조정한 뒤 뷰포트 아래의 마스크 다운로드 버튼을 클릭하세요.<br /><br />
 
-			5. 다운로드 받은 이미지들을 ComfyUI의 인풋으로 사용하세요.<br /><br />
-			<span style="color: red;">
-				!! 새로운 제품을 업로드하려면 새로고침 후 다시 이용해주세요. !!<br /><br />
-				업로드 및 다운로드한 파일은 별도로 외부로 전송되거나 저장되지 않습니다. <br /><br /></span
-			>
-		</p>
-	</div>
-	<!-- <div class="sub-title">
+				5. 다운로드 받은 이미지들을 ComfyUI의 인풋으로 사용하세요.<br /><br />
+				<span style="color: red;">
+					!! 새로운 제품을 업로드하려면 새로고침 후 다시 이용해주세요. !!<br /><br />
+					업로드 및 다운로드한 파일은 별도로 외부로 전송되거나 저장되지 않습니다. <br /><br /></span
+				>
+			</p>
+		</div>
+		<!-- <div class="sub-title">
 		<h5>UPLOAD HDRI</h5>
 	</div>
 	<div class="sub-card">
 		<button id="hdr-import-btn">Import HDR</button>
 	</div> -->
+	</div>
 </section>
 
 <style>
 	section {
 		box-sizing: border-box;
 		width: 100%; /* 30% of the smaller viewport dimension */
-		height: 100%;
-
+		height: 100vh;
+		overflow: hidden;
 		background-color: var(--background-color);
+	}
+	.sectionWrapper {
+		display: flex;
+		flex-direction: column;
+
+		width: 100%;
+		height: 100%;
+		overflow: auto;
 	}
 
 	.main-title {
@@ -114,13 +202,13 @@
 
 	.sub-card {
 		display: flex;
-		justify-content: center;
+		justify-content: flex-start;
 		align-items: center;
 		flex-direction: column;
 		color: var(--text-color);
 		box-sizing: border-box;
 		width: 100%;
-		padding: 8px;
+		padding: 6px;
 		border: 1px solid var(--border-color);
 		background-color: var(--background-color);
 	}
@@ -143,5 +231,30 @@
 	button:hover {
 		background-color: var(--accent-hover-color);
 		cursor: pointer;
+	}
+
+	.asset-item {
+		box-sizing: border-box;
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		width: 100%;
+	}
+
+	.asset-item button {
+		width: 30%;
+	}
+	ul {
+		list-style-type: none;
+		padding: 0;
+		margin: 0;
+		display: flex;
+		flex-direction: column;
+		width: 100%;
+	}
+	li {
+		border: 1px solid var(--border-color);
+		padding: 0;
+		margin: 0;
 	}
 </style>
