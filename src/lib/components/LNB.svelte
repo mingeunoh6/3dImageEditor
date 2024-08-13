@@ -101,7 +101,7 @@
 				<li>
 					<div class="asset-item">
 						<p>프라엘 더마세라 BLQ1</p>
-						<button on:click={() => handleAssetSelection('BLQ1_blend_export.glb')}>사용하기</button>
+						<button on:click={() => handleAssetSelection('BLQ1_remesh.glb')}>사용하기</button>
 					</div>
 				</li>
 				<li>
