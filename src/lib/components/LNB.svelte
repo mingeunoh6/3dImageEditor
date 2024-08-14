@@ -1,7 +1,9 @@
 <script>
 	import { onMount, createEventDispatcher } from 'svelte';
 
-	import { glbFileStore } from '$lib/components/stores/lnb_store';
+	let fov = 10;
+	let envMapIntensity = 1;
+	let isBackground = false;
 
 	const dispatch = createEventDispatcher();
 	function handleGLBImport(event) {
@@ -10,9 +12,25 @@
 			dispatch('importGLB', { file });
 		}
 	}
+	function handleBGImport(event) {
+		isBackground = true;
+		const file = event.target.files[0];
+		if (file) {
+			dispatch('importBG', { file });
+		}
+	}
 
 	function handleAssetSelection(assetName) {
 		dispatch('selectAsset', { assetName });
+	}
+
+	function handleCameraFov(e) {
+		fov = e.target.value;
+		dispatch('changeFov', { fov });
+	}
+	function handleEnvMapIntensity(e) {
+		envMapIntensity = e.target.value;
+		dispatch('changeEnvMapIntensity', { envMapIntensity });
 	}
 
 	onMount(() => {
@@ -26,7 +44,7 @@
 			<h5>3D Masking Prototype</h5>
 		</div>
 		<div class="sub-title-lv1">
-			<p>ver 0.1.2</p>
+			<p>ver 0.2.0</p>
 		</div>
 		<div class="sub-title-lv1">
 			<p>by MIN GEUN</p>
@@ -43,6 +61,49 @@
 				on:change={handleGLBImport}
 			/>
 			<button on:click={() => document.getElementById('glb-import').click()}>GLB 불러오기</button>
+		</div>
+		<div class="sub-title">
+			<h5>배경 이미지 업로드</h5>
+		</div>
+		<div class="sub-card">
+			<input
+				type="file"
+				id="bg-import"
+				accept=".png,.jpg,.jpeg, .webp"
+				style="display: none;"
+				on:change={handleBGImport}
+			/>
+			<button on:click={() => document.getElementById('bg-import').click()}>배경 불러오기</button>
+
+			<!-- <div>
+				<label for="envMapIntensity">환경맵 강도: {envMapIntensity}</label>
+
+				<input
+					type="range"
+					id="envMapIntensity"
+					name="envMapIntensity"
+					min="0"
+					max="10"
+					step="0.1"
+					value="10"
+					on:input={(e) => handleEnvMapIntensity(e)}
+				/>
+			</div> -->
+		</div>
+		<div class="sub-title">
+			<h5>카메라 화각 변경</h5>
+		</div>
+		<div class="sub-card">
+			<label for="fov">FOV: {fov}</label>
+			<input
+				type="range"
+				id="fov"
+				name="fov"
+				min="1"
+				max="179"
+				value="10"
+				on:input={(e) => handleCameraFov(e)}
+			/>
 		</div>
 		<div class="sub-title">
 			<h5>테스트 어셋 목록</h5>

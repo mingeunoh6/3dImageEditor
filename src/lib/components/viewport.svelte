@@ -7,14 +7,17 @@
 	import GLBImporter from '$lib/components/functions/importFile';
 	import GLBModelController from '$lib/components/functions/transform';
 	import CustomDirectionalLight from '$lib/components/functions/directionalLight';
+	import { TransformControls } from 'three/addons/controls/TransformControls';
 
 	export let glbFile = null;
+	export let bgFile = null;
 
 	let scene, camera, renderer, renderRenderer, passRenderer, controls, canvas;
 	let scene1, scene2;
 	let renderCanvas, passCanvas;
 	let originalCube, redCube;
 	let glbImporter;
+	let hdrLoader;
 	let transformController;
 	let raycaster, mouse;
 	let unSelectableObjects = [];
@@ -22,13 +25,25 @@
 	let renderpass1obj;
 	let renderpass2obj;
 	let currentSelectedObj = null;
+	let textureloader = new THREE.TextureLoader();
+	let controller;
+	let controlGroup;
+	let envMapTexture;
+
+	$: if (bgFile) {
+		console.log('bgFile', bgFile);
+
+		changeBackground(bgFile);
+	}
 
 	$: if (glbFile) {
 		clearScene();
+		resetTransform();
 		glbImporter
 			.importGLB(glbFile)
 			.then((model) => {
 				console.log('GLB model added to the scene', model);
+
 				addedModel.push(model);
 			})
 			.catch((error) => {
@@ -38,12 +53,37 @@
 		glbFile = null;
 	}
 
+	async function changeBackground(bgFile) {
+		console.log('dd', bgFile);
+
+		hdrLoader
+			.loadImageBackground(bgFile)
+			.then((texture) => {
+				console.log('texture', texture);
+			})
+			.catch((error) => {
+				console.error('Error loading HDR:', error);
+			});
+		bgFile = null;
+	}
+
+	function changeEnvMapIntensity(intensity) {
+		if (addedModel.length > 0) {
+			addedModel[0].traverse((child) => {
+				if (child.isMesh) {
+					child.material.envMapIntensity = intensity;
+					child.material.needsUpdate = true;
+				}
+			});
+		}
+	}
+
 	function clearScene() {
 		//reset glb imported outside
 
 		//reset scene
-		while (scene.children.length > 0) {
-			scene.remove(scene.children[0]);
+		while (controlGroup.children.length > 0) {
+			controlGroup.remove(controlGroup.children[0]);
 		}
 
 		//reset scene1
@@ -78,6 +118,7 @@
 	// Function to load a new GLB model
 	function loadNewModel(assetName) {
 		clearScene();
+		resetTransform();
 		const filePath = `glb/${assetName}`; // Update this path as needed
 		fetch(filePath)
 			.then((res) => res.blob())
@@ -87,10 +128,31 @@
 					.importGLB(file)
 					.then((model) => {
 						console.log('GLB model added to the scene', model);
+						if (envMapTexture) {
+							model.traverse((child) => {
+								if (child.isMesh) {
+									child.material.envMap = envMapTexture;
+									child.material.envMapIntensity = 10;
+									child.material.needsUpdate = true;
+								}
+							});
+						}
 						addedModel.push(model);
 					})
 					.catch((error) => console.error('Error loading model:', error));
 			});
+
+		if (bgFile) {
+			changeBackground(bgFile);
+			changeEnvMapIntensity(intensity);
+		}
+	}
+
+	function changeFov(fov) {
+		camera.fov = fov;
+		camera.updateProjectionMatrix();
+
+		console.log('Camera FOV changed to:', fov);
 	}
 
 	async function init() {
@@ -110,7 +172,7 @@
 		renderer.shadowMap.bias = 0.0001;
 		renderer.outputColorSpace = THREE.SRGBColorSpace;
 		renderer.toneMapping = THREE.ACESFilmicToneMapping;
-		renderer.toneMappingExposure = 1.5;
+		renderer.toneMappingExposure = 1.2;
 
 		// Render renderer
 		renderRenderer = new THREE.WebGLRenderer({
@@ -128,6 +190,12 @@
 		camera.position.z = 5;
 		controls = new OrbitControls(camera, renderer.domElement);
 		controls.update();
+
+		controller = new TransformControls(camera, renderer.domElement);
+		console.log('controller', controller);
+		controller.addEventListener('dragging-changed', function (event) {
+			controls.enabled = !event.value;
+		});
 
 		//plane
 		const planeGeometry = new THREE.PlaneGeometry(100, 100);
@@ -151,11 +219,16 @@
 		// //add to unselectable objects
 		// unSelectableObjects.push(gridHelper);
 
-		//glbImport
-		glbImporter = new GLBImporter(scene);
+		//add object control group
+		controlGroup = new THREE.Group();
+		scene.add(controlGroup);
+		controlGroup.position.set(0, 0, 0);
 
-		//hdr
-		const hdrLoader = new HDRLoader(scene, renderer);
+		//glbImport
+		glbImporter = new GLBImporter(scene, controlGroup);
+
+		// hdr;
+		hdrLoader = new HDRLoader(scene, renderer);
 		try {
 			await hdrLoader.loadHDR('/hdri/brown_photostudio_02_1k.hdr');
 		} catch (error) {
@@ -164,55 +237,132 @@
 
 		//background
 		// // Load background texture
-		// const textureLoader = new THREE.TextureLoader();
-		// const backgroundTexture = await textureLoader.loadAsync('/bg/bg_1.jpeg');
-		// backgroundTexture.colorSpace = THREE.SRGBColorSpace;
-		// scene.background = backgroundTexture;
 
 		// Add custom directional lights
-		const directionalLight1 = new CustomDirectionalLight(0xffffff, 1, [0, 1, -3]);
-		const directionalLight2 = new CustomDirectionalLight(0xffffff, 0.5, [-2, 3, 2]);
-		const directionalLight3 = new CustomDirectionalLight(0xffffff, 0.8, [2, 3, 2]);
-
+		const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+		scene.add(ambientLight);
+		const directionalLight1 = new CustomDirectionalLight(0xffffff, 5, [0, 3, -3]);
+		const directionalLight2 = new CustomDirectionalLight(0xffffff, 5, [-2, 3, 2]);
+		const directionalLight3 = new CustomDirectionalLight(0xffffff, 5, [2, 3, 2]);
+		const lightHelper1 = new THREE.DirectionalLightHelper(directionalLight1.light, 5);
+		const lightHelper2 = new THREE.DirectionalLightHelper(directionalLight2.light, 5);
+		const lightHelper3 = new THREE.DirectionalLightHelper(directionalLight3.light, 5);
+		// scene.add(lightHelper1);
+		// scene.add(lightHelper2);
+		// scene.add(lightHelper3);
 		directionalLight1.addToScene(scene);
 		directionalLight2.addToScene(scene);
 		directionalLight3.addToScene(scene);
 
 		//viewport selector
-		transformController = new GLBModelController(scene, camera, renderer, controls);
+
 		canvas.addEventListener('click', onSelect, false);
-		function onSelect(event) {
-			const rect = canvas.getBoundingClientRect();
-			mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-			mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-
-			raycaster.setFromCamera(mouse, camera);
-			const intersects = raycaster.intersectObjects(scene.children, true);
-
-			if (intersects.length > 0) {
-				const intersectedObject = intersects[0].object;
-				console.log(intersectedObject);
-				transformController.setSelectedObj(intersectedObject);
-			} else if (transformController.selectedObj) {
-				transformController.setSelectedObj(null);
-			}
-
-			console.log('Selected object:', currentSelectedObj);
-		}
-
+		window.addEventListener('keydown', handleKeyDown);
 		// Add resize event listener
 		window.addEventListener('resize', onWindowResize, false);
 		animate();
 
 		function animate() {
 			requestAnimationFrame(animate);
+
 			renderer.render(scene, camera);
 
 			// Temporarily replace the original cube with the red cube for the render canvas
 		}
 	}
 
+	function onSelect(event) {
+		console.log('onSelect');
+		// Get mouse position in normalized device coordinates (-1 to +1) for both components
+		const rect = canvas.getBoundingClientRect();
+		mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+		mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+		// Create a raycaster and set its position based on the mouse coordinates
+		raycaster.setFromCamera(mouse, camera);
+
+		// Check for intersections with objects in the scene
+		const intersects = raycaster.intersectObjects(scene.children, true);
+
+		if (intersects.length > 0) {
+			if (controller.object) {
+				return;
+			}
+			controller.detach();
+			// Get the first intersected object
+			let currentOBJ = controlGroup;
+
+			console.log('Attaching controller to:', currentOBJ);
+			// Ensure controller is added to scene and set to visible
+			if (!scene.children.includes(controller)) {
+				scene.add(controller);
+			}
+
+			controller.attach(currentOBJ);
+			controller.space = 'local';
+			controller.visible = true;
+		} else {
+			// Optionally handle the case where no object was selected
+			console.log('No object selected');
+
+			controller.detach();
+			scene.remove(controller);
+			controller.visible = false;
+		}
+	}
+	function handleKeyDown(event) {
+		switch (event.key) {
+			case 'q': // Disable TransformControls
+				controller.detach();
+				break;
+			case 'w': // Translate
+				controller.setMode('translate');
+				break;
+			case 'e': // Rotate
+				controller.setMode('rotate');
+				break;
+			case 'r': // Scale
+				controller.setMode('scale');
+				break;
+		}
+	}
+
+	function changeTransformMode(event) {
+		if (!controller.object) {
+			alert('선택된 모델이 없습니다');
+			return;
+		}
+
+		const mode = event.target.innerText;
+		switch (mode) {
+			case '이동':
+				controller.setMode('translate');
+				break;
+			case '회전':
+				controller.setMode('rotate');
+				break;
+			case '크기':
+				controller.setMode('scale');
+				break;
+		}
+	}
+
+	function resetTransform() {
+		if (controller.object) {
+			controller.object.position.set(0, 0, 0);
+			controller.object.rotation.set(0, 0, 0);
+			controller.object.scale.set(1, 1, 1);
+		}
+	}
+
+	function disableOrbitControl() {
+		controls.enabled = false;
+	}
+
 	function imageOutputRender() {
+		if (controller) {
+			controller.detach();
+		}
 		if (addedModel.length === 0) {
 			console.error('No model added to the scene');
 			alert('Please upload product model first.');
@@ -246,7 +396,7 @@
 		const maskMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
 		maskMat.side = THREE.DoubleSide;
 		maskMat.alphaTest = 0.5;
-		renderpass1obj = addedModel[0].clone();
+		renderpass1obj = controlGroup.clone();
 		renderpass1obj.traverse((child) => {
 			if (child.isMesh) {
 				child.material = maskMat;
@@ -259,7 +409,7 @@
 		this.offscreenRenderRenderer.render(scene1, camera);
 
 		// Clone object for render pass 2
-		renderpass2obj = addedModel[0].clone();
+		renderpass2obj = controlGroup.clone();
 		let objectMatlist = [];
 		renderpass2obj.traverse((child) => {
 			if (child.isMesh && child.material) {
@@ -345,16 +495,24 @@
 		return () => {
 			// Cleanup on destroy
 			renderer.dispose();
+
+			transformController.dispose();
+
+			renderer.dispose();
 			controls.dispose();
+			controller.dispose();
+			canvas.removeEventListener('click', onSelect);
+			window.removeEventListener('keydown', handleKeyDown);
+			window.removeEventListener('resize', onWindowResize);
 		};
 	});
 
-	export { loadNewModel };
+	export { loadNewModel, changeFov, changeEnvMapIntensity };
 </script>
 
 <div id="viewport-main-wrapper">
 	<div id="viewport-wrapper">
-		<canvas id="viewport" bind:this={canvas}></canvas>
+		<canvas id="viewport" bind:this={canvas}> </canvas>
 		<div id="preview-wrapper">
 			<canvas id="render-canvas" bind:this={renderCanvas}></canvas>
 			<canvas id="pass-canvas" bind:this={passCanvas}></canvas>
@@ -363,19 +521,25 @@
 	<div id="viewport-menu">
 		<button on:click={imageOutputRender}>제품 이미지 / 제품 마스크 다운로드</button>
 	</div>
+	<div id="transform-tool">
+		<button class="transform-btn" on:click={changeTransformMode}>이동</button>
+		<button class="transform-btn" on:click={changeTransformMode}>회전</button>
+		<button class="transform-btn" on:click={changeTransformMode}>크기</button>
+	</div>
 </div>
 
 <style>
 	#viewport-main-wrapper {
+		position: relative;
 		box-sizing: border-box;
 		display: flex;
 		flex-direction: column;
 		justify-content: center;
 		align-items: center;
-		border: 1px solid var(--border-color);
+		border: 1px solid green;
 	}
 	#viewport-menu {
-		width: 100vmin;
+		width: 100%;
 		height: 64px;
 		border: 1px solid var(--border-color);
 		box-sizing: border-box;
@@ -391,10 +555,33 @@
 		align-items: flex-start;
 	}
 
+	#transform-tool {
+		display: flex;
+		flex-direction: column;
+		box-sizing: border-box;
+		position: absolute;
+		left: 0;
+		top: 0;
+		z-index: 100;
+		padding: 6px;
+	}
+
+	#transform-tool button {
+		box-sizing: border-box;
+		width: 72px;
+		height: 72px;
+		border: 1px solid var(--border-color);
+
+		margin-bottom: 6px;
+	}
+	#transform-tool button:hover {
+		background-color: var(--accent-hover-color);
+	}
+
 	#viewport {
 		box-sizing: border-box;
-		width: 70vmin; /* 50% of the smaller viewport dimension */
-		height: 70vmin;
+		width: 80vmin; /* 50% of the smaller viewport dimension */
+		height: 80vmin;
 		border: 1px solid black;
 		background-color: var(--background-color);
 	}
@@ -409,8 +596,8 @@
 	#render-canvas,
 	#pass-canvas {
 		box-sizing: border-box;
-		width: 35vmin; /* 50% of the viewport canvas size */
-		height: 35vmin;
+		width: 40vmin; /* 50% of the viewport canvas size */
+		height: 40vmin;
 		border: 1px solid black;
 		background-color: var(--accent-hover-color);
 		margin-bottom: 0; /* Space between render and pass canvases */

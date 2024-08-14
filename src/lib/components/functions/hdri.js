@@ -27,6 +27,42 @@ class HDRLoader {
 			);
 		});
 	}
+
+	loadImageBackground(file) {
+		return new Promise((resolve, reject) => {
+			const reader = new FileReader();
+
+			reader.onload = (event) => {
+				const dataUrl = event.target.result;
+
+				const loader = new THREE.TextureLoader();
+				const texture = loader.load(
+					dataUrl,
+					(texture) => {
+						texture.colorSpace = THREE.SRGBColorSpace;
+						this.scene.background = texture;
+
+						const envTexture = texture.clone();
+						envTexture.mapping = THREE.EquirectangularReflectionMapping;
+
+						this.scene.environment = envTexture;
+
+						resolve(texture);
+					},
+					undefined,
+					(error) => {
+						reject(error);
+					}
+				);
+			};
+
+			reader.onerror = () => {
+				reject(new Error('Failed to read the background image file.'));
+			};
+
+			reader.readAsDataURL(file);
+		});
+	}
 }
 
 export default HDRLoader;

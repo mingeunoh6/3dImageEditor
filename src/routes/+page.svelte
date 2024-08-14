@@ -4,13 +4,29 @@
 	import LNB from '../lib/components/LNB.svelte';
 	let viewportRef;
 	let glbFile = null;
+	let bgFile = null;
 	function handleGLBImport(event) {
 		glbFile = event.detail.file;
+	}
+
+	function handleBGImport(event) {
+		bgFile = event.detail.file;
+		console.log('changeBG');
 	}
 
 	function handleSelectAsset(event) {
 		const { assetName } = event.detail;
 		viewportRef.loadNewModel(assetName);
+	}
+
+	function handleCameraFov(event) {
+		const { fov } = event.detail;
+		viewportRef.changeFov(fov);
+	}
+
+	function handleEnvMapIntensity(event) {
+		const { envMapIntensity } = event.detail;
+		viewportRef.changeEnvMapIntensity(envMapIntensity);
 	}
 
 	onMount(() => {
@@ -20,10 +36,16 @@
 
 <main>
 	<section id="LNB">
-		<LNB on:importGLB={handleGLBImport} on:selectAsset={handleSelectAsset} />
+		<LNB
+			on:importGLB={handleGLBImport}
+			on:importBG={handleBGImport}
+			on:selectAsset={handleSelectAsset}
+			on:changeFov={handleCameraFov}
+			on:changeEnvMapIntensity={handleEnvMapIntensity}
+		/>
 	</section>
 	<section id="Viewport">
-		<Viewport {glbFile} bind:this={viewportRef} />
+		<Viewport {glbFile} {bgFile} bind:this={viewportRef} />
 	</section>
 </main>
 
@@ -32,6 +54,7 @@
 		display: flex;
 		padding: 0;
 		margin: 0;
+		flex-direction: row;
 
 		height: 100%;
 		width: 100%;
@@ -44,6 +67,7 @@
 	}
 
 	#LNB {
+		min-width: 320px;
 		width: 30vmin; /* 30% of the smaller viewport dimension */
 		border: 1px solid black;
 		background-color: lightgreen;
@@ -53,5 +77,8 @@
 		flex-grow: 1;
 		border: 1px solid black;
 		background-color: #323232;
+		display: flex;
+		justify-content: center;
+		align-items: center;
 	}
 </style>

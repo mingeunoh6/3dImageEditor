@@ -2,9 +2,10 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 
 class GLBImporter {
-	constructor(scene) {
+	constructor(scene, controlGroup) {
 		this.scene = scene;
 		this.loader = new GLTFLoader();
+		this.controlGroup = controlGroup;
 	}
 
 	importGLB(file) {
@@ -16,7 +17,7 @@ class GLBImporter {
 					contents,
 					'',
 					(gltf) => {
-						this.scene.add(gltf.scene);
+						this.controlGroup.add(gltf.scene);
 						gltf.scene.traverse((child) => {
 							if (child.isMesh) {
 								child.castShadow = true;
