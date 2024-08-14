@@ -44,7 +44,7 @@
 			<h5>3D Masking Prototype</h5>
 		</div>
 		<div class="sub-title-lv1">
-			<p>ver 0.2.0</p>
+			<p>ver 0.2.1</p>
 		</div>
 		<div class="sub-title-lv1">
 			<p>by MIN GEUN</p>

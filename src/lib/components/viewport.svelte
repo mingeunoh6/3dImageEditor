@@ -172,7 +172,7 @@
 		renderer.shadowMap.bias = 0.0001;
 		renderer.outputColorSpace = THREE.SRGBColorSpace;
 		renderer.toneMapping = THREE.ACESFilmicToneMapping;
-		renderer.toneMappingExposure = 1.2;
+		renderer.toneMappingExposure = 1.0;
 
 		// Render renderer
 		renderRenderer = new THREE.WebGLRenderer({
@@ -241,9 +241,9 @@
 		// Add custom directional lights
 		const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
 		scene.add(ambientLight);
-		const directionalLight1 = new CustomDirectionalLight(0xffffff, 5, [0, 3, -3]);
-		const directionalLight2 = new CustomDirectionalLight(0xffffff, 5, [-2, 3, 2]);
-		const directionalLight3 = new CustomDirectionalLight(0xffffff, 5, [2, 3, 2]);
+		const directionalLight1 = new CustomDirectionalLight(0xffffff, 1, [0, 3, -3]);
+		const directionalLight2 = new CustomDirectionalLight(0xffffff, 1, [-2, 3, 2]);
+		const directionalLight3 = new CustomDirectionalLight(0xffffff, 1, [2, 3, 2]);
 		const lightHelper1 = new THREE.DirectionalLightHelper(directionalLight1.light, 5);
 		const lightHelper2 = new THREE.DirectionalLightHelper(directionalLight2.light, 5);
 		const lightHelper3 = new THREE.DirectionalLightHelper(directionalLight3.light, 5);
