@@ -360,6 +360,17 @@
 	}
 
 	function imageOutputRender() {
+		//clear scene
+		//reset scene1
+		while (scene1.children.length > 0) {
+			scene1.remove(scene1.children[0]);
+		}
+
+		//reset scene2
+		while (scene2.children.length > 0) {
+			scene2.remove(scene2.children[0]);
+		}
+
 		if (controller) {
 			controller.detach();
 		}
