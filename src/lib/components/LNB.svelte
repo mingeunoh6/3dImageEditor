@@ -44,7 +44,7 @@
 			<h5>3D Masking Prototype</h5>
 		</div>
 		<div class="sub-title-lv1">
-			<p>ver 0.2.1</p>
+			<p>ver 0.2.2</p>
 		</div>
 		<div class="sub-title-lv1">
 			<p>by MIN GEUN</p>
@@ -163,6 +163,14 @@
 					<div class="asset-item">
 						<p>프라엘 더마세라 BLQ1</p>
 						<button on:click={() => handleAssetSelection('BLQ1_remesh.glb')}>사용하기</button>
+					</div>
+				</li>
+				<li>
+					<div class="asset-item">
+						<p><span style="color: red;">NEW - </span> 프라엘 더마세라 BLQ1 - 무광</p>
+						<button on:click={() => handleAssetSelection('BLQ1_LOW_REFLECTIVE.glb')}
+							>사용하기</button
+						>
 					</div>
 				</li>
 				<li>

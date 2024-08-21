@@ -199,12 +199,7 @@
 
 		//plane
 		const planeGeometry = new THREE.PlaneGeometry(100, 100);
-		const planeMaterial = new THREE.MeshStandardMaterial({
-			color: 0x555555,
-			side: THREE.DoubleSide,
-			roughness: 0.8,
-			metalness: 0.1
-		});
+		const planeMaterial = new THREE.ShadowMaterial({ opacity: 0.5 });
 		const plane = new THREE.Mesh(planeGeometry, planeMaterial);
 		plane.receiveShadow = true;
 		plane.rotation.x = -Math.PI / 2;
@@ -253,7 +248,6 @@
 		directionalLight1.addToScene(scene);
 		directionalLight2.addToScene(scene);
 		directionalLight3.addToScene(scene);
-
 		//viewport selector
 
 		canvas.addEventListener('click', onSelect, false);
