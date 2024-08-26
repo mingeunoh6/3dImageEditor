@@ -70,13 +70,12 @@
 		min-width: 320px;
 		width: 30vmin; /* 30% of the smaller viewport dimension */
 		border: 1px solid black;
-		background-color: lightgreen;
 	}
 
 	#Viewport {
 		flex-grow: 1;
 		border: 1px solid black;
-		background-color: #323232;
+		background-color: var(--background-color);
 		display: flex;
 		justify-content: center;
 		align-items: center;

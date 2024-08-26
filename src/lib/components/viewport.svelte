@@ -159,7 +159,7 @@
 		scene = new THREE.Scene();
 		scene1 = new THREE.Scene();
 		scene2 = new THREE.Scene();
-		camera = new THREE.PerspectiveCamera(10, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
+		camera = new THREE.PerspectiveCamera(10, canvas.clientWidth / canvas.clientHeight, 0.01, 1000);
 		raycaster = new THREE.Raycaster();
 		mouse = new THREE.Vector2();
 		// Main renderer
@@ -541,12 +541,10 @@
 		flex-direction: column;
 		justify-content: center;
 		align-items: center;
-		border: 1px solid green;
 	}
 	#viewport-menu {
-		width: 100%;
+		width: 80%;
 		height: 64px;
-		border: 1px solid var(--border-color);
 		box-sizing: border-box;
 		display: flex;
 		flex-direction: column;
@@ -575,12 +573,12 @@
 		box-sizing: border-box;
 		width: 72px;
 		height: 72px;
-		border: 1px solid var(--border-color);
+		border: 1px solid var(--primary-color);
 
 		margin-bottom: 6px;
 	}
 	#transform-tool button:hover {
-		background-color: var(--accent-hover-color);
+		background-color: var(--accent-color);
 	}
 
 	#viewport {
@@ -616,13 +614,13 @@
 		box-sizing: border-box;
 		width: 80%;
 		height: 42px;
-		border: 1px solid var(--border-color);
-		background-color: var(--accent-color);
+		border: none;
+		background-color: var(--secondary-color);
 		color: var(--text-color);
 	}
 
 	button:hover {
-		background-color: var(--accent-hover-color);
+		background-color: var(--accent-color);
 		cursor: pointer;
 	}
 

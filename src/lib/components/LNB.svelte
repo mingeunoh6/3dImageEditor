@@ -41,10 +41,10 @@
 <section>
 	<div class="sectionWrapper">
 		<div class="main-title">
-			<h5>3D Masking Prototype</h5>
+			<h5>3D Web Studio Prototype</h5>
 		</div>
 		<div class="sub-title-lv1">
-			<p>ver 0.2.2</p>
+			<p>ver 0.3.0</p>
 		</div>
 		<div class="sub-title-lv1">
 			<p>by MIN GEUN</p>
@@ -91,10 +91,10 @@
 			</div> -->
 		</div>
 		<div class="sub-title">
-			<h5>카메라 화각 변경</h5>
+			<h5>카메라 FOV 변경</h5>
 		</div>
-		<div class="sub-card">
-			<label for="fov">FOV: {fov}</label>
+		<div class="sub-card-slider">
+			<label for="fov">{fov}°</label>
 			<input
 				type="range"
 				id="fov"
@@ -106,7 +106,7 @@
 			/>
 		</div>
 		<div class="sub-title">
-			<h5>테스트 어셋 목록</h5>
+			<h5>3D 제품 모델 목록</h5>
 		</div>
 		<div class="sub-card">
 			<ul class="product-asset-list">
@@ -186,7 +186,7 @@
 		<div class="sub-title">
 			<h5>사용법</h5>
 		</div>
-		<div class="sub-card">
+		<div class="sub-card-instruction">
 			<p>
 				1. 테스트 어셋 중에 선택하거나 GLB 불러오기 버튼을 클릭해 파일을 불러옵니다.<br />
 				<span style="color: red;"
@@ -220,16 +220,17 @@
 	section {
 		box-sizing: border-box;
 		width: 100%; /* 30% of the smaller viewport dimension */
-		height: 100vh;
+		height: 100%;
 		overflow: hidden;
 		background-color: var(--background-color);
 	}
 	.sectionWrapper {
 		display: flex;
 		flex-direction: column;
-
+		box-sizing: border-box;
 		width: 100%;
 		height: 100%;
+		padding: 10px;
 		overflow: auto;
 	}
 
@@ -238,9 +239,9 @@
 		justify-content: center;
 		align-items: center;
 		box-sizing: border-box;
+		padding: 30px 0 30px 0;
 		width: 100%;
-		height: 72px;
-		border: 1px solid var(--border-color);
+		height: 20%;
 		color: var(--text-color);
 		background-color: var(--primary-color);
 	}
@@ -251,10 +252,10 @@
 		align-items: center;
 		box-sizing: border-box;
 		width: 100%;
-		height: 48px;
-		border: 1px solid var(--border-color);
+
 		color: var(--text-color);
 		background-color: var(--primary-color);
+		padding: 18px 0 18px 0;
 	}
 
 	.sub-title-lv1 {
@@ -263,10 +264,15 @@
 		align-items: center;
 		box-sizing: border-box;
 		width: 100%;
-		height: 36px;
-		border: 1px solid var(--border-color);
-		color: var(--accent-color);
+		height: 42px;
+
+		color: var(--text-color);
 		background-color: var(--background-color);
+		padding: 8px;
+	}
+	.sub-title-lv1 p {
+		font-size: 0.8rem;
+		color: var(--text-color);
 	}
 
 	.sub-card {
@@ -277,8 +283,7 @@
 		color: var(--text-color);
 		box-sizing: border-box;
 		width: 100%;
-		padding: 6px;
-		border: 1px solid var(--border-color);
+		padding: 10px;
 		background-color: var(--background-color);
 	}
 
@@ -292,14 +297,21 @@
 		box-sizing: border-box;
 		width: 80%;
 		height: 42px;
-		border: 1px solid var(--border-color);
-		background-color: var(--accent-color);
+		margin: 30px;
+
+		background-color: var(--border-color);
 		color: var(--text-color);
+		border: none;
 	}
 
 	button:hover {
-		background-color: var(--accent-hover-color);
+		background-color: var(--secondary-color);
 		cursor: pointer;
+		border: none;
+	}
+
+	.product-asset-list {
+		background-color: var(--secondary-color);
 	}
 
 	.asset-item {
@@ -308,10 +320,23 @@
 		justify-content: space-between;
 		align-items: center;
 		width: 100%;
+		height: 64px;
+		padding: 10px;
 	}
 
 	.asset-item button {
+		box-sizing: border-box;
 		width: 30%;
+		height: 42px;
+		margin: 0;
+		background-color: var(--border-color);
+		color: var(--text-color);
+		border: none;
+	}
+	.asset-item button:hover {
+		background-color: var(--accent-color);
+		cursor: pointer;
+		border: none;
 	}
 	ul {
 		list-style-type: none;
@@ -322,8 +347,44 @@
 		width: 100%;
 	}
 	li {
-		border: 1px solid var(--border-color);
 		padding: 0;
 		margin: 0;
+	}
+
+	.sub-card-instruction {
+		display: flex;
+		justify-content: flex-start;
+		align-items: center;
+		flex-direction: column;
+		color: var(--text-color);
+		box-sizing: border-box;
+		width: 100%;
+		padding: 16px;
+		background-color: var(--background-color);
+	}
+
+	.sub-card-instruction p {
+		font-size: 1.2em;
+		margin-bottom: 10px;
+		line-height: 1.5em;
+	}
+
+	.sub-card-slider {
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		flex-direction: row-reverse;
+		color: var(--text-color);
+		box-sizing: border-box;
+		width: 100%;
+
+		padding-top: 20px;
+		padding-bottom: 20px;
+		background-color: var(--background-color);
+	}
+	.sub-card-slider label {
+		font-size: 1.2em;
+		margin-left: 20px;
+		line-height: 1.5em;
 	}
 </style>
