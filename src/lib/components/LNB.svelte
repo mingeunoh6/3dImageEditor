@@ -159,15 +159,10 @@
 						>
 					</div>
 				</li>
+
 				<li>
 					<div class="asset-item">
 						<p>프라엘 더마세라 BLQ1</p>
-						<button on:click={() => handleAssetSelection('BLQ1_remesh.glb')}>사용하기</button>
-					</div>
-				</li>
-				<li>
-					<div class="asset-item">
-						<p><span style="color: red;">NEW - </span> 프라엘 더마세라 BLQ1 - 무광</p>
 						<button on:click={() => handleAssetSelection('BLQ1_LOW_REFLECTIVE.glb')}
 							>사용하기</button
 						>

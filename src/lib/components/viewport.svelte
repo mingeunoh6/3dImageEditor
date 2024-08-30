@@ -164,7 +164,7 @@
 		mouse = new THREE.Vector2();
 		// Main renderer
 		renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
-		renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+		setRendererResolution(renderer, canvas);
 		renderer.setPixelRatio(window.devicePixelRatio);
 		//shadows
 		renderer.shadowMap.enabled = true;
@@ -179,15 +179,20 @@
 			canvas: renderCanvas,
 			antialias: true
 		});
-		renderRenderer.setSize(renderCanvas.clientWidth, renderCanvas.clientHeight);
+		setRendererResolution(renderRenderer, renderCanvas);
 		renderRenderer.setPixelRatio(window.devicePixelRatio);
 
 		// Pass renderer
 		passRenderer = new THREE.WebGLRenderer({ canvas: passCanvas, antialias: true });
-		passRenderer.setSize(passCanvas.clientWidth, passCanvas.clientHeight);
+		setRendererResolution(passRenderer, passCanvas);
 		passRenderer.setPixelRatio(window.devicePixelRatio);
 
 		camera.position.z = 5;
+
+		//set initial renderer, canvas size and resolution in square aspect ratio
+		resizeCanvasAndRenderers(1);
+
+		//orbit control
 		controls = new OrbitControls(camera, renderer.domElement);
 		controls.update();
 
@@ -223,19 +228,19 @@
 		glbImporter = new GLBImporter(scene, controlGroup);
 
 		// hdr;
-		hdrLoader = new HDRLoader(scene, renderer);
-		try {
-			await hdrLoader.loadHDR('/hdri/brown_photostudio_02_1k.hdr');
-		} catch (error) {
-			console.error('Error loading HDR:', error);
-		}
+		hdrLoader = new HDRLoader(scene, renderer, resizeCanvasAndRenderers);
+		// try {
+		// 	await hdrLoader.loadHDR('/hdri/brown_photostudio_02_1k.hdr');
+		// } catch (error) {
+		// 	console.error('Error loading HDR:', error);
+		// }
 
 		//background
 		// // Load background texture
 
 		// Add custom directional lights
-		const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-		scene.add(ambientLight);
+		// const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+		// scene.add(ambientLight);
 		const directionalLight1 = new CustomDirectionalLight(0xffffff, 1, [0, 3, -3]);
 		const directionalLight2 = new CustomDirectionalLight(0xffffff, 1, [-2, 3, 2]);
 		const directionalLight3 = new CustomDirectionalLight(0xffffff, 1, [2, 3, 2]);
@@ -249,6 +254,8 @@
 		directionalLight2.addToScene(scene);
 		directionalLight3.addToScene(scene);
 		//viewport selector
+
+		//adjust resolution
 
 		canvas.addEventListener('click', onSelect, false);
 		window.addEventListener('keydown', handleKeyDown);
@@ -376,24 +383,33 @@
 
 		// Create off-screen renderers
 		// Reuse or create off-screen renderers
+
+		const scaleFactor = 2; // Adjust this value to increase/decrease resolution
+		const aspectRatio = renderCanvas.width / renderCanvas.height;
+		const offscreenWidth = 1024 * scaleFactor;
+		const offscreenHeight = offscreenWidth / aspectRatio;
+
 		if (!this.offscreenRenderRenderer) {
 			this.offscreenRenderRenderer = new THREE.WebGLRenderer({ antialias: true });
-			this.offscreenRenderRenderer.setSize(1024, 1024);
+			this.offscreenRenderRenderer.setSize(offscreenWidth, offscreenHeight);
 		} else {
+			this.offscreenRenderRenderer.setSize(offscreenWidth, offscreenHeight);
 			this.offscreenRenderRenderer.clear();
 		}
 
 		if (!this.offscreenPassRenderer) {
 			this.offscreenPassRenderer = new THREE.WebGLRenderer({ antialias: true });
-			this.offscreenPassRenderer.setSize(1024, 1024);
+			this.offscreenPassRenderer.setSize(offscreenWidth, offscreenHeight);
 		} else {
+			this.offscreenPassRenderer.setSize(offscreenWidth, offscreenHeight);
 			this.offscreenPassRenderer.clear();
 		}
 
 		if (!this.offscreenMainRenderer) {
 			this.offscreenMainRenderer = new THREE.WebGLRenderer({ antialias: true });
-			this.offscreenMainRenderer.setSize(1024, 1024);
+			this.offscreenMainRenderer.setSize(offscreenWidth, offscreenHeight);
 		} else {
+			this.offscreenMainRenderer.setSize(offscreenWidth, offscreenHeight);
 			this.offscreenMainRenderer.clear();
 		}
 
@@ -474,6 +490,51 @@
 			this.offscreenMainRenderer.dispose();
 		}, 1000);
 	}
+
+	function setRendererResolution(renderer, canvas, scaleFactor = 2) {
+		const width = canvas.clientWidth * scaleFactor;
+		const height = canvas.clientHeight * scaleFactor;
+		renderer.setSize(width, height, false);
+		canvas.style.width = canvas.clientWidth + 'px';
+		canvas.style.height = canvas.clientHeight + 'px';
+	}
+
+	function resizeCanvasAndRenderers(aspectRatio) {
+		const scaleFactor = 2; // or whatever value you're using
+		const maxSize = Math.min(window.innerWidth * 0.8, window.innerHeight * 0.8);
+		const baseSize = 1024 * scaleFactor;
+		let width, height;
+
+		if (aspectRatio > 1) {
+			// Landscape
+			width = maxSize;
+			height = maxSize / aspectRatio;
+		} else {
+			// Portrait or square
+			height = maxSize;
+			width = maxSize * aspectRatio;
+		}
+
+		// Resize main renderer and canvas
+		renderer.setSize(width * scaleFactor, height * scaleFactor, false);
+		canvas.style.width = `${width}px`;
+		canvas.style.height = `${height}px`;
+
+		// Resize render renderer and canvas
+		renderRenderer.setSize((width * scaleFactor) / 2, (height * scaleFactor) / 2, false);
+		renderCanvas.style.width = `${width / 2}px`;
+		renderCanvas.style.height = `${height / 2}px`;
+
+		// Resize pass renderer and canvas
+		passRenderer.setSize((width * scaleFactor) / 2, (height * scaleFactor) / 2, false);
+		passCanvas.style.width = `${width / 2}px`;
+		passCanvas.style.height = `${height / 2}px`;
+
+		// Update camera aspect ratio
+		camera.aspect = width / height;
+		camera.updateProjectionMatrix();
+	}
+
 	function downloadImage(dataUrl, fileName) {
 		const link = document.createElement('a');
 		link.href = dataUrl;
@@ -484,13 +545,20 @@
 	}
 
 	function onWindowResize() {
+		if (scene.background && scene.background.isTexture) {
+			const aspectRatio = scene.background.image.width / scene.background.image.height;
+			resizeCanvasAndRenderers(aspectRatio);
+		}
+
 		const width = canvas.clientWidth;
 		const height = canvas.clientHeight;
 
 		camera.aspect = width / height;
 		camera.updateProjectionMatrix();
 
-		renderer.setSize(width, height);
+		setRendererResolution(renderer, canvas);
+		setRendererResolution(renderRenderer, renderCanvas);
+		setRendererResolution(passRenderer, passCanvas);
 	}
 
 	onMount(() => {
@@ -552,10 +620,11 @@
 		align-items: center;
 	}
 	#viewport-wrapper {
-		box-sizing: border-box;
 		display: flex;
 		justify-content: center;
 		align-items: flex-start;
+		width: 100%;
+		height: 80vh;
 	}
 
 	#transform-tool {
@@ -582,25 +651,21 @@
 	}
 
 	#viewport {
-		box-sizing: border-box;
-		width: 80vmin; /* 50% of the smaller viewport dimension */
-		height: 80vmin;
-		border: 1px solid black;
-		background-color: var(--background-color);
+		max-width: 80vw;
+		max-height: 80vh;
+		width: auto;
+		height: auto;
 	}
-
 	#preview-wrapper {
-		box-sizing: border-box;
 		display: flex;
 		flex-direction: column;
-		margin-left: 0; /* Space between viewport and side canvases */
+		margin-left: 20px;
 	}
 
 	#render-canvas,
 	#pass-canvas {
 		box-sizing: border-box;
-		width: 40vmin; /* 50% of the viewport canvas size */
-		height: 40vmin;
+
 		border: 1px solid black;
 		background-color: var(--accent-hover-color);
 		margin-bottom: 0; /* Space between render and pass canvases */
@@ -622,6 +687,15 @@
 	button:hover {
 		background-color: var(--accent-color);
 		cursor: pointer;
+	}
+
+	#render-canvas,
+	#pass-canvas {
+		max-width: 40vw;
+		max-height: 40vh;
+		width: auto;
+		height: auto;
+		margin-bottom: 10px;
 	}
 
 	@media (max-width: 768px) {

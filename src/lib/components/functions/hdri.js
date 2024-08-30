@@ -2,9 +2,10 @@ import * as THREE from 'three';
 import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
 
 class HDRLoader {
-	constructor(scene, renderer) {
+	constructor(scene, renderer, canvasResizer) {
 		this.scene = scene;
 		this.renderer = renderer;
+		this.canvasResizer = canvasResizer;
 	}
 
 	async loadHDR(url) {
@@ -36,7 +37,7 @@ class HDRLoader {
 				const dataUrl = event.target.result;
 
 				const loader = new THREE.TextureLoader();
-				const texture = loader.load(
+				loader.load(
 					dataUrl,
 					(texture) => {
 						texture.colorSpace = THREE.SRGBColorSpace;
@@ -46,6 +47,9 @@ class HDRLoader {
 						envTexture.mapping = THREE.EquirectangularReflectionMapping;
 
 						this.scene.environment = envTexture;
+
+						const aspectRatio = texture.image.width / texture.image.height;
+						this.canvasResizer(aspectRatio);
 
 						resolve(texture);
 					},
