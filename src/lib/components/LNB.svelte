@@ -15,6 +15,9 @@
 	let light3status = true;
 	let light3intensity = 0.3;
 	let light3color = 'ffffff';
+	let light0status = true;
+	let light0intensity = 0.3;
+	let light0color = 'ffffff';
 
 	const dispatch = createEventDispatcher();
 	function handleGLBImport(event) {
@@ -59,6 +62,11 @@
 			lightId = 3;
 
 			dispatch('changeSubLightColor', { lightId, lightColor: value });
+		} else if (id === 'light-0-color' || id === 'light-0-color-input') {
+			light0color = value.replace('#', '');
+			lightId = 0;
+
+			dispatch('changeSubLightColor', { lightId, lightColor: value });
 		}
 	}
 
@@ -86,6 +94,11 @@
 			case 'light-3-intensity':
 				light3intensity = value;
 				lightId = 3;
+				dispatch('changeSubLightIntensity', { lightId, lightIntensity: value });
+				break;
+			case 'light-0-intensity':
+				light3intensity = value;
+				lightId = 0;
 				dispatch('changeSubLightIntensity', { lightId, lightIntensity: value });
 				break;
 		}
@@ -129,6 +142,17 @@
 					break;
 			}
 			dispatch('changeSubLightStatus', { lightId: 3, lightStatus: checked });
+		} else if (id === 'light-0-switch') {
+			light3status = checked;
+			switch (checked) {
+				case true:
+					console.log('light0 on');
+					break;
+				case false:
+					console.log('light0 off');
+					break;
+			}
+			dispatch('changeSubLightStatus', { lightId: 0, lightStatus: checked });
 		}
 	}
 
@@ -140,7 +164,7 @@
 <section>
 	<div class="sectionWrapper">
 		<div class="main-title">
-			<h5>3D Web Studio Beta v.0.4.1</h5>
+			<h5>3D Web Studio Beta v.0.4.2</h5>
 		</div>
 		<div class="sub-card">
 			<div class="sub-title-lv1">
@@ -223,12 +247,58 @@
 					min="0"
 					max="360"
 					value="0"
-					step="0.01"
+					step=".001"
 					on:input={(e) => handleSubLightRot(e)}
 				/>
 				<label for="sub-light-rot">{subLightRot}°</label>
 			</div>
+		</div>
+		<div class="sub-sub-card">
+			<div class="sub-sub-card-title">간접광(Ambient-light)</div>
+			<div class="sub-sub-card-content">
+				<div class="sub-sub-card-property-title">전원</div>
 
+				<label class="switch">
+					<input
+						type="checkbox"
+						id="light-0-switch"
+						checked={light1status}
+						on:input={(e) => handleSubLightStatus(e)}
+					/>
+					<span class="toggle-slider round"></span>
+				</label>
+			</div>
+			<div class="sub-sub-card-content">
+				<div class="sub-sub-card-property-title">강도</div>
+				<input
+					id="light-0-intensity"
+					name="light-0-intensity"
+					class="slider"
+					type="range"
+					min="0"
+					max="2"
+					value={light0intensity}
+					step="0.01"
+					on:input={(e) => handleSubLightIntensity(e)}
+				/>
+				<label for="light-0-intensity">{light0intensity}</label>
+			</div>
+			<div class="sub-sub-card-content">
+				<div class="sub-sub-card-property-title">색</div>
+				<input
+					class="colorPicker"
+					type="color"
+					id="light-0-color"
+					name="light-0-color"
+					value={`#` + `${light1color}`}
+					on:input={(e) => handleColorChange(e)}
+				/>
+				<div class="colorInputGroup">
+					#{light0color}
+				</div>
+			</div>
+		</div>
+		<div class="sub-sub-card">
 			<div class="sub-sub-card-title">1. 키 라이트(Key-light)</div>
 			<div class="sub-sub-card-content">
 				<div class="sub-sub-card-property-title">전원</div>
@@ -273,6 +343,7 @@
 				</div>
 			</div>
 		</div>
+
 		<div class="sub-sub-card">
 			<div class="sub-sub-card-title">2. 필 라이트(Fill-light)</div>
 			<div class="sub-sub-card-content">
@@ -464,12 +535,6 @@
 				5. 다운로드 받은 이미지들을 AI 및 포토샵 보정을 위한 인풋으로 사용하세요.<br /><br />
 			</p>
 		</div>
-		<!-- <div class="sub-title">
-		<h5>UPLOAD HDRI</h5>
-	</div>
-	<div class="sub-card">
-		<button id="hdr-import-btn">Import HDR</button>
-	</div> -->
 	</div>
 </section>
 

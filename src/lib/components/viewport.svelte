@@ -14,6 +14,7 @@
 	export let bgFile = null;
 
 	let scene, camera, renderer, renderRenderer, passRenderer, controls, canvas;
+	let ambientLight;
 	let scene1, scene2;
 	let renderCanvas, passCanvas;
 	let originalCube, redCube;
@@ -166,6 +167,9 @@
 			return;
 		}
 		switch (lightId) {
+			case 0:
+				ambientLight.intensity = intensity;
+				break;
 			case 1:
 				lights[0].changeIntensity(intensity);
 				break;
@@ -187,6 +191,10 @@
 			return;
 		}
 		switch (lightId) {
+			case 0:
+				let newColor = new THREE.Color(lightColor);
+				ambientLight.color = newColor;
+				break;
 			case 1:
 				lights[0].changeColor(lightColor);
 				break;
@@ -205,6 +213,9 @@
 			return;
 		}
 		switch (lightId) {
+			case 0:
+				ambientLight.visible = lightStatus;
+				break;
 			case 1:
 				lights[0].changeVisible(lightStatus);
 				break;
@@ -291,36 +302,36 @@
 
 		// hdr;
 		hdrLoader = new HDRLoader(scene, renderer, resizeCanvasAndRenderers);
-		hdrLoader.loadDefaultHDR();
+		// hdrLoader.loadDefaultHDR();
 
 		//background
 		// // Load background texture
 
 		// Add custom directional lights
-		// const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-		// scene.add(ambientLight);
-		const directionalLight3 = new CustomDirectionalLight(0xffffff, 0.3, [0, 1.3, -2]);
-		const directionalLight1 = new CustomDirectionalLight(0xffffff, 1.2, [-2, 1.3, 2]);
-		const directionalLight2 = new CustomDirectionalLight(0xffffff, 0.7, [2, 1.3, 2]);
-		const lightHelper1 = new THREE.DirectionalLightHelper(directionalLight1.light, 5);
-		const lightHelper2 = new THREE.DirectionalLightHelper(directionalLight2.light, 5);
-		const lightHelper3 = new THREE.DirectionalLightHelper(directionalLight3.light, 5);
+		ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
+		scene.add(ambientLight);
+		const backLight = new CustomDirectionalLight(0xffffff, 0.3, [0, 1.3, -2]);
+		const keyLight = new CustomDirectionalLight(0xffffff, 1.2, [-2, 1.3, 2]);
+		const fillLight = new CustomDirectionalLight(0xffffff, 0.7, [2, 1.3, 2]);
+		const lightHelper1 = new THREE.DirectionalLightHelper(keyLight.light, 5);
+		const lightHelper2 = new THREE.DirectionalLightHelper(fillLight.light, 5);
+		const lightHelper3 = new THREE.DirectionalLightHelper(backLight.light, 5);
 		// scene.add(lightHelper1);
 		// scene.add(lightHelper2);
 		// scene.add(lightHelper3);
-		directionalLight1.addToScene(scene);
-		directionalLight2.addToScene(scene);
-		directionalLight3.addToScene(scene);
+		keyLight.addToScene(scene);
+		fillLight.addToScene(scene);
+		backLight.addToScene(scene);
 
 		// Add lights to the lights array
-		lights.push(directionalLight1);
-		lights.push(directionalLight2);
-		lights.push(directionalLight3);
+		lights.push(keyLight);
+		lights.push(fillLight);
+		lights.push(backLight);
 
 		const baseLightGroup = new THREE.Group();
-		baseLightGroup.add(directionalLight1.light);
-		baseLightGroup.add(directionalLight2.light);
-		baseLightGroup.add(directionalLight3.light);
+		baseLightGroup.add(keyLight.light);
+		baseLightGroup.add(fillLight.light);
+		baseLightGroup.add(backLight.light);
 
 		baseLightGroup.position.set(0, 0, 0);
 		baseLightGroup.name = 'baseLightGroup';
