@@ -97,7 +97,7 @@
 				dispatch('changeSubLightIntensity', { lightId, lightIntensity: value });
 				break;
 			case 'light-0-intensity':
-				light3intensity = value;
+				light0intensity = value;
 				lightId = 0;
 				dispatch('changeSubLightIntensity', { lightId, lightIntensity: value });
 				break;
@@ -143,7 +143,7 @@
 			}
 			dispatch('changeSubLightStatus', { lightId: 3, lightStatus: checked });
 		} else if (id === 'light-0-switch') {
-			light3status = checked;
+			light0status = checked;
 			switch (checked) {
 				case true:
 					console.log('light0 on');
@@ -262,7 +262,7 @@
 					<input
 						type="checkbox"
 						id="light-0-switch"
-						checked={light1status}
+						checked={light0status}
 						on:input={(e) => handleSubLightStatus(e)}
 					/>
 					<span class="toggle-slider round"></span>
@@ -290,7 +290,7 @@
 					type="color"
 					id="light-0-color"
 					name="light-0-color"
-					value={`#` + `${light1color}`}
+					value={`#` + `${light0color}`}
 					on:input={(e) => handleColorChange(e)}
 				/>
 				<div class="colorInputGroup">
