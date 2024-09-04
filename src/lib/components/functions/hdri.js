@@ -17,7 +17,6 @@ class HDRLoader {
 					texture.mapping = THREE.EquirectangularReflectionMapping;
 
 					this.scene.environment = texture;
-					this.scene.background = 0x1f1f1f;
 
 					resolve(texture);
 				},
@@ -27,6 +26,14 @@ class HDRLoader {
 				}
 			);
 		});
+	}
+
+	async loadDefaultHDR() {
+		try {
+			await this.loadHDR('/hdri/brown_photostudio_02_1k.hdr');
+		} catch (error) {
+			console.error('Error loading HDR:', error);
+		}
 	}
 
 	loadImageBackground(file) {
@@ -66,6 +73,14 @@ class HDRLoader {
 
 			reader.readAsDataURL(file);
 		});
+	}
+
+	clearBackground() {
+		this.scene.background = null;
+	}
+
+	clearEnvironment() {
+		this.scene.environment = null;
 	}
 }
 

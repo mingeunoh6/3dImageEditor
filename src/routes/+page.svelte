@@ -24,9 +24,25 @@
 		viewportRef.changeFov(fov);
 	}
 
-	function handleEnvMapIntensity(event) {
-		const { envMapIntensity } = event.detail;
-		viewportRef.changeEnvMapIntensity(envMapIntensity);
+	function handleSubLightRot(event) {
+		const { subLightRot } = event.detail;
+		viewportRef.changeSubLightRot(subLightRot);
+	}
+	function handleSubLightIntensity(event) {
+		const { lightId, lightIntensity } = event.detail;
+		console.log(lightId, lightIntensity);
+		viewportRef.changeSubLightIntensity(lightId, lightIntensity);
+	}
+
+	function handleSubLightStatus(event) {
+		const { lightId, lightStatus } = event.detail;
+		console.log(lightId, lightStatus);
+		viewportRef.changeSubLightStatus(lightId, lightStatus);
+	}
+	function handleSubLightColor(event) {
+		const { lightId, lightColor } = event.detail;
+		console.log(lightId, lightColor);
+		viewportRef.changeSubLightColor(lightId, lightColor);
 	}
 
 	onMount(() => {
@@ -41,7 +57,10 @@
 			on:importBG={handleBGImport}
 			on:selectAsset={handleSelectAsset}
 			on:changeFov={handleCameraFov}
-			on:changeEnvMapIntensity={handleEnvMapIntensity}
+			on:changeSubLightRot={handleSubLightRot}
+			on:changeSubLightIntensity={handleSubLightIntensity}
+			on:changeSubLightStatus={handleSubLightStatus}
+			on:changeSubLightColor={handleSubLightColor}
 		/>
 	</section>
 	<section id="Viewport">
@@ -75,7 +94,7 @@
 	#Viewport {
 		flex-grow: 1;
 		border: 1px solid black;
-		background-color: var(--background-color);
+		background-color: #191a1a;
 		display: flex;
 		justify-content: center;
 		align-items: center;

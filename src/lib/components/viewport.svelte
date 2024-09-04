@@ -8,6 +8,7 @@
 	import GLBModelController from '$lib/components/functions/transform';
 	import CustomDirectionalLight from '$lib/components/functions/directionalLight';
 	import { TransformControls } from 'three/addons/controls/TransformControls';
+	import { base } from '$app/paths';
 
 	export let glbFile = null;
 	export let bgFile = null;
@@ -29,10 +30,10 @@
 	let controller;
 	let controlGroup;
 	let envMapTexture;
+	let lights = [];
 
 	$: if (bgFile) {
 		console.log('bgFile', bgFile);
-
 		changeBackground(bgFile);
 	}
 
@@ -50,12 +51,18 @@
 				console.error('Error importing GLB file', error);
 			});
 
+		if (document.getElementById('overlay').style.display !== 'none') {
+			hideOverlay();
+		}
+
 		glbFile = null;
 	}
 
-	async function changeBackground(bgFile) {
-		console.log('dd', bgFile);
+	function hideOverlay() {
+		document.getElementById('overlay').style.display = 'none';
+	}
 
+	async function changeBackground(bgFile) {
 		hdrLoader
 			.loadImageBackground(bgFile)
 			.then((texture) => {
@@ -64,18 +71,10 @@
 			.catch((error) => {
 				console.error('Error loading HDR:', error);
 			});
-		bgFile = null;
-	}
-
-	function changeEnvMapIntensity(intensity) {
-		if (addedModel.length > 0) {
-			addedModel[0].traverse((child) => {
-				if (child.isMesh) {
-					child.material.envMapIntensity = intensity;
-					child.material.needsUpdate = true;
-				}
-			});
+		if (document.getElementById('overlay').style.display !== 'none') {
+			hideOverlay();
 		}
+		bgFile = null;
 	}
 
 	function clearScene() {
@@ -141,10 +140,11 @@
 					})
 					.catch((error) => console.error('Error loading model:', error));
 			});
-
+		if (document.getElementById('overlay').style.display !== 'none') {
+			hideOverlay();
+		}
 		if (bgFile) {
 			changeBackground(bgFile);
-			changeEnvMapIntensity(intensity);
 		}
 	}
 
@@ -155,11 +155,73 @@
 		console.log('Camera FOV changed to:', fov);
 	}
 
+	function changeSubLightRot(rot) {
+		const lightGroup = scene.getObjectByName('baseLightGroup');
+		lightGroup.rotation.y = rot;
+	}
+
+	function changeSubLightIntensity(lightId, intensity) {
+		if (lights.length === 0) {
+			console.error('No lights in the scene');
+			return;
+		}
+		switch (lightId) {
+			case 1:
+				lights[0].changeIntensity(intensity);
+				break;
+			case 2:
+				lights[1].changeIntensity(intensity);
+				break;
+			case 3:
+				lights[2].changeIntensity(intensity);
+				break;
+		}
+		// lights.forEach((light) => {
+		// 	light.changeIntensity(intensity);
+		// });
+	}
+
+	function changeSubLightColor(lightId, lightColor) {
+		if (lights.length === 0) {
+			console.error('No lights in the scene');
+			return;
+		}
+		switch (lightId) {
+			case 1:
+				lights[0].changeColor(lightColor);
+				break;
+			case 2:
+				lights[1].changeColor(lightColor);
+				break;
+			case 3:
+				lights[2].changeColor(lightColor);
+				break;
+		}
+	}
+
+	function changeSubLightStatus(lightId, lightStatus) {
+		if (lights.length === 0) {
+			console.error('No lights in the scene');
+			return;
+		}
+		switch (lightId) {
+			case 1:
+				lights[0].changeVisible(lightStatus);
+				break;
+			case 2:
+				lights[1].changeVisible(lightStatus);
+				break;
+			case 3:
+				lights[2].changeVisible(lightStatus);
+				break;
+		}
+	}
+
 	async function init() {
 		scene = new THREE.Scene();
 		scene1 = new THREE.Scene();
 		scene2 = new THREE.Scene();
-		camera = new THREE.PerspectiveCamera(10, canvas.clientWidth / canvas.clientHeight, 0.01, 1000);
+		camera = new THREE.PerspectiveCamera(10, canvas.clientWidth / canvas.clientHeight, 0.01, 10000);
 		raycaster = new THREE.Raycaster();
 		mouse = new THREE.Vector2();
 		// Main renderer
@@ -229,11 +291,7 @@
 
 		// hdr;
 		hdrLoader = new HDRLoader(scene, renderer, resizeCanvasAndRenderers);
-		// try {
-		// 	await hdrLoader.loadHDR('/hdri/brown_photostudio_02_1k.hdr');
-		// } catch (error) {
-		// 	console.error('Error loading HDR:', error);
-		// }
+		hdrLoader.loadDefaultHDR();
 
 		//background
 		// // Load background texture
@@ -241,9 +299,9 @@
 		// Add custom directional lights
 		// const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
 		// scene.add(ambientLight);
-		const directionalLight1 = new CustomDirectionalLight(0xffffff, 1, [0, 3, -3]);
-		const directionalLight2 = new CustomDirectionalLight(0xffffff, 1, [-2, 3, 2]);
-		const directionalLight3 = new CustomDirectionalLight(0xffffff, 1, [2, 3, 2]);
+		const directionalLight3 = new CustomDirectionalLight(0xffffff, 0.3, [0, 1.3, -2]);
+		const directionalLight1 = new CustomDirectionalLight(0xffffff, 1.2, [-2, 1.3, 2]);
+		const directionalLight2 = new CustomDirectionalLight(0xffffff, 0.7, [2, 1.3, 2]);
 		const lightHelper1 = new THREE.DirectionalLightHelper(directionalLight1.light, 5);
 		const lightHelper2 = new THREE.DirectionalLightHelper(directionalLight2.light, 5);
 		const lightHelper3 = new THREE.DirectionalLightHelper(directionalLight3.light, 5);
@@ -253,6 +311,21 @@
 		directionalLight1.addToScene(scene);
 		directionalLight2.addToScene(scene);
 		directionalLight3.addToScene(scene);
+
+		// Add lights to the lights array
+		lights.push(directionalLight1);
+		lights.push(directionalLight2);
+		lights.push(directionalLight3);
+
+		const baseLightGroup = new THREE.Group();
+		baseLightGroup.add(directionalLight1.light);
+		baseLightGroup.add(directionalLight2.light);
+		baseLightGroup.add(directionalLight3.light);
+
+		baseLightGroup.position.set(0, 0, 0);
+		baseLightGroup.name = 'baseLightGroup';
+		scene.add(baseLightGroup);
+		console.log('baseLightGroup', baseLightGroup);
 		//viewport selector
 
 		//adjust resolution
@@ -408,6 +481,14 @@
 		if (!this.offscreenMainRenderer) {
 			this.offscreenMainRenderer = new THREE.WebGLRenderer({ antialias: true });
 			this.offscreenMainRenderer.setSize(offscreenWidth, offscreenHeight);
+			this.offscreenMainRenderer.setPixelRatio(window.devicePixelRatio);
+			//shadows
+			this.offscreenMainRenderer.shadowMap.enabled = true;
+			this.offscreenMainRenderer.shadowMap.type = THREE.PCFSoftShadowMap; // Use soft shadows for smoother edges
+			this.offscreenMainRenderer.shadowMap.bias = 0.0001;
+			this.offscreenMainRenderer.outputColorSpace = THREE.SRGBColorSpace;
+			this.offscreenMainRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+			this.offscreenMainRenderer.toneMappingExposure = 1.0;
 		} else {
 			this.offscreenMainRenderer.setSize(offscreenWidth, offscreenHeight);
 			this.offscreenMainRenderer.clear();
@@ -580,12 +661,36 @@
 		};
 	});
 
-	export { loadNewModel, changeFov, changeEnvMapIntensity };
+	export {
+		loadNewModel,
+		changeFov,
+		changeSubLightRot,
+		changeSubLightIntensity,
+		changeSubLightStatus,
+		changeSubLightColor
+	};
 </script>
 
 <div id="viewport-main-wrapper">
 	<div id="viewport-wrapper">
-		<canvas id="viewport" bind:this={canvas}> </canvas>
+		<div id="main-viewport">
+			<canvas id="viewport" bind:this={canvas}> </canvas>
+			<div id="overlay">
+				<div id="overlay-content">
+					<h1>GUIDE</h1>
+					<p>
+						1.<br /> 왼쪽 패널의 <span class="highlight">"GLB 불러오기"</span> 버튼을 클릭해 3D
+						모델을 불러오거나<br /> 왼쪽 패널 하단의 <span class="highlight">제품 모델 목록</span> 에서
+						원하는 제품을 골라 사용하기를 클릭하세요.
+					</p>
+					<p>
+						2.<br /><span class="highlight">"배경 불러오기"</span> 버튼을 통해 원하는 배경 이미지를
+						<br />불러오면 배경 이미지가 자연스럽게 제품의 주변광으로 적용됩니다.
+					</p>
+				</div>
+			</div>
+		</div>
+
 		<div id="preview-wrapper">
 			<canvas id="render-canvas" bind:this={renderCanvas}></canvas>
 			<canvas id="pass-canvas" bind:this={passCanvas}></canvas>
@@ -626,6 +731,49 @@
 		width: 100%;
 		height: 80vh;
 	}
+	#main-viewport {
+		position: relative;
+	}
+
+	#overlay {
+		position: absolute;
+		top: 0;
+		left: 0;
+		width: 100%;
+		height: 100%;
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		color: var(--text-color);
+		background-color: rgba(0, 0, 0, 0.5);
+		box-sizing: border-box;
+		padding: 30px;
+		z-index: 999;
+	}
+	#overlay-content {
+		width: 100%;
+		height: 100%;
+		text-align: center;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		align-items: center;
+
+		gap: 10px;
+	}
+	#overlay-content h1 {
+		font-size: 2rem;
+		margin-bottom: 32px;
+	}
+
+	.highlight {
+		color: var(--highlight-color);
+	}
+
+	#overlay-content p {
+		font-size: 1rem;
+		line-height: 1.7rem;
+	}
 
 	#transform-tool {
 		display: flex;
@@ -659,7 +807,6 @@
 	#preview-wrapper {
 		display: flex;
 		flex-direction: column;
-		margin-left: 20px;
 	}
 
 	#render-canvas,
@@ -695,7 +842,6 @@
 		max-height: 40vh;
 		width: auto;
 		height: auto;
-		margin-bottom: 10px;
 	}
 
 	@media (max-width: 768px) {
