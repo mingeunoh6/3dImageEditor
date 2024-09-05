@@ -164,7 +164,7 @@
 <section>
 	<div class="sectionWrapper">
 		<div class="main-title">
-			<h5>3D Web Studio Beta v.0.4.2</h5>
+			<h5>3D Web Studio Beta v.0.4.3</h5>
 		</div>
 		<div class="sub-card">
 			<div class="sub-title-lv1">
@@ -444,56 +444,6 @@
 			<ul class="product-asset-list">
 				<li>
 					<div class="asset-item">
-						<p>식기세척기</p>
-						<button on:click={() => handleAssetSelection('dishwasher_Web_10_1024_png.glb')}
-							>사용하기</button
-						>
-					</div>
-				</li>
-				<li>
-					<div class="asset-item">
-						<p>벽걸이 에어컨</p>
-						<button on:click={() => handleAssetSelection('rac_s1_Web_6_1024_png.glb')}
-							>사용하기</button
-						>
-					</div>
-				</li>
-				<li>
-					<div class="asset-item">
-						<p>로봇클리너</p>
-						<button on:click={() => handleAssetSelection('robotcleaner_Web_20_1024_png_rS1.glb')}
-							>사용하기</button
-						>
-					</div>
-				</li>
-				<li>
-					<div class="asset-item">
-						<p>스타일러</p>
-						<button on:click={() => handleAssetSelection('styler_Web_10_1024_png.glb')}
-							>사용하기</button
-						>
-					</div>
-				</li>
-				<li>
-					<div class="asset-item">
-						<p>얼음정수기 냉장고</p>
-						<button
-							on:click={() => handleAssetSelection('SXS_VS_GSLV70MCT_00101_Web_10_1024_png.glb')}
-							>사용하기</button
-						>
-					</div>
-				</li>
-				<li>
-					<div class="asset-item">
-						<p>진공청소기</p>
-						<button on:click={() => handleAssetSelection('vacuumcleaner_Web_10_1024_png.glb')}
-							>사용하기</button
-						>
-					</div>
-				</li>
-
-				<li>
-					<div class="asset-item">
 						<p>프라엘 더마세라 BLQ1</p>
 						<button on:click={() => handleAssetSelection('BLQ1_LOW_REFLECTIVE.glb')}
 							>사용하기</button
@@ -502,10 +452,52 @@
 				</li>
 				<li>
 					<div class="asset-item">
-						<p>2018-벤츠-AMG G65 블랙</p>
-						<button on:click={() => handleAssetSelection('2018_mercedes-amg_g65_final_edition.glb')}
+						<p>세탁기+건조기 워쉬타워</p>
+						<button on:click={() => handleAssetSelection('washTower.glb')}>사용하기</button>
+					</div>
+				</li>
+
+				<li>
+					<div class="asset-item">
+						<p>스탠바이미-화면 off/ 가로</p>
+						<button on:click={() => handleAssetSelection('lgStandbyMe_off.glb')}>사용하기</button>
+					</div>
+				</li>
+				<li>
+					<div class="asset-item">
+						<p>스탠바이미-화면 on/ 가로</p>
+						<button on:click={() => handleAssetSelection('lgStandbyMe_on.glb')}>사용하기</button>
+					</div>
+				</li>
+				<li>
+					<div class="asset-item">
+						<p>스탠바이미-화면 off/ 세로</p>
+						<button on:click={() => handleAssetSelection('lgStandbyMe_off_portrait.glb')}
 							>사용하기</button
 						>
+					</div>
+				</li>
+				<li>
+					<div class="asset-item">
+						<p>스탠바이미-화면 on/ 세로</p>
+						<button on:click={() => handleAssetSelection('lgStandbyMe_on_portrait.glb')}
+							>사용하기</button
+						>
+					</div>
+				</li>
+
+				<li>
+					<div class="asset-item">
+						<p>벽걸이 에어컨</p>
+						<button on:click={() => handleAssetSelection('air_conditioner_lg.glb')}>사용하기</button
+						>
+					</div>
+				</li>
+
+				<li>
+					<div class="asset-item">
+						<p>스타일러</p>
+						<button on:click={() => handleAssetSelection('lg_stlyer.glb')}>사용하기</button>
 					</div>
 				</li>
 			</ul>

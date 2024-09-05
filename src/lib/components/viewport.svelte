@@ -302,7 +302,7 @@
 
 		// hdr;
 		hdrLoader = new HDRLoader(scene, renderer, resizeCanvasAndRenderers);
-		// hdrLoader.loadDefaultHDR();
+		hdrLoader.loadDefaultHDR();
 
 		//background
 		// // Load background texture
