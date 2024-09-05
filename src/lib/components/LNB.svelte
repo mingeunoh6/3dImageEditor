@@ -164,7 +164,7 @@
 <section>
 	<div class="sectionWrapper">
 		<div class="main-title">
-			<h5>3D Web Studio Beta v.0.4.3</h5>
+			<h5>3D Web Studio Beta v.0.4.4</h5>
 		</div>
 		<div class="sub-card">
 			<div class="sub-title-lv1">

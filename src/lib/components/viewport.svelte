@@ -236,7 +236,11 @@
 		raycaster = new THREE.Raycaster();
 		mouse = new THREE.Vector2();
 		// Main renderer
-		renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+		renderer = new THREE.WebGLRenderer({
+			canvas: canvas,
+			antialias: true,
+			logarithmicDepthBuffer: true
+		});
 		setRendererResolution(renderer, canvas);
 		renderer.setPixelRatio(window.devicePixelRatio);
 		//shadows
@@ -490,7 +494,10 @@
 		}
 
 		if (!this.offscreenMainRenderer) {
-			this.offscreenMainRenderer = new THREE.WebGLRenderer({ antialias: true });
+			this.offscreenMainRenderer = new THREE.WebGLRenderer({
+				antialias: true,
+				logarithmicDepthBuffer: true
+			});
 			this.offscreenMainRenderer.setSize(offscreenWidth, offscreenHeight);
 			this.offscreenMainRenderer.setPixelRatio(window.devicePixelRatio);
 			//shadows
