@@ -164,13 +164,13 @@
 <section>
 	<div class="sectionWrapper">
 		<div class="main-title">
-			<h5>3D Web Studio Beta v.0.4.4</h5>
+			<h5>3D Web Studio Beta v.1.0.0</h5>
 		</div>
 		<div class="sub-card">
 			<div class="sub-title-lv1">
 				<p>by 오민근 | OTR | HSAD</p>
 				<p>mg.oh@hsad.co.kr</p>
-				<p>last update: 2024-09-04</p>
+				<p>last update: 2024-09-25</p>
 			</div>
 		</div>
 

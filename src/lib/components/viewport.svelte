@@ -8,7 +8,7 @@
 	import GLBModelController from '$lib/components/functions/transform';
 	import CustomDirectionalLight from '$lib/components/functions/directionalLight';
 	import { TransformControls } from 'three/addons/controls/TransformControls';
-	import { base } from '$app/paths';
+	import ShadowGround from '$lib/components/functions/ground.js';
 
 	export let glbFile = null;
 	export let bgFile = null;
@@ -31,7 +31,9 @@
 	let controller;
 	let controlGroup;
 	let envMapTexture;
+	let ground;
 	let lights = [];
+	let isBackground = true;
 
 	$: if (bgFile) {
 		console.log('bgFile', bgFile);
@@ -242,11 +244,11 @@
 			logarithmicDepthBuffer: true
 		});
 		setRendererResolution(renderer, canvas);
-		renderer.setPixelRatio(window.devicePixelRatio);
+		renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 		//shadows
 		renderer.shadowMap.enabled = true;
 		renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Use soft shadows for smoother edges
-		renderer.shadowMap.bias = 0.0001;
+		renderer.shadowMap.needsUpdate = true;
 		renderer.outputColorSpace = THREE.SRGBColorSpace;
 		renderer.toneMapping = THREE.ACESFilmicToneMapping;
 		renderer.toneMappingExposure = 1.0;
@@ -257,12 +259,12 @@
 			antialias: true
 		});
 		setRendererResolution(renderRenderer, renderCanvas);
-		renderRenderer.setPixelRatio(window.devicePixelRatio);
+		renderRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
 		// Pass renderer
 		passRenderer = new THREE.WebGLRenderer({ canvas: passCanvas, antialias: true });
 		setRendererResolution(passRenderer, passCanvas);
-		passRenderer.setPixelRatio(window.devicePixelRatio);
+		passRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
 		camera.position.z = 5;
 
@@ -314,9 +316,9 @@
 		// Add custom directional lights
 		ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
 		scene.add(ambientLight);
-		const backLight = new CustomDirectionalLight(0xffffff, 0.3, [0, 1.3, -2]);
-		const keyLight = new CustomDirectionalLight(0xffffff, 1.2, [-2, 1.3, 2]);
-		const fillLight = new CustomDirectionalLight(0xffffff, 0.7, [2, 1.3, 2]);
+		const backLight = new CustomDirectionalLight(0xffffff, 0.3, [0, 4, -2], 'back');
+		const keyLight = new CustomDirectionalLight(0xffffff, 1.2, [-2, 4, 2], 'key');
+		const fillLight = new CustomDirectionalLight(0xffffff, 0.7, [2, 4, 2], 'fill');
 		const lightHelper1 = new THREE.DirectionalLightHelper(keyLight.light, 5);
 		const lightHelper2 = new THREE.DirectionalLightHelper(fillLight.light, 5);
 		const lightHelper3 = new THREE.DirectionalLightHelper(backLight.light, 5);
@@ -340,8 +342,10 @@
 		baseLightGroup.position.set(0, 0, 0);
 		baseLightGroup.name = 'baseLightGroup';
 		scene.add(baseLightGroup);
-		console.log('baseLightGroup', baseLightGroup);
-		//viewport selector
+
+		//shadow Ground
+		ground = new ShadowGround(1000);
+		// ground.addToScene(scene);
 
 		//adjust resolution
 
@@ -463,6 +467,12 @@
 		if (controller) {
 			controller.detach();
 		}
+
+		//그리드 제거
+		// if (ground) {
+		// 	ground.gridOption(false);
+		// }
+
 		if (addedModel.length === 0) {
 			console.error('No model added to the scene');
 			alert('Please upload product model first.');
@@ -495,15 +505,16 @@
 
 		if (!this.offscreenMainRenderer) {
 			this.offscreenMainRenderer = new THREE.WebGLRenderer({
+				alpha: true,
 				antialias: true,
 				logarithmicDepthBuffer: true
 			});
 			this.offscreenMainRenderer.setSize(offscreenWidth, offscreenHeight);
-			this.offscreenMainRenderer.setPixelRatio(window.devicePixelRatio);
+			this.offscreenMainRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 			//shadows
 			this.offscreenMainRenderer.shadowMap.enabled = true;
 			this.offscreenMainRenderer.shadowMap.type = THREE.PCFSoftShadowMap; // Use soft shadows for smoother edges
-			this.offscreenMainRenderer.shadowMap.bias = 0.0001;
+
 			this.offscreenMainRenderer.outputColorSpace = THREE.SRGBColorSpace;
 			this.offscreenMainRenderer.toneMapping = THREE.ACESFilmicToneMapping;
 			this.offscreenMainRenderer.toneMappingExposure = 1.0;
@@ -569,6 +580,12 @@
 		passRenderer.render(scene2, camera);
 		this.offscreenPassRenderer.render(scene2, camera);
 
+		//background decision
+		let saveSceneBG = scene.background;
+		if (!isBackground) {
+			scene.background = null;
+		}
+
 		// Render the main scene to the off-screen renderer
 		this.offscreenMainRenderer.render(scene, camera);
 
@@ -583,11 +600,21 @@
 			downloadImage(renderDataUrl, 'rendered_scene.png');
 			downloadImage(passDataUrl, 'pass_scene.png');
 
+			// Reset scene background
+			if (!isBackground) {
+				scene.background = saveSceneBG;
+			}
+
 			// Clean up off-screen renderers
 			this.offscreenRenderRenderer.dispose();
 			this.offscreenPassRenderer.dispose();
 			this.offscreenMainRenderer.dispose();
 		}, 1000);
+
+		//이미지 내보내기를 위해 임시로 제거했던 것 다시 추가
+		if (ground) {
+			ground.gridOption(true);
+		}
 	}
 
 	function setRendererResolution(renderer, canvas, scaleFactor = 2) {
@@ -679,6 +706,11 @@
 		};
 	});
 
+	function handleBackgroundOption(e) {
+		isBackground = e.target.checked;
+		console.log('isBackground', isBackground);
+	}
+
 	export {
 		loadNewModel,
 		changeFov,
@@ -715,8 +747,25 @@
 		</div>
 	</div>
 	<div id="viewport-menu">
-		<button on:click={imageOutputRender}>제품 이미지 / 제품 마스크 다운로드</button>
+		<button on:click={imageOutputRender}>제품 이미지 / 마스크 다운로드</button>
+		<div class="checkBox-wrapper">
+			<p>배경 포함</p>
+			<div class="checkBox-section">
+				<p>off</p>
+				<label class="switch">
+					<input
+						type="checkbox"
+						id="background-download-switch"
+						checked={isBackground}
+						on:input={(e) => handleBackgroundOption(e)}
+					/>
+					<span class="toggle-slider round"></span>
+				</label>
+				<p>on</p>
+			</div>
+		</div>
 	</div>
+
 	<div id="transform-tool">
 		<button class="transform-btn" on:click={changeTransformMode}>이동</button>
 		<button class="transform-btn" on:click={changeTransformMode}>회전</button>
@@ -734,20 +783,22 @@
 		align-items: center;
 	}
 	#viewport-menu {
-		width: 80%;
-		height: 64px;
+		width: 100%;
+		height: 100%;
 		box-sizing: border-box;
 		display: flex;
-		flex-direction: column;
+		flex-direction: row;
 		justify-content: center;
 		align-items: center;
+		margin: 8px;
+		gap: 8px;
 	}
 	#viewport-wrapper {
 		display: flex;
 		justify-content: center;
 		align-items: flex-start;
 		width: 100%;
-		height: 80vh;
+		height: 90vh;
 	}
 	#main-viewport {
 		position: relative;
@@ -842,7 +893,7 @@
 
 	button {
 		box-sizing: border-box;
-		width: 80%;
+		width: 50%;
 		height: 42px;
 		border: none;
 		background-color: var(--secondary-color);
@@ -854,6 +905,10 @@
 		cursor: pointer;
 	}
 
+	.sub-button {
+		background-color: #f88030;
+	}
+
 	#render-canvas,
 	#pass-canvas {
 		max-width: 40vw;
@@ -862,6 +917,87 @@
 		height: auto;
 	}
 
+	.checkBox-wrapper {
+		display: flex;
+		flex-direction: row;
+		justify-content: center;
+		align-items: center;
+		gap: 8px;
+	}
+
+	.checkBox-section {
+		display: flex;
+		flex-direction: row;
+		justify-content: center;
+		align-items: center;
+		gap: 8px;
+	}
+
+	.checkBox-wrapper p {
+		color: var(--text-color);
+		font-size: 1rem;
+	}
+
+	.switch {
+		position: relative;
+		display: inline-block;
+		width: 42px;
+		height: 24px;
+	}
+
+	/* Hide default HTML checkbox */
+	.switch input {
+		opacity: 0;
+		width: 0;
+		height: 0;
+	}
+	/* The slider */
+	.toggle-slider {
+		position: absolute;
+		cursor: pointer;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background-color: #ccc;
+		-webkit-transition: 0.4s;
+		transition: 0.4s;
+	}
+
+	.toggle-slider:before {
+		position: absolute;
+		content: '';
+		height: 16px;
+		width: 16px;
+		left: 4px;
+		bottom: 4px;
+		background-color: white;
+		-webkit-transition: 0.4s;
+		transition: 0.4s;
+	}
+
+	input:checked + .toggle-slider {
+		background-color: #2196f3;
+	}
+
+	input:focus + .toggle-slider {
+		box-shadow: 0 0 1px #2196f3;
+	}
+
+	input:checked + .toggle-slider:before {
+		-webkit-transform: translateX(19px);
+		-ms-transform: translateX(19px);
+		transform: translateX(19px);
+	}
+
+	/* Rounded sliders */
+	.toggle-slider.round {
+		border-radius: 34px;
+	}
+
+	.toggle-slider.round:before {
+		border-radius: 50%;
+	}
 	@media (max-width: 768px) {
 	}
 

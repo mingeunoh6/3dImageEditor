@@ -1,20 +1,36 @@
 import * as THREE from 'three';
 class CustomDirectionalLight {
-	constructor(color, intensity, position) {
+	constructor(color, intensity, position, type) {
+		this.type = type;
 		this.light = new THREE.DirectionalLight(color, intensity);
 		this.light.position.set(...position);
-		this.light.castShadow = true;
-		this.light.shadow.bias = -0.0001;
 
-		// Configure shadow map size and camera settings
-		// this.light.shadow.mapSize.width = 2048;
-		// this.light.shadow.mapSize.height = 2048;
-		// this.light.shadow.camera.near = 0.1;
-		// this.light.shadow.camera.far = 50;
-		// this.light.shadow.camera.left = -50;
-		// this.light.shadow.camera.right = 50;
-		// this.light.shadow.camera.top = 50;
-		// this.light.shadow.camera.bottom = -50;
+		switch (this.type) {
+			case 'key':
+				this.light.castShadow = true;
+				this.light.shadow.bias = -0.000001;
+
+				// Configure shadow map size and camera settings
+				this.light.shadow.mapSize.width = 2048;
+				this.light.shadow.mapSize.height = 2048;
+				this.light.shadow.camera.near = 0.01;
+				this.light.shadow.camera.far = 150;
+				this.light.shadow.camera.left = -150;
+				this.light.shadow.camera.right = 150;
+				this.light.shadow.camera.top = 150;
+				this.light.shadow.camera.bottom = -150;
+
+				break;
+			case 'fill':
+				this.light.castShadow = false;
+
+				break;
+			case 'back':
+				this.light.castShadow = false;
+				break;
+			default:
+				this.light.castShadow = true;
+		}
 	}
 
 	addToScene(scene) {
