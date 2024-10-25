@@ -1,6 +1,9 @@
 <script>
 	import { onMount, createEventDispatcher } from 'svelte';
+	import Icon from '@iconify/svelte';
+	import ExpandPanel from './EP.svelte';
 
+	let aiPanelStatus = false;
 	let fov = 10;
 	let subLightRot = 0;
 	let envMapIntensity = 1;
@@ -31,6 +34,25 @@
 		const file = event.target.files[0];
 		if (file) {
 			dispatch('importBG', { file });
+		}
+	}
+
+	async function handleApplyAIBG(event) {
+		isBackground = true;
+		const imageUrl = event.detail.imageUrl;
+		try {
+			const response = await fetch(imageUrl);
+			const blob = await response.blob();
+			const file = new File([blob], 'background.png', { type: 'image/png' });
+
+			// Now call your existing handleBGImport with the file
+			dispatch('importBG', { file });
+
+			// Close the AI panel
+			aiPanelStatus = false;
+			document.getElementById('expand-panel').style.left = '0%';
+		} catch (error) {
+			console.error('Error converting URL to file:', error);
 		}
 	}
 
@@ -156,6 +178,16 @@
 		}
 	}
 
+	function openAIpanel() {
+		aiPanelStatus = !aiPanelStatus;
+
+		if (aiPanelStatus) {
+			document.getElementById('expand-panel').style.left = '100%';
+		} else {
+			document.getElementById('expand-panel').style.left = '0%';
+		}
+	}
+
 	onMount(() => {
 		console.log('Hello LNB component');
 	});
@@ -164,13 +196,13 @@
 <section>
 	<div class="sectionWrapper">
 		<div class="main-title">
-			<h5>3D Web Studio Beta v.1.0.0</h5>
+			<h5>3D DASH AI Beta v.2.0.0</h5>
 		</div>
 		<div class="sub-card">
 			<div class="sub-title-lv1">
 				<p>by 오민근 | OTR | HSAD</p>
 				<p>mg.oh@hsad.co.kr</p>
-				<p>last update: 2024-09-25</p>
+				<p>last update: 2024-10-25</p>
 			</div>
 		</div>
 
@@ -188,7 +220,7 @@
 			<button on:click={() => document.getElementById('glb-import').click()}>GLB 불러오기</button>
 		</div>
 		<div class="sub-title">
-			<h5>배경 이미지 업로드</h5>
+			<h5>배경 이미지</h5>
 		</div>
 		<div class="sub-card">
 			<input
@@ -198,23 +230,18 @@
 				style="display: none;"
 				on:change={handleBGImport}
 			/>
-			<button on:click={() => document.getElementById('bg-import').click()}>배경 불러오기</button>
-
-			<!-- <div>
-				<label for="envMapIntensity">환경맵 강도: {envMapIntensity}</label>
-
-				<input
-					type="range"
-					id="envMapIntensity"
-					name="envMapIntensity"
-					min="0"
-					max="10"
-					step="0.1"
-					value="10"
-					on:input={(e) => handleEnvMapIntensity(e)}
-				/>
-			</div> -->
+			<div class="button-list">
+				<button class="btn" on:click={() => document.getElementById('bg-import').click()}
+					>배경 불러오기</button
+				>
+				<button on:click={openAIpanel} class="btn"
+					><div class="btn-icon-group">
+						<Icon icon="mingcute:ai-fill" class="button-icon" />AI로 배경 생성
+					</div></button
+				>
+			</div>
 		</div>
+
 		<div class="sub-title">
 			<h5>카메라 FOV 변경</h5>
 		</div>
@@ -529,15 +556,36 @@
 		</div>
 	</div>
 </section>
+<div id="expand-panel">
+	<ExpandPanel on:applyBackground={handleApplyAIBG} />
+</div>
 
 <style>
 	section {
+		position: absolute;
+		top: 0;
+		left: 0%;
 		box-sizing: border-box;
-		width: 100%; /* 30% of the smaller viewport dimension */
+		width: 100%;
 		height: 100%;
 		overflow: hidden;
-		background-color: var(--background-color);
+		z-index: 999;
+		border: 1px solid black;
 	}
+
+	#expand-panel {
+		position: absolute;
+		top: 0;
+		left: 0%;
+		box-sizing: border-box;
+		width: 100%;
+		height: 100%;
+		background-color: var(--primary-color);
+		color: var(--text-color);
+		z-index: 998;
+		transition: left 0.5s ease-in-out;
+	}
+
 	.sectionWrapper {
 		display: flex;
 		flex-direction: column;
@@ -546,6 +594,7 @@
 		height: 100%;
 		padding: 10px;
 		overflow: auto;
+		background-color: var(--background-color);
 	}
 
 	.main-title {
@@ -692,7 +741,7 @@
 		box-sizing: border-box;
 		width: 80%;
 		height: 42px;
-		margin: 30px;
+		margin: 15px 0 15px 0;
 
 		background-color: var(--border-color);
 		color: var(--text-color);
@@ -703,6 +752,54 @@
 		background-color: var(--secondary-color);
 		cursor: pointer;
 		border: none;
+	}
+
+	.btn {
+		box-sizing: border-box;
+		width: 80%;
+		height: 42px;
+		margin: 0;
+
+		background-color: var(--border-color);
+		color: var(--text-color);
+		border: none;
+	}
+
+	.button-list {
+		margin: 15px 0 15px 0;
+		display: flex;
+		flex-direction: column;
+
+		align-items: center;
+		width: 100%;
+		gap: 10px;
+	}
+
+	div :global(.button-icon) {
+		font-size: 1.4rem;
+	}
+
+	.btn-icon-group {
+		width: 100%;
+		height: 100%;
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		gap: 4px;
+	}
+	.btn-icon-group p {
+		text-align: center;
+		color: var(--text-color);
+	}
+
+	.btn-icon-group .icon {
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		margin: 0;
+		height: 100%;
+		border: 1px solid red;
+		margin-right: 10px;
 	}
 
 	.product-asset-list {

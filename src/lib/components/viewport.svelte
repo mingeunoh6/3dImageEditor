@@ -817,7 +817,7 @@
 		background-color: rgba(0, 0, 0, 0.5);
 		box-sizing: border-box;
 		padding: 30px;
-		z-index: 999;
+		z-index: 997;
 	}
 	#overlay-content {
 		width: 100%;

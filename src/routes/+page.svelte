@@ -86,9 +86,9 @@
 	}
 
 	#LNB {
+		position: relative;
 		min-width: 320px;
 		width: 30vmin; /* 30% of the smaller viewport dimension */
-		border: 1px solid black;
 	}
 
 	#Viewport {
