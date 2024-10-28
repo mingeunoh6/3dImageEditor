@@ -10,9 +10,11 @@
 	import { TransformControls } from 'three/addons/controls/TransformControls';
 	import ShadowGround from '$lib/components/functions/ground.js';
 
+
 	export let glbFile = null;
 	export let bgFile = null;
 
+	let scaleFactor = 2;
 	let scene, camera, renderer, renderRenderer, passRenderer, controls, canvas;
 	let ambientLight;
 	let scene1, scene2;
@@ -243,7 +245,7 @@
 			antialias: true,
 			logarithmicDepthBuffer: true
 		});
-		setRendererResolution(renderer, canvas);
+		setRendererResolution(renderer, canvas, scaleFactor);
 		renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 		//shadows
 		renderer.shadowMap.enabled = true;
@@ -258,18 +260,18 @@
 			canvas: renderCanvas,
 			antialias: true
 		});
-		setRendererResolution(renderRenderer, renderCanvas);
+		setRendererResolution(renderRenderer, renderCanvas,scaleFactor);
 		renderRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
 		// Pass renderer
 		passRenderer = new THREE.WebGLRenderer({ canvas: passCanvas, antialias: true });
-		setRendererResolution(passRenderer, passCanvas);
+		setRendererResolution(passRenderer, passCanvas,scaleFactor);
 		passRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
 		camera.position.z = 5;
 
 		//set initial renderer, canvas size and resolution in square aspect ratio
-		resizeCanvasAndRenderers(1);
+		resizeCanvasAndRenderers(1,scaleFactor);
 
 		//orbit control
 		controls = new OrbitControls(camera, renderer.domElement);
@@ -307,7 +309,7 @@
 		glbImporter = new GLBImporter(scene, controlGroup);
 
 		// hdr;
-		hdrLoader = new HDRLoader(scene, renderer, resizeCanvasAndRenderers);
+		hdrLoader = new HDRLoader(scene, renderer, resizeCanvasAndRenderers,scaleFactor);
 		hdrLoader.loadDefaultHDR();
 
 		//background
@@ -482,7 +484,7 @@
 		// Create off-screen renderers
 		// Reuse or create off-screen renderers
 
-		const scaleFactor = 2; // Adjust this value to increase/decrease resolution
+	// Adjust this value to increase/decrease resolution
 		const aspectRatio = renderCanvas.width / renderCanvas.height;
 		const offscreenWidth = 1024 * scaleFactor;
 		const offscreenHeight = offscreenWidth / aspectRatio;
@@ -490,6 +492,7 @@
 		if (!this.offscreenRenderRenderer) {
 			this.offscreenRenderRenderer = new THREE.WebGLRenderer({ antialias: true });
 			this.offscreenRenderRenderer.setSize(offscreenWidth, offscreenHeight);
+			this.offscreenRenderRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 		} else {
 			this.offscreenRenderRenderer.setSize(offscreenWidth, offscreenHeight);
 			this.offscreenRenderRenderer.clear();
@@ -498,6 +501,7 @@
 		if (!this.offscreenPassRenderer) {
 			this.offscreenPassRenderer = new THREE.WebGLRenderer({ antialias: true });
 			this.offscreenPassRenderer.setSize(offscreenWidth, offscreenHeight);
+			this.offscreenPassRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 		} else {
 			this.offscreenPassRenderer.setSize(offscreenWidth, offscreenHeight);
 			this.offscreenPassRenderer.clear();
@@ -617,7 +621,7 @@
 		}
 	}
 
-	function setRendererResolution(renderer, canvas, scaleFactor = 2) {
+	function setRendererResolution(renderer, canvas, scaleFactor) {
 		const width = canvas.clientWidth * scaleFactor;
 		const height = canvas.clientHeight * scaleFactor;
 		renderer.setSize(width, height, false);
@@ -625,8 +629,8 @@
 		canvas.style.height = canvas.clientHeight + 'px';
 	}
 
-	function resizeCanvasAndRenderers(aspectRatio) {
-		const scaleFactor = 2; // or whatever value you're using
+	function resizeCanvasAndRenderers(aspectRatio, scaleFactor) {
+		// const scaleFactor = 1; // or whatever value you're using
 		const maxSize = Math.min(window.innerWidth * 0.8, window.innerHeight * 0.8);
 		const baseSize = 1024 * scaleFactor;
 		let width, height;
@@ -673,7 +677,7 @@
 	function onWindowResize() {
 		if (scene.background && scene.background.isTexture) {
 			const aspectRatio = scene.background.image.width / scene.background.image.height;
-			resizeCanvasAndRenderers(aspectRatio);
+			resizeCanvasAndRenderers(aspectRatio, scaleFactor);
 		}
 
 		const width = canvas.clientWidth;
@@ -682,9 +686,9 @@
 		camera.aspect = width / height;
 		camera.updateProjectionMatrix();
 
-		setRendererResolution(renderer, canvas);
-		setRendererResolution(renderRenderer, renderCanvas);
-		setRendererResolution(passRenderer, passCanvas);
+		setRendererResolution(renderer, canvas,scaleFactor);
+		setRendererResolution(renderRenderer, renderCanvas,scaleFactor);
+		setRendererResolution(passRenderer, passCanvas,scaleFactor);
 	}
 
 	onMount(() => {

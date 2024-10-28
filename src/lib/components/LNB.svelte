@@ -196,13 +196,13 @@
 <section>
 	<div class="sectionWrapper">
 		<div class="main-title">
-			<h5>3D DASH AI Beta v.2.0.0</h5>
+			<h5>3D DASH AI Beta v.2.1.0</h5>
 		</div>
 		<div class="sub-card">
 			<div class="sub-title-lv1">
 				<p>by 오민근 | OTR | HSAD</p>
 				<p>mg.oh@hsad.co.kr</p>
-				<p>last update: 2024-10-25</p>
+				<p>last update: 2024-10-28</p>
 			</div>
 		</div>
 

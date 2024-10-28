@@ -2,10 +2,11 @@ import * as THREE from 'three';
 import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
 
 class HDRLoader {
-	constructor(scene, renderer, canvasResizer) {
+	constructor(scene, renderer, canvasResizer,scaleFactor) {
 		this.scene = scene;
 		this.renderer = renderer;
 		this.canvasResizer = canvasResizer;
+		this.scaleFactor = scaleFactor;
 	}
 
 	async loadHDR(url) {
@@ -56,7 +57,7 @@ class HDRLoader {
 						this.scene.environment = envTexture;
 
 						const aspectRatio = texture.image.width / texture.image.height;
-						this.canvasResizer(aspectRatio);
+						this.canvasResizer(aspectRatio,this.scaleFactor);
 
 						resolve(texture);
 					},
