@@ -26,6 +26,7 @@ class GLBImporter {
 					'',
 					(gltf) => {
 						this.controlGroup.add(gltf.scene);
+						console.log('imported');
 						gltf.scene.traverse((child) => {
 							if (child.isMesh) {
 								child.castShadow = true;

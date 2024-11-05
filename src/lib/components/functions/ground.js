@@ -4,15 +4,20 @@ class ShadowGround {
 	constructor(size) {
 		this.ground = new THREE.Mesh(
 			new THREE.PlaneGeometry(size, size),
-			new THREE.ShadowMaterial({ opacity: 0.5 })
+			new THREE.ShadowMaterial({ opacity: 0.2 })
 		);
 		this.ground.rotation.x = -Math.PI / 2;
 		this.ground.receiveShadow = true;
-		this.grid = new THREE.GridHelper(size, 30, 0xffffff, 0xffffff);
+		this.ground.name = 'ground';
+		this.grid = new THREE.GridHelper(size, 100, 0xffffff, 0xffffff);
+		this.grid.name = 'grid';
 	}
 
 	addToScene(scene) {
 		scene.add(this.ground);
+	}
+
+	addGrid(scene) {
 		scene.add(this.grid);
 	}
 
@@ -31,6 +36,8 @@ class ShadowGround {
 	changeVisible(visible) {
 		this.ground.visible = visible;
 	}
+
+	
 }
 
 export default ShadowGround;

@@ -7,7 +7,7 @@ class CustomDirectionalLight {
 
 		switch (this.type) {
 			case 'key':
-				this.light.castShadow = true;
+				this.light.castShadow = false;
 				this.light.shadow.bias = -0.000001;
 
 				// Configure shadow map size and camera settings

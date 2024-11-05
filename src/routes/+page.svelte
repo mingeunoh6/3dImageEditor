@@ -45,6 +45,24 @@
 		viewportRef.changeSubLightColor(lightId, lightColor);
 	}
 
+	function handleGridStatus(event) {
+		const { gridStatus } = event.detail;
+			console.log('gridStatus', gridStatus);
+		viewportRef.changeGridStatus(gridStatus);
+	}
+
+	function handleShadow(event) {
+		const {type, value } = event.detail;
+		console.log(type, value);
+		viewportRef.changeShadowStatus(type, value);
+	}
+
+	function handleEnvironment(event) {
+		const { type, value } = event.detail;
+
+		viewportRef.changeEnvMapSetting(type, value);
+	}
+
 	onMount(() => {
 		console.log('Hello from the page component');
 	});
@@ -61,6 +79,9 @@
 			on:changeSubLightIntensity={handleSubLightIntensity}
 			on:changeSubLightStatus={handleSubLightStatus}
 			on:changeSubLightColor={handleSubLightColor}
+			on:changeGridStatus={handleGridStatus}
+			on:changeShadow={handleShadow}
+			on:changeEnvironment = {handleEnvironment}
 		/>
 	</section>
 	<section id="Viewport">

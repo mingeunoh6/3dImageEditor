@@ -2,8 +2,10 @@
 	import { onMount, createEventDispatcher } from 'svelte';
 	import Icon from '@iconify/svelte';
 	import ExpandPanel from './EP.svelte';
+	import GLBPanel from './EP-GLB.svelte';
 
 	let aiPanelStatus = false;
+	let glbPanelStatus = false;
 	let fov = 10;
 	let subLightRot = 0;
 	let envMapIntensity = 1;
@@ -22,14 +24,34 @@
 	let light0intensity = 0.3;
 	let light0color = 'ffffff';
 
+	let gridStatus = false;
+
+	let shadowOpacity = 0.5;
+	let shadowDistance = 0;
+	let shadowSize = 10;
+	let shadowRotation = 0;
+	let isShadowHelper = false;
+
+	let envRotation = 0;
+	let envIntensity = 1;
+
 	const dispatch = createEventDispatcher();
 	function handleGLBImport(event) {
+		glbPanelStatus = false;
+		aiPanelStatus = false;
+		document.getElementById('expand-panel-ai').style.left = '0%';
+		document.getElementById('expand-panel-glb').style.left = '0%';
 		const file = event.target.files[0];
 		if (file) {
 			dispatch('importGLB', { file });
+			event.target.value = '';
 		}
 	}
 	function handleBGImport(event) {
+				glbPanelStatus = false;
+		aiPanelStatus = false;
+		document.getElementById('expand-panel-ai').style.left = '0%';
+		document.getElementById('expand-panel-glb').style.left = '0%';
 		isBackground = true;
 		const file = event.target.files[0];
 		if (file) {
@@ -50,19 +72,57 @@
 
 			// Close the AI panel
 			aiPanelStatus = false;
-			document.getElementById('expand-panel').style.left = '0%';
+			document.getElementById('expand-panel-ai').style.left = '0%';
 		} catch (error) {
 			console.error('Error converting URL to file:', error);
 		}
 	}
 
-	function handleAssetSelection(assetName) {
+	async function handleAssetSelection(event) {
+		glbPanelStatus = false;
+		document.getElementById('expand-panel-glb').style.left = '0%';
+		const assetName = event.detail.assetName;
 		dispatch('selectAsset', { assetName });
 	}
 
 	function handleCameraFov(e) {
 		fov = e.target.value;
 		dispatch('changeFov', { fov });
+	}
+
+	function handleGridStatus(e) {
+		const { id, checked } = e.target;
+
+		gridStatus = checked;
+		dispatch('changeGridStatus', { gridStatus });
+	}
+
+	function handleShadow(e) {
+		const { id, value } = e.target;
+
+		switch (id) {
+			case 'shadow-opacity':
+				shadowOpacity = value;
+				dispatch('changeShadow', { type: 'opacity', value: shadowOpacity });
+				break;
+			case 'shadow-distance':
+				shadowDistance = value;
+				dispatch('changeShadow', { type: 'distance', value: shadowDistance });
+				break;
+			case 'shadow-rotation':
+				shadowRotation = value;
+				dispatch('changeShadow', { type: 'rotation', value: shadowRotation });
+				break;
+			case 'shadow-size':
+				shadowSize = value;
+				dispatch('changeShadow', { type: 'size', value: shadowSize });
+				break;
+				case 'shadow-helper':
+				isShadowHelper = e.target.checked;
+				dispatch('changeShadow', { type: 'helper', value: isShadowHelper });
+		}
+
+		// dispatch('changeShadow', { shadowOpacity });
 	}
 
 	function handleColorChange(e) {
@@ -178,13 +238,42 @@
 		}
 	}
 
+	function handleEnvironment(e) {
+		const {id, value } = e.target;
+
+		switch (id) {
+			case 'envRotation':
+				envRotation = value;
+				dispatch('changeEnvironment', {type:"rotation", value: envRotation });
+				break;
+
+			case 'envIntensity':
+				envIntensity = value;
+				dispatch('changeEnvironment', { type:"intensity", value: envIntensity });
+				break;
+		}
+	
+	}
+
 	function openAIpanel() {
 		aiPanelStatus = !aiPanelStatus;
-
+		glbPanelStatus = false;
+		document.getElementById('expand-panel-glb').style.left = '0%';
 		if (aiPanelStatus) {
-			document.getElementById('expand-panel').style.left = '100%';
+			document.getElementById('expand-panel-ai').style.left = '100%';
 		} else {
-			document.getElementById('expand-panel').style.left = '0%';
+			document.getElementById('expand-panel-ai').style.left = '0%';
+		}
+	}
+
+	function open3Dpanel() {
+		glbPanelStatus = !glbPanelStatus;
+		aiPanelStatus = false;
+		document.getElementById('expand-panel-ai').style.left = '0%';
+		if (glbPanelStatus) {
+			document.getElementById('expand-panel-glb').style.left = '100%';
+		} else {
+			document.getElementById('expand-panel-glb').style.left = '0%';
 		}
 	}
 
@@ -196,13 +285,12 @@
 <section>
 	<div class="sectionWrapper">
 		<div class="main-title">
-			<h5>3D DASH AI Beta v.2.1.0</h5>
+			<h5>3D DASH AI Beta v.2.2.0</h5>
 		</div>
 		<div class="sub-card">
 			<div class="sub-title-lv1">
-				<p>by 오민근 | OTR | HSAD</p>
 				<p>mg.oh@hsad.co.kr</p>
-				<p>last update: 2024-10-28</p>
+				<p>last update: 2024-11-04</p>
 			</div>
 		</div>
 
@@ -215,9 +303,16 @@
 				id="glb-import"
 				accept=".glb,.gltf"
 				style="display: none;"
-				on:change={handleGLBImport}
+				on:input={handleGLBImport}
 			/>
-			<button on:click={() => document.getElementById('glb-import').click()}>GLB 불러오기</button>
+			<div class="button-list">
+				<button class="btn" on:click={() => document.getElementById('glb-import').click()}
+					>GLB 불러오기</button
+				>
+				<button id="3d-panel-open-btn" on:click={open3Dpanel} class="btn"
+					><div class="btn-icon-group">라이브러리에서 불러오기</div></button
+				>
+			</div>
 		</div>
 		<div class="sub-title">
 			<h5>배경 이미지</h5>
@@ -234,28 +329,170 @@
 				<button class="btn" on:click={() => document.getElementById('bg-import').click()}
 					>배경 불러오기</button
 				>
-				<button on:click={openAIpanel} class="btn"
+				<button id="ai-panel-open-btn" on:click={openAIpanel} class="btn"
 					><div class="btn-icon-group">
 						<Icon icon="mingcute:ai-fill" class="button-icon" />AI로 배경 생성
 					</div></button
 				>
 			</div>
+			
 		</div>
+		{#if isBackground}
+			
+				<div class="sub-sub-card">
+			<div class="sub-sub-card-title">배경 광원 설정</div>
+			<div class="sub-sub-card-content">
+				<div class="sub-sub-card-property-title">회전</div>
+				<input
+					class="slider"
+					type="range"
+					id="envRotation"
+					name="envRotation"
+					min="0"
+					max="360"
+					value={envRotation}
+					step="0.01"
+					on:input={(e) => handleEnvironment(e)}
+				/>
+				<label for="envRotation">{envRotation}°</label>
+			</div>
+				<div class="sub-sub-card-content">
+				<div class="sub-sub-card-property-title">강도</div>
+				<input
+					class="slider"
+					type="range"
+					id="envIntensity"
+					name="envIntensity"
+					min="0"
+					max="2"
+					value={envIntensity}
+					step="0.01"
+					on:input={(e) => handleEnvironment(e)}
+				/>
+				<label for="envIntensity">{envIntensity}</label>
+			</div></div>
+			{/if}
 
 		<div class="sub-title">
 			<h5>카메라 FOV 변경</h5>
 		</div>
-		<div class="sub-card-slider">
-			<label for="fov">{fov}°</label>
-			<input
-				type="range"
-				id="fov"
-				name="fov"
-				min="1"
-				max="179"
-				value="10"
-				on:input={(e) => handleCameraFov(e)}
-			/>
+		<div class="sub-sub-card">
+			<div class="sub-sub-card-title">Field Of View</div>
+			<div class="sub-sub-card-content">
+				<div class="sub-sub-card-property-title">FOV 각도</div>
+				<input
+					class="slider"
+					type="range"
+					id="fov"
+					name="fov"
+					min="1"
+					max="179"
+					value={fov}
+					on:input={(e) => handleCameraFov(e)}
+				/>
+				<label for="fov">{fov}°</label>
+			</div>
+			<div class="sub-sub-card">
+				<div class="sub-sub-card-content">
+					<div class="sub-sub-card-property-title">투시 가이드</div>
+
+					<label class="switch">
+						<input
+							type="checkbox"
+							id="grid-switch"
+							checked={gridStatus}
+							on:input={(e) => handleGridStatus(e)}
+						/>
+						<span class="toggle-slider round"></span>
+					</label>
+				</div>
+			</div>
+		</div>
+		<div class="sub-title">
+			<h5>그림자 설정</h5>
+		</div>
+		<div class="sub-sub-card">
+			<div class="sub-sub-card-title">그림자 설정</div>
+				<div class="sub-sub-card-content">
+				<div class="sub-sub-card-property-title">광원 가이드</div>
+
+				<label class="switch">
+					<input
+						type="checkbox"
+						id="shadow-helper"
+						checked={isShadowHelper}
+						on:input={(e) => handleShadow(e)}
+					/>
+					<span class="toggle-slider round"></span>
+				</label>
+			</div>
+			<div class="sub-sub-card-content">
+				<div class="sub-sub-card-property-title">투명도</div>
+
+				<input
+					class="slider"
+					type="range"
+					id="shadow-opacity"
+					name="shadow-opacity"
+					min="0"
+					max="1"
+					value={shadowOpacity}
+					step=".01"
+					on:input={(e) => handleShadow(e)}
+				/>
+				<label for="shadow-opacity">{Math.round(shadowOpacity * 100)}%</label>
+			</div>
+			<div class="sub-sub-card-content">
+				<div class="sub-sub-card-property-title">거리</div>
+
+				<input
+					class="slider"
+					type="range"
+					id="shadow-distance"
+					name="shadow-distance"
+					min="0"
+					max="100"
+					value={shadowDistance}
+					step=".1"
+					on:input={(e) => handleShadow(e)}
+				/>
+				<label for="shadow-distance">{shadowDistance}</label>
+			</div>
+			<div class="sub-sub-card-content">
+				<div class="sub-sub-card-property-title">회전</div>
+
+				<input
+					class="slider"
+					type="range"
+					id="shadow-rotation"
+					name="shadow-rotation"
+					min="0"
+					max="360"
+					value={shadowRotation}
+					step=".01"
+					on:input={(e) => handleShadow(e)}
+				/>
+
+				<label for="shadow-rotation">{shadowRotation}°</label>
+			</div>
+			<div class="sub-sub-card-content">
+				<div class="sub-sub-card-property-title">광원크기</div>
+
+				<input
+					class="slider"
+					type="range"
+					id="shadow-size"
+					name="shadow-size"
+					min="10"
+					max="1000"
+					value={shadowSize}
+					step="1"
+					on:input={(e) => handleShadow(e)}
+				/>
+
+				<label for="shadow-size">{shadowSize}</label>
+			</div>
+			
 		</div>
 
 		<div class="sub-title">
@@ -463,101 +700,13 @@
 				</div>
 			</div>
 		</div>
-
-		<div class="sub-title">
-			<h5>3D 제품 모델 목록</h5>
-		</div>
-		<div class="sub-card">
-			<ul class="product-asset-list">
-				<li>
-					<div class="asset-item">
-						<p>프라엘 더마세라 BLQ1</p>
-						<button on:click={() => handleAssetSelection('BLQ1_LOW_REFLECTIVE.glb')}
-							>사용하기</button
-						>
-					</div>
-				</li>
-				<li>
-					<div class="asset-item">
-						<p>세탁기+건조기 워쉬타워</p>
-						<button on:click={() => handleAssetSelection('washTower.glb')}>사용하기</button>
-					</div>
-				</li>
-
-				<li>
-					<div class="asset-item">
-						<p>스탠바이미-화면 off/ 가로</p>
-						<button on:click={() => handleAssetSelection('lgStandbyMe_off.glb')}>사용하기</button>
-					</div>
-				</li>
-				<li>
-					<div class="asset-item">
-						<p>스탠바이미-화면 on/ 가로</p>
-						<button on:click={() => handleAssetSelection('lgStandbyMe_on.glb')}>사용하기</button>
-					</div>
-				</li>
-				<li>
-					<div class="asset-item">
-						<p>스탠바이미-화면 off/ 세로</p>
-						<button on:click={() => handleAssetSelection('lgStandbyMe_off_portrait.glb')}
-							>사용하기</button
-						>
-					</div>
-				</li>
-				<li>
-					<div class="asset-item">
-						<p>스탠바이미-화면 on/ 세로</p>
-						<button on:click={() => handleAssetSelection('lgStandbyMe_on_portrait.glb')}
-							>사용하기</button
-						>
-					</div>
-				</li>
-
-				<li>
-					<div class="asset-item">
-						<p>벽걸이 에어컨</p>
-						<button on:click={() => handleAssetSelection('air_conditioner_lg.glb')}>사용하기</button
-						>
-					</div>
-				</li>
-
-				<li>
-					<div class="asset-item">
-						<p>스타일러</p>
-						<button on:click={() => handleAssetSelection('lg_stlyer.glb')}>사용하기</button>
-					</div>
-				</li>
-			</ul>
-		</div>
-		<div class="sub-title">
-			<h5>사용법</h5>
-		</div>
-		<div class="sub-card-instruction">
-			<p>
-				1. 테스트 어셋 중에 선택하거나 GLB 불러오기 버튼을 클릭해 파일을 불러옵니다.<br />
-				<span style="color: red;"
-					>파일이 50MB 이상으로 너무 크면 불러오는데 오래걸려요, 기다려주세요</span
-				><br /><br />
-				<span style="color: red;">
-					업로드 및 다운로드한 데이터는 별도로 외부로 전송되거나 저장되지 않습니다. <br /><br
-					/></span
-				>
-
-				2. 불러온 GLB 파일은 중앙의 뷰포트에 표시됩니다.<br /><br />
-
-				3. 뷰포트에서 마우스 왼쪽 드래그로 회전, 오른족 드래그로 이동이 가능합니다. 마우스 휠로
-				확대/축소 하세요.<br /><br />
-
-				4. 원하는 각도, 조명을 조정한 뒤 뷰포트 아래의 제품 이미지 다운로드 버튼을 클릭하세요.<br
-				/><br />
-
-				5. 다운로드 받은 이미지들을 AI 및 포토샵 보정을 위한 인풋으로 사용하세요.<br /><br />
-			</p>
-		</div>
 	</div>
 </section>
-<div id="expand-panel">
+<div id="expand-panel-ai" class="expand-panel">
 	<ExpandPanel on:applyBackground={handleApplyAIBG} />
+</div>
+<div id="expand-panel-glb" class="expand-panel">
+	<GLBPanel on:selectAsset={handleAssetSelection} />
 </div>
 
 <style>
@@ -573,7 +722,7 @@
 		border: 1px solid black;
 	}
 
-	#expand-panel {
+	.expand-panel {
 		position: absolute;
 		top: 0;
 		left: 0%;
@@ -666,6 +815,8 @@
 
 	.sub-sub-card {
 		box-sizing: border-box;
+		margin-bottom: 14px;
+		background-color: var(--background-color);
 	}
 
 	.sub-sub-card-title {

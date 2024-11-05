@@ -9,16 +9,16 @@
 	import CustomDirectionalLight from '$lib/components/functions/directionalLight';
 	import { TransformControls } from 'three/addons/controls/TransformControls';
 	import ShadowGround from '$lib/components/functions/ground.js';
-
+	import ShadowLight from '$lib/components/functions/shadowLight.js';
 
 	export let glbFile = null;
 	export let bgFile = null;
 
 	let scaleFactor = 2;
-	let scene, camera, renderer, renderRenderer, passRenderer, controls, canvas;
+	let scene, camera, renderer, maskRenderer, passRenderer, controls, canvas;
 	let ambientLight;
 	let scene1, scene2;
-	let renderCanvas, passCanvas;
+	let maskCanvas, passCanvas;
 	let originalCube, redCube;
 	let glbImporter;
 	let hdrLoader;
@@ -33,9 +33,18 @@
 	let controller;
 	let controlGroup;
 	let envMapTexture;
+	let envMapIntensity;
+	let envMapRotation;
 	let ground;
+	let isGrid = false;
 	let lights = [];
 	let isBackground = true;
+	let shadowLight;
+	let shadowOpacity = 0.5;
+	let shadowDistance = 0;
+	let shadowSize = 10;
+	let shadowRotation = 0;
+	let isShadowHelper = false;
 
 	$: if (bgFile) {
 		console.log('bgFile', bgFile);
@@ -43,13 +52,13 @@
 	}
 
 	$: if (glbFile) {
+		console.log('glbFile', glbFile);
 		clearScene();
 		resetTransform();
 		glbImporter
 			.importGLB(glbFile)
 			.then((model) => {
 				console.log('GLB model added to the scene', model);
-
 				addedModel.push(model);
 			})
 			.catch((error) => {
@@ -60,6 +69,7 @@
 			hideOverlay();
 		}
 
+		console.log('added', addedModel);
 		glbFile = null;
 	}
 
@@ -96,9 +106,9 @@
 		}
 
 		//reset scene2
-		while (scene2.children.length > 0) {
-			scene2.remove(scene2.children[0]);
-		}
+		// while (scene2.children.length > 0) {
+		// 	scene2.remove(scene2.children[0]);
+		// }
 
 		//clean up renderers
 
@@ -106,13 +116,13 @@
 			renderer.dispose();
 		}
 
-		if (renderRenderer) {
-			renderRenderer.dispose();
+		if (maskRenderer) {
+			maskRenderer.dispose();
 		}
 
-		if (passRenderer) {
-			passRenderer.dispose();
-		}
+		// if (passRenderer) {
+		// 	passRenderer.dispose();
+		// }
 
 		if (addedModel.length > 0) {
 			addedModel = [];
@@ -142,6 +152,7 @@
 							});
 						}
 						addedModel.push(model);
+						glbFile = null;
 					})
 					.catch((error) => console.error('Error loading model:', error));
 			});
@@ -158,6 +169,57 @@
 		camera.updateProjectionMatrix();
 
 		console.log('Camera FOV changed to:', fov);
+	}
+
+	function changeGridStatus(gridStatus) {
+		console.log('gridStatus changed to', gridStatus);
+		isGrid = gridStatus;
+		if (ground) {
+			ground.gridOption(isGrid);
+		}
+	}
+
+	function changeEnvMapSetting(type, value){
+		if(!isBackground){
+			
+			return;
+		}
+		switch(type){
+			case 'intensity':
+				envMapIntensity = value;
+				scene.environmentIntensity = envMapIntensity;
+				break;
+			case 'rotation':
+				envMapRotation = value;
+				scene.environmentRotation.y= envMapRotation*Math.PI/180
+				break;
+		}
+	}
+
+	function changeShadowStatus(type, value) {
+		switch (type) {
+			case 'opacity':
+				shadowOpacity = value;
+				ground.shadowOpacity(shadowOpacity);
+				break;
+			case 'distance':
+				shadowDistance = value;
+				shadowLight.changeDistance(shadowDistance);
+				break;
+			case 'size':
+				shadowSize = value;
+				shadowLight.changeSize(shadowSize);
+				break;
+			case 'rotation':
+				shadowRotation = value;
+				shadowLight.changeRotation(shadowRotation);
+				break;
+				case 'helper':
+					isShadowHelper = value;
+					shadowLight.toggleShadowHelper(isShadowHelper);
+					break;
+
+		}
 	}
 
 	function changeSubLightRot(rot) {
@@ -235,7 +297,7 @@
 	async function init() {
 		scene = new THREE.Scene();
 		scene1 = new THREE.Scene();
-		scene2 = new THREE.Scene();
+		// scene2 = new THREE.Scene();
 		camera = new THREE.PerspectiveCamera(10, canvas.clientWidth / canvas.clientHeight, 0.01, 10000);
 		raycaster = new THREE.Raycaster();
 		mouse = new THREE.Vector2();
@@ -256,51 +318,33 @@
 		renderer.toneMappingExposure = 1.0;
 
 		// Render renderer
-		renderRenderer = new THREE.WebGLRenderer({
-			canvas: renderCanvas,
+		maskRenderer = new THREE.WebGLRenderer({
+			canvas: maskCanvas,
 			antialias: true
 		});
-		setRendererResolution(renderRenderer, renderCanvas,scaleFactor);
-		renderRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+		setRendererResolution(maskRenderer, maskCanvas, scaleFactor);
+		maskRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
-		// Pass renderer
-		passRenderer = new THREE.WebGLRenderer({ canvas: passCanvas, antialias: true });
-		setRendererResolution(passRenderer, passCanvas,scaleFactor);
-		passRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+		// // Pass renderer
+		// passRenderer = new THREE.WebGLRenderer({ canvas: passCanvas, antialias: true });
+		// setRendererResolution(passRenderer, passCanvas,scaleFactor);
+		// passRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
 		camera.position.z = 5;
 
 		//set initial renderer, canvas size and resolution in square aspect ratio
-		resizeCanvasAndRenderers(1,scaleFactor);
+		resizeCanvasAndRenderers(1, scaleFactor);
 
 		//orbit control
 		controls = new OrbitControls(camera, renderer.domElement);
 		controls.update();
 
 		controller = new TransformControls(camera, renderer.domElement);
-		console.log('controller', controller);
 		controller.addEventListener('dragging-changed', function (event) {
 			controls.enabled = !event.value;
 		});
 
-		//plane
-		const planeGeometry = new THREE.PlaneGeometry(100, 100);
-		const planeMaterial = new THREE.ShadowMaterial({ opacity: 0.5 });
-		const plane = new THREE.Mesh(planeGeometry, planeMaterial);
-		plane.receiveShadow = true;
-		plane.rotation.x = -Math.PI / 2;
-		plane.position.y = -0.5;
-		// scene.add(plane);
-
-		plane.receiveShadow = true;
-
-		//create grid plane
-		// const gridHelper = new THREE.GridHelper(10, 10);
-		// scene.add(gridHelper);
-		// //add to unselectable objects
-		// unSelectableObjects.push(gridHelper);
-
-		//add object control group
+		//제품 모델 컨트롤 그룹
 		controlGroup = new THREE.Group();
 		scene.add(controlGroup);
 		controlGroup.position.set(0, 0, 0);
@@ -309,13 +353,10 @@
 		glbImporter = new GLBImporter(scene, controlGroup);
 
 		// hdr;
-		hdrLoader = new HDRLoader(scene, renderer, resizeCanvasAndRenderers,scaleFactor);
+		hdrLoader = new HDRLoader(scene, renderer, resizeCanvasAndRenderers, scaleFactor);
 		hdrLoader.loadDefaultHDR();
 
-		//background
-		// // Load background texture
-
-		// Add custom directional lights
+		// Add 3점 조명
 		ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
 		scene.add(ambientLight);
 		const backLight = new CustomDirectionalLight(0xffffff, 0.3, [0, 4, -2], 'back');
@@ -336,6 +377,11 @@
 		lights.push(fillLight);
 		lights.push(backLight);
 
+		//Create shadow group
+		shadowLight = new ShadowLight(shadowDistance, shadowSize, shadowRotation);
+		shadowLight.addToScene(scene);
+		shadowLight.toggleShadowHelper(isShadowHelper);
+
 		const baseLightGroup = new THREE.Group();
 		baseLightGroup.add(keyLight.light);
 		baseLightGroup.add(fillLight.light);
@@ -347,10 +393,13 @@
 
 		//shadow Ground
 		ground = new ShadowGround(1000);
-		// ground.addToScene(scene);
+		ground.addToScene(scene);
 
-		//adjust resolution
+		//grid
+		ground.addGrid(scene);
+		ground.gridOption(isGrid);
 
+		// Add event listeners
 		canvas.addEventListener('click', onSelect, false);
 		window.addEventListener('keydown', handleKeyDown);
 		// Add resize event listener
@@ -366,8 +415,8 @@
 		}
 	}
 
+	//오브젝트 선택 이벤트
 	function onSelect(event) {
-		console.log('onSelect');
 		// Get mouse position in normalized device coordinates (-1 to +1) for both components
 		const rect = canvas.getBoundingClientRect();
 		mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -380,6 +429,12 @@
 		const intersects = raycaster.intersectObjects(scene.children, true);
 
 		if (intersects.length > 0) {
+			let selectedObject = intersects[0].object;
+			// Check if the selected object is the ground or grid
+			if (selectedObject.name === 'ground' || selectedObject.name === 'grid') {
+				return;
+			}
+
 			if (controller.object) {
 				return;
 			}
@@ -387,7 +442,6 @@
 			// Get the first intersected object
 			let currentOBJ = controlGroup;
 
-			console.log('Attaching controller to:', currentOBJ);
 			// Ensure controller is added to scene and set to visible
 			if (!scene.children.includes(controller)) {
 				scene.add(controller);
@@ -399,7 +453,6 @@
 		} else {
 			// Optionally handle the case where no object was selected
 			console.log('No object selected');
-
 			controller.detach();
 			scene.remove(controller);
 			controller.visible = false;
@@ -450,10 +503,6 @@
 		}
 	}
 
-	function disableOrbitControl() {
-		controls.enabled = false;
-	}
-
 	function imageOutputRender() {
 		//clear scene
 		//reset scene1
@@ -462,18 +511,22 @@
 		}
 
 		//reset scene2
-		while (scene2.children.length > 0) {
-			scene2.remove(scene2.children[0]);
-		}
+		// while (scene2.children.length > 0) {
+		// 	scene2.remove(scene2.children[0]);
+		// }
 
 		if (controller) {
 			controller.detach();
 		}
 
-		//그리드 제거
-		// if (ground) {
-		// 	ground.gridOption(false);
-		// }
+		// 그리드 제거
+		if (ground) {
+			ground.gridOption(false);
+		}
+		//helper 제거
+		if (shadowLight) {
+			shadowLight.toggleShadowHelper(false);
+		}
 
 		if (addedModel.length === 0) {
 			console.error('No model added to the scene');
@@ -484,28 +537,28 @@
 		// Create off-screen renderers
 		// Reuse or create off-screen renderers
 
-	// Adjust this value to increase/decrease resolution
-		const aspectRatio = renderCanvas.width / renderCanvas.height;
+		// Adjust this value to increase/decrease resolution
+		const aspectRatio = maskCanvas.width / maskCanvas.height;
 		const offscreenWidth = 1024 * scaleFactor;
 		const offscreenHeight = offscreenWidth / aspectRatio;
 
-		if (!this.offscreenRenderRenderer) {
-			this.offscreenRenderRenderer = new THREE.WebGLRenderer({ antialias: true });
-			this.offscreenRenderRenderer.setSize(offscreenWidth, offscreenHeight);
-			this.offscreenRenderRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+		if (!this.offscreenMaskRenderer) {
+			this.offscreenMaskRenderer = new THREE.WebGLRenderer({ antialias: true });
+			this.offscreenMaskRenderer.setSize(offscreenWidth, offscreenHeight);
+			this.offscreenMaskRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 		} else {
-			this.offscreenRenderRenderer.setSize(offscreenWidth, offscreenHeight);
-			this.offscreenRenderRenderer.clear();
+			this.offscreenMaskRenderer.setSize(offscreenWidth, offscreenHeight);
+			this.offscreenMaskRenderer.clear();
 		}
 
-		if (!this.offscreenPassRenderer) {
-			this.offscreenPassRenderer = new THREE.WebGLRenderer({ antialias: true });
-			this.offscreenPassRenderer.setSize(offscreenWidth, offscreenHeight);
-			this.offscreenPassRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-		} else {
-			this.offscreenPassRenderer.setSize(offscreenWidth, offscreenHeight);
-			this.offscreenPassRenderer.clear();
-		}
+		// if (!this.offscreenPassRenderer) {
+		// 	this.offscreenPassRenderer = new THREE.WebGLRenderer({ antialias: true });
+		// 	this.offscreenPassRenderer.setSize(offscreenWidth, offscreenHeight);
+		// 	this.offscreenPassRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+		// } else {
+		// 	this.offscreenPassRenderer.setSize(offscreenWidth, offscreenHeight);
+		// 	this.offscreenPassRenderer.clear();
+		// }
 
 		if (!this.offscreenMainRenderer) {
 			this.offscreenMainRenderer = new THREE.WebGLRenderer({
@@ -540,49 +593,49 @@
 
 		scene1.add(renderpass1obj);
 		console.log('Image output render');
-		renderRenderer.render(scene1, camera);
-		this.offscreenRenderRenderer.render(scene1, camera);
+		maskRenderer.render(scene1, camera);
+		this.offscreenMaskRenderer.render(scene1, camera);
 
-		// Clone object for render pass 2
-		renderpass2obj = controlGroup.clone();
-		let objectMatlist = [];
-		renderpass2obj.traverse((child) => {
-			if (child.isMesh && child.material) {
-				objectMatlist.push(child.material);
-			}
-		});
-		renderpass2obj.traverse((child) => {
-			if (child.isMesh && child.material && objectMatlist.includes(child.material)) {
-				if (child.material === objectMatlist[0]) {
-					child.material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
-				} else if (child.material === objectMatlist[1]) {
-					child.material = new THREE.MeshBasicMaterial({ color: 0x0000ff });
-				} else if (child.material === objectMatlist[2]) {
-					child.material = new THREE.MeshBasicMaterial({ color: 0xffff00 });
-				} else if (child.material === objectMatlist[3]) {
-					child.material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-				} else if (child.material === objectMatlist[4]) {
-					child.material = new THREE.MeshBasicMaterial({ color: 0x00ffff });
-				} else if (child.material === objectMatlist[5]) {
-					child.material = new THREE.MeshBasicMaterial({ color: 0xff00ff });
-				} else if (child.material === objectMatlist[6]) {
-					child.material = new THREE.MeshBasicMaterial({ color: 0x0ffff0 });
-				} else if (child.material === objectMatlist[7]) {
-					child.material = new THREE.MeshBasicMaterial({ color: 0xffffff });
-				} else if (child.material === objectMatlist[8]) {
-					child.material = new THREE.MeshBasicMaterial({ color: 0x00ffd0 });
-				} else if (child.material === objectMatlist[9]) {
-					child.material = new THREE.MeshBasicMaterial({ color: 0xffd000 });
-				} else {
-					child.material = new THREE.MeshBasicMaterial({ color: 0x444444 });
-				}
-			}
-		});
+		// // Clone object for render pass 2
+		// renderpass2obj = controlGroup.clone();
+		// let objectMatlist = [];
+		// renderpass2obj.traverse((child) => {
+		// 	if (child.isMesh && child.material) {
+		// 		objectMatlist.push(child.material);
+		// 	}
+		// });
+		// renderpass2obj.traverse((child) => {
+		// 	if (child.isMesh && child.material && objectMatlist.includes(child.material)) {
+		// 		if (child.material === objectMatlist[0]) {
+		// 			child.material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+		// 		} else if (child.material === objectMatlist[1]) {
+		// 			child.material = new THREE.MeshBasicMaterial({ color: 0x0000ff });
+		// 		} else if (child.material === objectMatlist[2]) {
+		// 			child.material = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+		// 		} else if (child.material === objectMatlist[3]) {
+		// 			child.material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+		// 		} else if (child.material === objectMatlist[4]) {
+		// 			child.material = new THREE.MeshBasicMaterial({ color: 0x00ffff });
+		// 		} else if (child.material === objectMatlist[5]) {
+		// 			child.material = new THREE.MeshBasicMaterial({ color: 0xff00ff });
+		// 		} else if (child.material === objectMatlist[6]) {
+		// 			child.material = new THREE.MeshBasicMaterial({ color: 0x0ffff0 });
+		// 		} else if (child.material === objectMatlist[7]) {
+		// 			child.material = new THREE.MeshBasicMaterial({ color: 0xffffff });
+		// 		} else if (child.material === objectMatlist[8]) {
+		// 			child.material = new THREE.MeshBasicMaterial({ color: 0x00ffd0 });
+		// 		} else if (child.material === objectMatlist[9]) {
+		// 			child.material = new THREE.MeshBasicMaterial({ color: 0xffd000 });
+		// 		} else {
+		// 			child.material = new THREE.MeshBasicMaterial({ color: 0x444444 });
+		// 		}
+		// 	}
+		// });
 
-		scene2.add(renderpass2obj);
-		console.log('Pass output render');
-		passRenderer.render(scene2, camera);
-		this.offscreenPassRenderer.render(scene2, camera);
+		// scene2.add(renderpass2obj);
+		// console.log('Pass output render');
+		// passRenderer.render(scene2, camera);
+		// this.offscreenPassRenderer.render(scene2, camera);
 
 		//background decision
 		let saveSceneBG = scene.background;
@@ -594,15 +647,15 @@
 		this.offscreenMainRenderer.render(scene, camera);
 
 		// Save rendered scenes as PNG images from off-screen renderers
-		const renderDataUrl = this.offscreenRenderRenderer.domElement.toDataURL('image/png');
-		const passDataUrl = this.offscreenPassRenderer.domElement.toDataURL('image/png');
+		const renderDataUrl = this.offscreenMaskRenderer.domElement.toDataURL('image/png');
+		// const passDataUrl = this.offscreenPassRenderer.domElement.toDataURL('image/png');
 		const viewportDataUrl = this.offscreenMainRenderer.domElement.toDataURL('image/png');
 
 		// Create download links
 		setTimeout(() => {
-			downloadImage(viewportDataUrl, 'viewport_scene.png');
-			downloadImage(renderDataUrl, 'rendered_scene.png');
-			downloadImage(passDataUrl, 'pass_scene.png');
+			downloadImage(viewportDataUrl, 'result.png');
+			downloadImage(renderDataUrl, 'mask.png');
+			// downloadImage(passDataUrl, 'pass_scene.png');
 
 			// Reset scene background
 			if (!isBackground) {
@@ -610,14 +663,18 @@
 			}
 
 			// Clean up off-screen renderers
-			this.offscreenRenderRenderer.dispose();
-			this.offscreenPassRenderer.dispose();
+			this.offscreenMaskRenderer.dispose();
+			// this.offscreenPassRenderer.dispose();
 			this.offscreenMainRenderer.dispose();
 		}, 1000);
 
 		//이미지 내보내기를 위해 임시로 제거했던 것 다시 추가
 		if (ground) {
-			ground.gridOption(true);
+			ground.gridOption(isGrid);
+		}
+
+		if (shadowLight) {
+			shadowLight.toggleShadowHelper(isShadowHelper);
 		}
 	}
 
@@ -651,14 +708,14 @@
 		canvas.style.height = `${height}px`;
 
 		// Resize render renderer and canvas
-		renderRenderer.setSize((width * scaleFactor) / 2, (height * scaleFactor) / 2, false);
-		renderCanvas.style.width = `${width / 2}px`;
-		renderCanvas.style.height = `${height / 2}px`;
+		maskRenderer.setSize((width * scaleFactor) / 2, (height * scaleFactor) / 2, false);
+		maskCanvas.style.width = `${width / 2}px`;
+		maskCanvas.style.height = `${height / 2}px`;
 
 		// Resize pass renderer and canvas
-		passRenderer.setSize((width * scaleFactor) / 2, (height * scaleFactor) / 2, false);
-		passCanvas.style.width = `${width / 2}px`;
-		passCanvas.style.height = `${height / 2}px`;
+		// passRenderer.setSize((width * scaleFactor) / 2, (height * scaleFactor) / 2, false);
+		// passCanvas.style.width = `${width / 2}px`;
+		// passCanvas.style.height = `${height / 2}px`;
 
 		// Update camera aspect ratio
 		camera.aspect = width / height;
@@ -686,9 +743,9 @@
 		camera.aspect = width / height;
 		camera.updateProjectionMatrix();
 
-		setRendererResolution(renderer, canvas,scaleFactor);
-		setRendererResolution(renderRenderer, renderCanvas,scaleFactor);
-		setRendererResolution(passRenderer, passCanvas,scaleFactor);
+		setRendererResolution(renderer, canvas, scaleFactor);
+		setRendererResolution(maskRenderer, maskCanvas, scaleFactor);
+		// setRendererResolution(passRenderer, passCanvas,scaleFactor);
 	}
 
 	onMount(() => {
@@ -721,7 +778,10 @@
 		changeSubLightRot,
 		changeSubLightIntensity,
 		changeSubLightStatus,
-		changeSubLightColor
+		changeSubLightColor,
+		changeGridStatus,
+		changeShadowStatus,
+		changeEnvMapSetting
 	};
 </script>
 
@@ -729,26 +789,35 @@
 	<div id="viewport-wrapper">
 		<div id="main-viewport">
 			<canvas id="viewport" bind:this={canvas}> </canvas>
+				<div id="transform-tool">
+			<button class="transform-btn" on:click={changeTransformMode}>이동</button>
+			<button class="transform-btn" on:click={changeTransformMode}>회전</button>
+			<button class="transform-btn" on:click={changeTransformMode}>크기</button>
+		</div>
 			<div id="overlay">
 				<div id="overlay-content">
 					<h1>GUIDE</h1>
 					<p>
 						1.<br /> 왼쪽 패널의 <span class="highlight">"GLB 불러오기"</span> 버튼을 클릭해 3D
-						모델을 불러오거나<br /> 왼쪽 패널 하단의 <span class="highlight">제품 모델 목록</span> 에서
-						원하는 제품을 골라 사용하기를 클릭하세요.
+						모델을 불러오거나<br /> <span class="highlight">"라이브러리에서 불러오기"</span> 에서 원하는
+						제품을 고르세요.
 					</p>
 					<p>
-						2.<br /><span class="highlight">"배경 불러오기"</span> 버튼을 통해 원하는 배경 이미지를
-						<br />불러오면 배경 이미지가 자연스럽게 제품의 주변광으로 적용됩니다.
+						2.<br /><span class="highlight">"배경 불러오기"</span> 버튼을 통해 배경 이미지를
+						불러오거나<br /><span class="highlight">"AI로 배경 생성"</span> 기능을 통해 배경을
+						생성하면<br /> 배경이 자연스럽게 제품의 주변광으로 적용됩니다.
 					</p>
 				</div>
 			</div>
 		</div>
 
-		<div id="preview-wrapper">
-			<canvas id="render-canvas" bind:this={renderCanvas}></canvas>
-			<canvas id="pass-canvas" bind:this={passCanvas}></canvas>
+<div id="preview-wrapper">
+			<canvas id="mask-canvas" bind:this={maskCanvas}></canvas>
+			<!-- <canvas id="pass-canvas" bind:this={passCanvas}></canvas> -->
 		</div>
+
+		
+	
 	</div>
 	<div id="viewport-menu">
 		<button on:click={imageOutputRender}>제품 이미지 / 마스크 다운로드</button>
@@ -769,12 +838,6 @@
 			</div>
 		</div>
 	</div>
-
-	<div id="transform-tool">
-		<button class="transform-btn" on:click={changeTransformMode}>이동</button>
-		<button class="transform-btn" on:click={changeTransformMode}>회전</button>
-		<button class="transform-btn" on:click={changeTransformMode}>크기</button>
-	</div>
 </div>
 
 <style>
@@ -785,6 +848,7 @@
 		flex-direction: column;
 		justify-content: center;
 		align-items: center;
+	
 	}
 	#viewport-menu {
 		width: 100%;
@@ -800,9 +864,20 @@
 	#viewport-wrapper {
 		display: flex;
 		justify-content: center;
-		align-items: flex-start;
+		align-items: center;
 		width: 100%;
 		height: 90vh;
+		
+	}
+
+	.side-wrapper {
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		align-items: center;
+		gap: 8px;
+		height: 90vh;
+	
 	}
 	#main-viewport {
 		position: relative;
@@ -882,7 +957,7 @@
 		flex-direction: column;
 	}
 
-	#render-canvas,
+	#mask-canvas,
 	#pass-canvas {
 		box-sizing: border-box;
 
@@ -913,7 +988,7 @@
 		background-color: #f88030;
 	}
 
-	#render-canvas,
+	#mask-canvas,
 	#pass-canvas {
 		max-width: 40vw;
 		max-height: 40vh;
