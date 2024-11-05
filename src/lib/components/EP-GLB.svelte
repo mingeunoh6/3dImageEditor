@@ -45,10 +45,24 @@
 						>
 					</div>
 				</li>
+					<li>
+					<div class="asset-item">
+						<p>시네빔</p>
+						<button class="btn" on:click={() => handleAssetSelection('CINEBEAM.glb')}
+							>불러오기</button
+						>
+					</div>
+				</li>
 				<li>
 					<div class="asset-item">
 						<p>모니터</p>
 						<button class="btn"  on:click={() => handleAssetSelection('LG_Monitor.glb')}>불러오기</button>
+					</div>
+				</li>
+					<li>
+					<div class="asset-item">
+						<p>울트라 와이드 모니터</p>
+						<button class="btn"  on:click={() => handleAssetSelection('monitor_ultrawide.glb')}>불러오기</button>
 					</div>
 				</li>
 
@@ -67,6 +81,7 @@
 						>
 					</div>
 				</li>
+			
 			
 			
 			</ul>
@@ -146,9 +161,14 @@
 		
 	}
 
+	.asset-item p {
+		font-size: 0.9rem;
+		color: var(--text-color);
+	}
+
 
 	.btn {
-		font-size: 1.2em;
+		font-size: 0.9rem;
 		font-family:
 			'Pretendard Variable',
 			Pretendard,
@@ -166,8 +186,8 @@
 			'Segoe UI Symbol',
 			sans-serif;
 
-		width: 20%;
-		height: 40px;
+		width: 30%;
+		height: 32px;
 		box-sizing: border-box;
 		padding: 6px;
 		border: none;

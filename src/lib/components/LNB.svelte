@@ -826,7 +826,7 @@
 		align-items: center;
 		width: 100%;
 		height: 48px;
-		font-size: 1rem;
+		font-size: 0.9rem;
 		color: var(--text-color);
 		margin-right: 10px;
 
@@ -848,20 +848,20 @@
 	}
 
 	.sub-sub-card-property-title {
-		font-size: 1rem;
+			font-size: 0.9rem;
 		color: var(--text-color);
 		margin-right: 10px;
 	}
 
 	.sub-sub-card-content .slider {
-		font-size: 1rem;
+			font-size: 0.9rem;
 		color: var(--text-color);
 		flex-grow: 1;
 		min-width: 100px;
 		max-width: 160px;
 	}
 	.sub-sub-card-content .colorPicker {
-		font-size: 1rem;
+			font-size: 0.9rem;
 		color: var(--text-color);
 
 		max-width: 120px;
@@ -874,7 +874,7 @@
 	}
 
 	.sub-sub-card-content .colorInputGroup {
-		font-size: 1rem;
+		font-size: 0.9rem;
 		display: flex;
 		align-items: center;
 		margin-right: 20px;
@@ -882,7 +882,7 @@
 	}
 
 	.sub-sub-card-content label {
-		font-size: 1rem;
+		font-size: 0.9rem;
 		color: var(--text-color);
 		margin-left: 10px;
 		margin-right: 20px;
@@ -941,6 +941,7 @@
 	.btn-icon-group p {
 		text-align: center;
 		color: var(--text-color);
+		
 	}
 
 	.btn-icon-group .icon {
