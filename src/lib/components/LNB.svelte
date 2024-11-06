@@ -285,7 +285,7 @@
 <section>
 	<div class="sectionWrapper">
 		<div class="main-title">
-			<h5>3D DASH AI Beta v.2.2.1</h5>
+			<h5>3D DASH AI Beta v.2.2.2</h5>
 		</div>
 		<div class="sub-card">
 			<div class="sub-title-lv1">
