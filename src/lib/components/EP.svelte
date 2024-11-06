@@ -178,6 +178,7 @@
 					<div class="range-container" >
 		<label for="control_strength">참조 강도</label>
 		<input
+		class="slider"
 					type="range"
 					id="control_strength"
 					bind:value={formData.control_strength}
@@ -636,6 +637,32 @@ outline: 0;
 	flex-direction: column;
 	gap: 10px;
 	}
+
+	.slider {
+		appearance: none;
+		 background: var(--background-color); 
+		     outline: none;
+			 border-radius: 12px;
+			font-size: 0.9rem;
+		color: var(--text-color);
+		flex-grow: 1;
+		min-width: 100px;
+		max-width: 160px;
+		height: 8px;
+
+	
+	}
+		.slider::-webkit-slider-thumb {
+		appearance: none;
+		width: 10px;
+		height: 16px;
+		border-radius: 8px;
+		background: var(--text-color);
+		cursor: pointer;
+
+	
+	}
+
 
 
 

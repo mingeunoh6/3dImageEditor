@@ -28,7 +28,7 @@
 
 	let shadowOpacity = 0.5;
 	let shadowDistance = 0;
-	let shadowSize = 10;
+	let shadowSize = 250;
 	let shadowRotation = 0;
 	let isShadowHelper = false;
 
@@ -285,12 +285,12 @@
 <section>
 	<div class="sectionWrapper">
 		<div class="main-title">
-			<h5>3D DASH AI Beta v.2.2.0</h5>
+			<h5>3D DASH AI Beta v.2.2.1</h5>
 		</div>
 		<div class="sub-card">
 			<div class="sub-title-lv1">
 				<p>mg.oh@hsad.co.kr</p>
-				<p>last update: 2024-11-04</p>
+				<p>last update: 2024-11-06</p>
 			</div>
 		</div>
 
@@ -483,7 +483,7 @@
 					type="range"
 					id="shadow-size"
 					name="shadow-size"
-					min="10"
+					min="1"
 					max="1000"
 					value={shadowSize}
 					step="1"
@@ -854,12 +854,31 @@
 	}
 
 	.sub-sub-card-content .slider {
+		appearance: none;
+		 background: var(--background-color); 
+		     outline: none;
+			 border-radius: 12px;
 			font-size: 0.9rem;
 		color: var(--text-color);
 		flex-grow: 1;
 		min-width: 100px;
 		max-width: 160px;
+		height: 8px;
+
+	
 	}
+		.sub-sub-card-content .slider::-webkit-slider-thumb {
+		appearance: none;
+		width: 10px;
+		height: 16px;
+		border-radius: 8px;
+		background: var(--text-color);
+		cursor: pointer;
+
+	
+	}
+
+	
 	.sub-sub-card-content .colorPicker {
 			font-size: 0.9rem;
 		color: var(--text-color);
@@ -1060,7 +1079,7 @@
 		left: 0;
 		right: 0;
 		bottom: 0;
-		background-color: #ccc;
+		background-color: var(--border-color);
 		-webkit-transition: 0.4s;
 		transition: 0.4s;
 	}
@@ -1072,7 +1091,7 @@
 		width: 16px;
 		left: 4px;
 		bottom: 4px;
-		background-color: white;
+		background-color: var(--text-color);
 		-webkit-transition: 0.4s;
 		transition: 0.4s;
 	}
@@ -1082,7 +1101,7 @@
 	}
 
 	input:focus + .toggle-slider {
-		box-shadow: 0 0 1px #2196f3;
+		box-shadow: 0 0 1px var(--border-color);
 	}
 
 	input:checked + .toggle-slider:before {

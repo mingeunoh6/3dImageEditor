@@ -42,7 +42,7 @@
 	let shadowLight;
 	let shadowOpacity = 0.5;
 	let shadowDistance = 0;
-	let shadowSize = 10;
+	let shadowSize = 250;
 	let shadowRotation = 0;
 	let isShadowHelper = false;
 
