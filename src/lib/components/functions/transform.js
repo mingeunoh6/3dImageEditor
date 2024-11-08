@@ -41,6 +41,7 @@ class GLBModelController {
 
 	setSelectedObj(object) {
 		if (object === null) {
+			console.log('No object selected');
 			this.transformControls.detach();
 			this.selectedObject = null;
 			return;

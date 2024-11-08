@@ -45,6 +45,7 @@
 	let shadowSize = 250;
 	let shadowRotation = 0;
 	let isShadowHelper = false;
+	let transfromControllerDragging = false;
 
 	$: if (bgFile) {
 		console.log('bgFile', bgFile);
@@ -179,19 +180,18 @@
 		}
 	}
 
-	function changeEnvMapSetting(type, value){
-		if(!isBackground){
-			
+	function changeEnvMapSetting(type, value) {
+		if (!isBackground) {
 			return;
 		}
-		switch(type){
+		switch (type) {
 			case 'intensity':
 				envMapIntensity = value;
 				scene.environmentIntensity = envMapIntensity;
 				break;
 			case 'rotation':
 				envMapRotation = value;
-				scene.environmentRotation.y= envMapRotation*Math.PI/180
+				scene.environmentRotation.y = (envMapRotation * Math.PI) / 180;
 				break;
 		}
 	}
@@ -214,11 +214,10 @@
 				shadowRotation = value;
 				shadowLight.changeRotation(shadowRotation);
 				break;
-				case 'helper':
-					isShadowHelper = value;
-					shadowLight.toggleShadowHelper(isShadowHelper);
-					break;
-
+			case 'helper':
+				isShadowHelper = value;
+				shadowLight.toggleShadowHelper(isShadowHelper);
+				break;
 		}
 	}
 
@@ -339,8 +338,11 @@
 		controls = new OrbitControls(camera, renderer.domElement);
 		controls.update();
 
+		//모델 컨트롤을 위한 컨트롤러 생성
 		controller = new TransformControls(camera, renderer.domElement);
 		controller.addEventListener('dragging-changed', function (event) {
+			console.log('dragging-changed', event);
+			transfromControllerDragging = true
 			controls.enabled = !event.value;
 		});
 
@@ -349,8 +351,8 @@
 		scene.add(controlGroup);
 		controlGroup.position.set(0, 0, 0);
 
-		//glbImport
-		glbImporter = new GLBImporter(scene, controlGroup);
+		//glbImport , 컨트롤 그룹에 모델을 추가하게 됨
+		glbImporter = new GLBImporter(scene, controlGroup, renderer);
 
 		// hdr;
 		hdrLoader = new HDRLoader(scene, renderer, resizeCanvasAndRenderers, scaleFactor);
@@ -425,37 +427,72 @@
 		// Create a raycaster and set its position based on the mouse coordinates
 		raycaster.setFromCamera(mouse, camera);
 
+		// Helper function to check if an object should be ignored
+		function shouldIgnoreObject(object) {
+			const ignoreTypes = [
+				'GridHelper',
+				'DirectionalLight',
+				'AmbientLight',
+				'TransformControlPlane',
+				'CameraHelper',
+				'TransformControls',
+				'Object3D' // Ignore generic Object3D containers
+			];
+
+			return (
+				object.name === 'ground' ||
+				ignoreTypes.includes(object.type) ||
+				object.userData.isController || // Add this flag to controller-related objects
+				(object.parent && object.parent.type === 'TransformControls')
+			);
+		}
+
+		const raycastableObjects = [];
+		scene.traverse((object) => {
+			if (!shouldIgnoreObject(object) && object.isMesh) {
+				raycastableObjects.push(object);
+			}
+		});
+
 		// Check for intersections with objects in the scene
-		const intersects = raycaster.intersectObjects(scene.children, true);
+		const intersects = raycaster.intersectObjects(raycastableObjects, false);
+		console.log(intersects.length);
 
 		if (intersects.length > 0) {
 			let selectedObject = intersects[0].object;
-			// Check if the selected object is the ground or grid
-			if (selectedObject.name === 'ground' || selectedObject.name === 'grid') {
-				return;
-			}
+			console.log('Selected object:', selectedObject);
 
+			//이미 컨트롤러가 활성화 되었다면
 			if (controller.object) {
+				console.log('Controller already active:', controller.object);
 				return;
 			}
+			// Detach current control
 			controller.detach();
-			// Get the first intersected object
-			let currentOBJ = controlGroup;
 
-			// Ensure controller is added to scene and set to visible
+			// Ensure controller is in the scene
 			if (!scene.children.includes(controller)) {
 				scene.add(controller);
 			}
 
+			// Get the control group and attach controller
+			let currentOBJ = controlGroup;
 			controller.attach(currentOBJ);
 			controller.space = 'local';
 			controller.visible = true;
+			// Mark controller-related objects to be ignored in future raycasts
+			controller.traverse((obj) => {
+				obj.userData.isController = true;
+			});
 		} else {
-			// Optionally handle the case where no object was selected
+			if(transfromControllerDragging){
+				return;
+			}
 			console.log('No object selected');
 			controller.detach();
 			scene.remove(controller);
 			controller.visible = false;
+			transfromControllerDraging = false;
 		}
 	}
 	function handleKeyDown(event) {
@@ -789,11 +826,11 @@
 	<div id="viewport-wrapper">
 		<div id="main-viewport">
 			<canvas id="viewport" bind:this={canvas}> </canvas>
-				<div id="transform-tool">
-			<button class="transform-btn" on:click={changeTransformMode}>이동</button>
-			<button class="transform-btn" on:click={changeTransformMode}>회전</button>
-			<button class="transform-btn" on:click={changeTransformMode}>크기</button>
-		</div>
+			<div id="transform-tool">
+				<button class="transform-btn" on:click={changeTransformMode}>이동</button>
+				<button class="transform-btn" on:click={changeTransformMode}>회전</button>
+				<button class="transform-btn" on:click={changeTransformMode}>크기</button>
+			</div>
 			<div id="overlay">
 				<div id="overlay-content">
 					<h1>GUIDE</h1>
@@ -811,13 +848,10 @@
 			</div>
 		</div>
 
-<div id="preview-wrapper">
+		<div id="preview-wrapper">
 			<canvas id="mask-canvas" bind:this={maskCanvas}></canvas>
 			<!-- <canvas id="pass-canvas" bind:this={passCanvas}></canvas> -->
 		</div>
-
-		
-	
 	</div>
 	<div id="viewport-menu">
 		<button on:click={imageOutputRender}>제품 이미지 / 마스크 다운로드</button>
@@ -848,7 +882,6 @@
 		flex-direction: column;
 		justify-content: center;
 		align-items: center;
-	
 	}
 	#viewport-menu {
 		width: 100%;
@@ -867,7 +900,6 @@
 		align-items: center;
 		width: 100%;
 		height: 90vh;
-		
 	}
 
 	.side-wrapper {
@@ -877,7 +909,6 @@
 		align-items: center;
 		gap: 8px;
 		height: 90vh;
-	
 	}
 	#main-viewport {
 		position: relative;
