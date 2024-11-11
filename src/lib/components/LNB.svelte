@@ -285,12 +285,12 @@
 <section>
 	<div class="sectionWrapper">
 		<div class="main-title">
-			<h5>3D DASH AI Beta v.2.2.3</h5>
+			<h5>3D DASH AI Beta v.2.3.0</h5>
 		</div>
 		<div class="sub-card">
 			<div class="sub-title-lv1">
 				<p>mg.oh@hsad.co.kr</p>
-				<p>last update: 2024-11-08</p>
+				<p>last update: 2024-11-11</p>
 			</div>
 		</div>
 

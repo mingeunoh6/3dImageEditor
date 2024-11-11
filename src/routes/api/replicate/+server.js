@@ -17,11 +17,13 @@ console.log(input);
 		if(input.base_model ==="FLUX"){
 		if (input.control_image === null) {
 			console.log('control image is null');
-			modelUrl = 'https://api.replicate.com/v1/models/black-forest-labs/flux-1.1-pro/predictions';
+			modelUrl =
+				'https://api.replicate.com/v1/models/black-forest-labs/flux-1.1-pro-ultra/predictions';
 			body = JSON.stringify({
 				input: {
+					raw: true,
 					prompt: input.prompt,
-					aspect_ratio: '1:1',
+					aspect_ratio: input.aspect_ratio,
 					output_format: 'png',
 					output_quality: 100,
 					safety_tolerance: 2,
@@ -45,7 +47,7 @@ console.log(input);
 						cfg: 3.5,
 						steps: 28,
 						prompt: input.prompt,
-						aspect_ratio: '1:1',
+						aspect_ratio: input.aspect_ratio,
 						output_format: 'png',
 						output_quality: 100,
 						negative_prompt: input.negative_prompt,

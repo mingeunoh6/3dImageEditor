@@ -18,10 +18,11 @@
 		guidance_scale: 2.5,
 		output_quality: 100,
 		negative_prompt: 'unreal, fantasy, dreamlike, abstract, blurry',
-		control_strength: 0.45
+		control_strength: 0.45,
+		aspect_ratio: '1:1'
 	};
 
-		// Convert file to base64
+	// Convert file to base64
 	function fileToBase64(file) {
 		return new Promise((resolve, reject) => {
 			const reader = new FileReader();
@@ -96,20 +97,16 @@
 		<h5>AI 배경 생성</h5>
 	</div> -->
 	<div class="sub-title model-info">
-		 <h5>현재 모델</h5>
+		<h5>현재 모델</h5>
 		{#if formData.base_model === 'FLUX' && controlImage}
 			<h5>FLUX.1 DEV ControlNet</h5>
 		{:else if formData.base_model === 'FLUX' && !controlImage}
-			<h5>FLUX 1.1 PRO</h5>
-
+			<h5>FLUX 1.1 PRO-ULTRA</h5>
 		{:else if formData.base_model === 'STABLE DIFFUSION' && controlImage}
 			<h5>SDXL-Controlnet-Lora</h5>
 		{:else if formData.base_model === 'STABLE DIFFUSION' && !controlImage}
 			<h5>STABLE DIFFUSION 3 Medium</h5>
 		{/if}
-		
-	
-		
 	</div>
 
 	<div class="result-group">
@@ -125,21 +122,14 @@
 			</div>
 		{/if}
 	</div>
-		<div class="sub-card">
+	<div class="sub-card">
 		<div class="selector-group">
-<label for="basemodel">베이스 모델 선택</label>
-			<select
-				id="basemodel"
-				class="model-input"
-				bind:value={formData.base_model}
-			
-				required
-			>
+			<label for="basemodel">베이스 모델 선택</label>
+			<select id="basemodel" class="model-input" bind:value={formData.base_model} required>
 				<option value="FLUX">FLUX</option>
 				<option value="STABLE DIFFUSION">STABLE DIFFUSION</option>
 			</select>
 		</div>
-		
 	</div>
 	<form on:submit|preventDefault={handleSubmit}>
 		<!-- <div class="sub-title">
@@ -154,63 +144,75 @@
 				placeholder="프롬프트를 입력하세요."
 				required
 			/>
-		</div>	
-			<!-- Image Upload -->
-			<div class="sub-card">
-				<label for="control_image">구조 참조 이미지</label>
-				<div class="upload-container">
-					<input
-						type="file"
-						id="control_image"
-						accept="image/*"
-						on:change={handleImageSelect}
-						class="file-input"
-					/>
-					<label for="control_image" class="btn"><div class="btn-icon-group">
-					불러오기
-				</div></label>
-				</div>
-
-				<!-- Image Preview -->
-				{#if controlImage}
-
-
-					<div class="range-container" >
-		<label for="control_strength">참조 강도</label>
-		<input
-		class="slider"
-					type="range"
-					id="control_strength"
-					bind:value={formData.control_strength}
-					min="0"
-					max="1"
-					step="0.05"
+		</div>
+		<!-- Image Upload -->
+		<div class="sub-card">
+			<label for="control_image">구조 참조 이미지</label>
+			<div class="upload-container">
+				<input
+					type="file"
+					id="control_image"
+					accept="image/*"
+					on:change={handleImageSelect}
+					class="file-input"
 				/>
-				<div class="range-result">
-					{formData.control_strength}
-				</div>
-				
-				
-			
-			
+				<label for="control_image" class="btn"><div class="btn-icon-group">불러오기</div></label>
 			</div>
-					<div class="image-preview">
-						<img src={controlImage} alt="Selected control image" />
+
+			<!-- Image Preview -->
+			{#if controlImage}
+				<div class="range-container">
+					<label for="control_strength">참조 강도</label>
+					<input
+						class="slider"
+						type="range"
+						id="control_strength"
+						bind:value={formData.control_strength}
+						min="0"
+						max="1"
+						step="0.05"
+					/>
+					<div class="range-result">
+						{formData.control_strength}
 					</div>
-						<div class="range-result">
-							<div class="delete-control-image-btn" on:click={()=>{
-					console.log('delete');
-					controlImage = null;
-					formData.control_image = null;
-				}} >
-		<Icon icon="material-symbols:delete-outline"class="button-icon" />
-							</div>
-		
 				</div>
-					
-		
-				{/if}
+				<div class="image-preview">
+					<img src={controlImage} alt="Selected control image" />
+				</div>
+				<div class="range-result">
+					<div
+						class="delete-control-image-btn"
+						on:click={() => {
+							console.log('delete');
+							controlImage = null;
+							formData.control_image = null;
+						}}
+					>
+						<Icon icon="material-symbols:delete-outline" class="button-icon" />
+					</div>
+				</div>
+			{/if}
+		</div>
+
+		{#if !controlImage}
+			<div class="sub-card">
+				<div class="selector-group">
+					<label for="basemodel">이미지 비율 선택</label>
+					<select id="basemodel" class="model-input" bind:value={formData.aspect_ratio} required>
+						<option value="1:1">1:1</option>
+						<option value="16:9">16:9</option>
+						<option value="2:3">2:3</option>
+						<option value="3:2">3:2</option>
+						<option value="4:5">4:5</option>
+						<option value="5:4">5:4</option>
+						<option value="3:2">9:16</option>
+						<option value="3:2">3:4</option>
+						<option value="3:2">4:3</option>
+					</select>
+				</div>
 			</div>
+		{/if}
+
 		<div class="sub-card">
 			<label for="prompt">API-KEY</label>
 			<input
@@ -511,11 +513,10 @@
 		color: var(--highlight-color);
 	}
 
-		/* File upload styling */
+	/* File upload styling */
 	.upload-container {
 		position: relative;
 		display: flex;
-
 	}
 
 	.file-input {
@@ -527,14 +528,9 @@
 		z-index: -1;
 	}
 
-
-
-
 	/* Image preview styling */
 	.image-preview {
-	
 		width: 100%;
-		
 
 		overflow: hidden;
 	}
@@ -545,12 +541,9 @@
 		display: block;
 	}
 
-	
 	input[type='range'] {
 		width: 200px;
-		
 	}
-
 
 	.range-container {
 		width: 100%;
@@ -559,33 +552,26 @@
 		align-items: center;
 		justify-items: space-between;
 		flex-direction: row;
-			gap:20px;
-		
+		gap: 20px;
 	}
 
 	.range-container label {
-		
-		
 		margin: 0;
-	
-
-
-
 	}
 
-	.range-result{
-	font-size: 1rem;
+	.range-result {
+		font-size: 1rem;
 	}
 
 	.selector-group {
 		display: flex;
 		flex-direction: column;
-	
+
 		width: 100%;
 	}
 
-	.model-input{
-font-size: 1.2em;
+	.model-input {
+		font-size: 1.2em;
 		font-family:
 			'Pretendard Variable',
 			Pretendard,
@@ -608,7 +594,7 @@ font-size: 1.2em;
 		box-sizing: border-box;
 		padding: 6px;
 		border: none;
-outline: 0;
+		outline: 0;
 		background-color: var(--onSurface-color);
 		color: var(--background-color);
 		font-weight: 600;
@@ -628,42 +614,33 @@ outline: 0;
 	}
 
 	.delete-control-image-btn:hover {
-
 		color: var(--text-color);
 	}
 
-	.model-info{
+	.model-info {
 		display: flex;
-	flex-direction: column;
-	gap: 10px;
+		flex-direction: column;
+		gap: 10px;
 	}
 
 	.slider {
 		appearance: none;
-		 background: var(--background-color); 
-		     outline: none;
-			 border-radius: 12px;
-			font-size: 0.9rem;
+		background: var(--background-color);
+		outline: none;
+		border-radius: 12px;
+		font-size: 0.9rem;
 		color: var(--text-color);
 		flex-grow: 1;
 		min-width: 100px;
 		max-width: 160px;
 		height: 8px;
-
-	
 	}
-		.slider::-webkit-slider-thumb {
+	.slider::-webkit-slider-thumb {
 		appearance: none;
 		width: 10px;
 		height: 16px;
 		border-radius: 8px;
 		background: var(--text-color);
 		cursor: pointer;
-
-	
 	}
-
-
-
-
 </style>
