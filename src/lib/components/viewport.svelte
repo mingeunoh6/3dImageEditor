@@ -756,12 +756,25 @@
 	}
 
 	function resizeCanvasAndRenderers(aspectRatio, scaleFactor) {
+//check device orientation
 		// const scaleFactor = 1; // or whatever value you're using
-		const maxSize = Math.min(window.innerWidth * 0.6, window.innerHeight * 0.8);
+		const maxSize = Math.min(window.innerWidth * 0.8, window.innerHeight);
 		const baseSize = 1024 * scaleFactor;
 		let width, height;
-
+		const isLandscape = window.innerWidth > window.innerHeight;
+		if(isLandscape){
+			
 		if (aspectRatio > 1) {
+				width = window.innerWidth*0.7;
+			height = width / aspectRatio;
+	
+		} else {
+			// Portrait or square
+	height = window.innerHeight*0.8;
+			width = height * aspectRatio;
+		}
+		} else {
+				if (aspectRatio > 1) {
 			// Landscape
 			width = maxSize;
 			height = maxSize / aspectRatio;
@@ -770,6 +783,13 @@
 			height = maxSize;
 			width = maxSize * aspectRatio;
 		}
+		}
+
+
+
+
+
+	
 
 		// Resize main renderer and canvas
 		renderer.setSize(width * scaleFactor, height * scaleFactor, false);
@@ -918,11 +938,12 @@
 		top: 100%;
 		right: 0;
 		width: 100%;
+		max-width: 600px;
 		z-index: 999;
 		box-sizing: border-box;
 		display: flex;
 		flex-direction: row;
-		justify-content: center;
+		justify-content: flex-end;
 		align-items:center;
 		gap: 8px;
 		margin-top: 8px;
@@ -995,19 +1016,20 @@
 		flex-direction: column;
 		box-sizing: border-box;
 		position: absolute;
-		right: 100%;
+		left: 0;
 		top: 0;
 		z-index: 100;
-		margin-right: 10px;
+		margin-left: 10px;
+		margin-top:10px
 
 	}
 
 
 	#transform-tool button {
 		box-sizing: border-box;
-		width: 64px;
-		height: 64px;
-		border: 1px solid var(--border-color);
+		width: 4rem;
+		height: 4rem;
+
 display: flex;
 		justify-content: center;
 		align-items: center;
