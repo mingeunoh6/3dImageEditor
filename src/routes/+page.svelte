@@ -108,14 +108,14 @@
 
 	#LNB {
 		position: relative;
-		min-width: 320px;
+		min-width: 360px;
 		width: 30vmin; /* 30% of the smaller viewport dimension */
 	}
 
 	#Viewport {
 		flex-grow: 1;
-		border: 1px solid black;
-		background-color: #191a1a;
+	box-sizing: border-box;
+		background-color: var(--background-color);
 		display: flex;
 		justify-content: center;
 		align-items: center;

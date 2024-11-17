@@ -118,18 +118,20 @@ table {
 
 :root {
 	--primary-color: #0e0e0e;
-	--surface-color: #2a2a2a;
-	--secondary-color: #2a2a2a;
-	--accent-color: #3a8cff;
-	--accent-highlight-color: #7eb4ff;
-	--background-color: #1e1e1e;
-	--text-color: #e0e0e0;
-	--border-color: #444444;
+	--surface-color: #FFFFFE;
+	--secondary-color: #555555;
+	--accent-color: #ff7474;
+	--accent-highlight-color: #ffb5b5;
+	--background-color: #ffffff;
+	--text-color: #000000;
+	--border-color: #DDDDDD;
 	--highlight-color: #ff5c5c;
-	--onBackground-color: #e0e0e0;
-	--onSurface-color: #e0e0e0;
+	--onBackground-color: #DDDDDD;
+	--onSurface-color: #D9D9D9;
 	--onPrimary-color: #e0e0e0;
 	--onSecondary-color: #e0e0e0;
+	--block-color: #DDDDDD;
+	--handle-color: #FFFFFE;
 }
 
 h1 {
@@ -162,22 +164,26 @@ p {
 }
 /* Styling the scrollbar */
 ::-webkit-scrollbar {
-	width: 12px; /* Width of the scrollbar */
+	width: 10px; /* Width of the scrollbar */
 }
 
 /* Track */
 ::-webkit-scrollbar-track {
 	background: var(--background-color); /* Background color of the scrollbar track */
+	border: 1px solid var(--border-color); /* Adds padding around the handle */
+box-sizing: border-box;
 }
 
 /* Handle */
 ::-webkit-scrollbar-thumb {
-	background-color: var(--surface-color); /* Color of the scrollbar handle */
-	border-radius: 6px; /* Rounded corners */
-	border: 1px solid var(--surface-color); /* Adds padding around the handle */
+	background-color: var(--onBackground-color); /* Color of the scrollbar handle */
+	border-radius: 8px; /* Rounded corners */
+	border: 1px solid var(--onBackground-color); /* Adds padding around the handle */
 }
 
 /* Handle on hover */
 ::-webkit-scrollbar-thumb:hover {
-	background: #555; /* Darker color on hover */
+	background: var(--border-color); /* Darker color on hover */
+	border: 1px solid var(--onBackground-color); /* Adds padding around the handle */
+
 }

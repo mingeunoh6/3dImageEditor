@@ -113,7 +113,7 @@
 		height: 100%;
 		padding: 10px;
 		overflow: auto;
-		background-color: var(--primary-color);
+		background-color: var(--background-color);
 	}
 
 
@@ -125,7 +125,7 @@
 		width: 100%;
 
 		padding: 10px;
-		background-color: var(--primary-color);
+	
 	}
 	.sub-title {
 		display: flex;
@@ -135,7 +135,7 @@
 		width: 100%;
 
 		color: var(--text-color);
-		background-color: var(--primary-color);
+
 		padding: 18px 0 18px 0;
 	}
 	.sub-title h5 {
@@ -146,8 +146,8 @@
 		display: flex;
 		flex-direction: column;
 		gap: 10px;
-		padding: 10px;
-		background-color: var(--primary-color);
+	
+	
 	}
 
 	.asset-item{
@@ -155,7 +155,8 @@
 		flex-direction: row;
 		justify-content: space-between;
 		align-items: center;
-		
+		padding-bottom: 10px;
+		padding-top: 10px;
 		border-bottom: 1px solid var(--border-color);
 
 		
@@ -168,7 +169,7 @@
 
 
 	.btn {
-		font-size: 0.9rem;
+		font-size: 0.8rem;
 		font-family:
 			'Pretendard Variable',
 			Pretendard,
@@ -191,17 +192,17 @@
 		box-sizing: border-box;
 		padding: 6px;
 		border: none;
-
-		background-color: var(--onSurface-color);
-		color: var(--background-color);
-		font-weight: 600;
+border-radius: 6px;
+		background-color: var(--block-color);
+		color: var(--text-color);
+		font-weight: 500;
 
 		cursor: pointer;
 	}
 
 	.btn:hover {
-		background-color: var(--accent-color);
-		color: var(--text-color);
+		background-color: var(--secondary-color);
+		color: var(--border-color);
 		cursor: pointer;
 		border: none;
 	}
@@ -211,80 +212,6 @@
 		color: var(--text-color);
 		cursor: not-allowed;
 	}
-
-	.btn-sub {
-		background-color: var(--accent-color);
-		color: var(--text-color);
-		margin-top: 10px;
-		margin-bottom: 10px;
-	}
-
-	.btn-sub:hover {
-		background-color: var(--accent-highlight-color);
-		color: var(--background-color);
-	}
-
-	div :global(.button-icon) {
-		font-size: 1.4rem;
-	}
-
-	div :global(.desc-icon) {
-		font-size: 1.2rem;
-	}
-
-	.btn-icon-group {
-		width: 100%;
-		height: 100%;
-		display: flex;
-		justify-content: center;
-		align-items: center;
-		gap: 4px;
-	}
-	.btn-icon-group p {
-		text-align: center;
-		color: var(--text-color);
-	}
-
-	.btn-icon-group .icon {
-		display: flex;
-		justify-content: center;
-		align-items: center;
-		margin: 0;
-		height: 100%;
-
-		margin-right: 10px;
-	}
-
-	.desc {
-		box-sizing: border-box;
-		display: flex;
-		justify-content: flex-end;
-		align-items: center;
-		padding: 4px;
-		color: var(--text-color);
-		margin-top: 8px;
-	}
-
-	.desc p {
-		text-align: right;
-		margin-right: 8px;
-		font-size: 0.8rem;
-	}
-
-	a {
-		text-decoration: none;
-		color: var(--text-color);
-	}
-
-	a:hover {
-		text-decoration: underline;
-	}
-
-	.error {
-		text-align: center;
-		color: var(--highlight-color);
-	}
-
 
 	
 

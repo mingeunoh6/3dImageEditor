@@ -10,6 +10,7 @@
 	import { TransformControls } from 'three/addons/controls/TransformControls';
 	import ShadowGround from '$lib/components/functions/ground.js';
 	import ShadowLight from '$lib/components/functions/shadowLight.js';
+	import Icon from '@iconify/svelte';
 
 	export let glbFile = null;
 	export let bgFile = null;
@@ -46,6 +47,7 @@
 	let shadowRotation = 0;
 	let isShadowHelper = false;
 	let transfromControllerDragging = false;
+
 
 	$: if (bgFile) {
 		console.log('bgFile', bgFile);
@@ -304,7 +306,8 @@
 		renderer = new THREE.WebGLRenderer({
 			canvas: canvas,
 			antialias: true,
-			logarithmicDepthBuffer: true
+			logarithmicDepthBuffer: true,
+			alpha: true
 		});
 		setRendererResolution(renderer, canvas, scaleFactor);
 		renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -342,7 +345,7 @@
 		controller = new TransformControls(camera, renderer.domElement);
 		controller.addEventListener('dragging-changed', function (event) {
 			console.log('dragging-changed', event);
-			transfromControllerDragging = true
+			transfromControllerDragging = true;
 			controls.enabled = !event.value;
 		});
 
@@ -406,12 +409,14 @@
 		window.addEventListener('keydown', handleKeyDown);
 		// Add resize event listener
 		window.addEventListener('resize', onWindowResize, false);
+
 		animate();
 
 		function animate() {
 			requestAnimationFrame(animate);
 
 			renderer.render(scene, camera);
+
 
 			// Temporarily replace the original cube with the red cube for the render canvas
 		}
@@ -485,14 +490,18 @@
 				obj.userData.isController = true;
 			});
 		} else {
-			if(transfromControllerDragging){
+			if (transfromControllerDragging) {
 				return;
 			}
+
 			console.log('No object selected');
 			controller.detach();
 			scene.remove(controller);
 			controller.visible = false;
-			transfromControllerDraging = false;
+		
+	transfromControllerDragging = false;
+			
+		
 		}
 	}
 	function handleKeyDown(event) {
@@ -547,10 +556,100 @@
 			scene1.remove(scene1.children[0]);
 		}
 
-		//reset scene2
-		// while (scene2.children.length > 0) {
-		// 	scene2.remove(scene2.children[0]);
-		// }
+	
+		if (controller) {
+			controller.detach();
+		}
+
+		// 그리드 제거
+		if (ground) {
+			ground.gridOption(false);
+		}
+		//helper 제거
+		if (shadowLight) {
+			shadowLight.toggleShadowHelper(false);
+		}
+
+		if (addedModel.length === 0) {
+			console.error('No model added to the scene');
+			alert('Please upload product model first.');
+			return;
+		}
+
+		// Create off-screen renderers
+		// Reuse or create off-screen renderers
+
+		// Adjust this value to increase/decrease resolution
+		const aspectRatio = maskCanvas.width / maskCanvas.height;
+		const offscreenWidth = 1024 * scaleFactor;
+		const offscreenHeight = offscreenWidth / aspectRatio;
+
+
+		if (!this.offscreenMainRenderer) {
+			this.offscreenMainRenderer = new THREE.WebGLRenderer({
+				alpha: true,
+				antialias: true,
+				logarithmicDepthBuffer: true
+			});
+			this.offscreenMainRenderer.setSize(offscreenWidth, offscreenHeight);
+			this.offscreenMainRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+			//shadows
+			this.offscreenMainRenderer.shadowMap.enabled = true;
+			this.offscreenMainRenderer.shadowMap.type = THREE.PCFSoftShadowMap; // Use soft shadows for smoother edges
+
+			this.offscreenMainRenderer.outputColorSpace = THREE.SRGBColorSpace;
+			this.offscreenMainRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+			this.offscreenMainRenderer.toneMappingExposure = 1.0;
+		} else {
+			this.offscreenMainRenderer.setSize(offscreenWidth, offscreenHeight);
+			this.offscreenMainRenderer.clear();
+		}
+
+	
+		//background decision
+		let saveSceneBG = scene.background;
+		if (!isBackground) {
+			scene.background = null;
+		}
+
+		// Render the main scene to the off-screen renderer
+	
+		this.offscreenMainRenderer.render(scene, camera);
+
+		// const passDataUrl = this.offscreenPassRenderer.domElement.toDataURL('image/png');
+		const viewportDataUrl = this.offscreenMainRenderer.domElement.toDataURL('image/png');
+
+		// Create download links
+		setTimeout(() => {
+			downloadImage(viewportDataUrl, 'result.png');
+			// downloadImage(passDataUrl, 'pass_scene.png');
+
+			// Reset scene background
+			if (!isBackground) {
+				scene.background = saveSceneBG;
+			}
+
+			// Clean up off-screen renderers
+			this.offscreenMainRenderer.dispose();
+			//포스트프로세싱 재적용
+		
+		}, 1000);
+
+		//이미지 내보내기를 위해 임시로 제거했던 것 다시 추가
+		if (ground) {
+			ground.gridOption(isGrid);
+		}
+
+		if (shadowLight) {
+			shadowLight.toggleShadowHelper(isShadowHelper);
+		}
+	}
+	function maskOutputRender() {
+		//clear scene
+		//reset scene1
+		while (scene1.children.length > 0) {
+			scene1.remove(scene1.children[0]);
+		}
 
 		if (controller) {
 			controller.detach();
@@ -588,34 +687,7 @@
 			this.offscreenMaskRenderer.clear();
 		}
 
-		// if (!this.offscreenPassRenderer) {
-		// 	this.offscreenPassRenderer = new THREE.WebGLRenderer({ antialias: true });
-		// 	this.offscreenPassRenderer.setSize(offscreenWidth, offscreenHeight);
-		// 	this.offscreenPassRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-		// } else {
-		// 	this.offscreenPassRenderer.setSize(offscreenWidth, offscreenHeight);
-		// 	this.offscreenPassRenderer.clear();
-		// }
 
-		if (!this.offscreenMainRenderer) {
-			this.offscreenMainRenderer = new THREE.WebGLRenderer({
-				alpha: true,
-				antialias: true,
-				logarithmicDepthBuffer: true
-			});
-			this.offscreenMainRenderer.setSize(offscreenWidth, offscreenHeight);
-			this.offscreenMainRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-			//shadows
-			this.offscreenMainRenderer.shadowMap.enabled = true;
-			this.offscreenMainRenderer.shadowMap.type = THREE.PCFSoftShadowMap; // Use soft shadows for smoother edges
-
-			this.offscreenMainRenderer.outputColorSpace = THREE.SRGBColorSpace;
-			this.offscreenMainRenderer.toneMapping = THREE.ACESFilmicToneMapping;
-			this.offscreenMainRenderer.toneMappingExposure = 1.0;
-		} else {
-			this.offscreenMainRenderer.setSize(offscreenWidth, offscreenHeight);
-			this.offscreenMainRenderer.clear();
-		}
 
 		// Clone object for render pass 1
 		const maskMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
@@ -633,46 +705,7 @@
 		maskRenderer.render(scene1, camera);
 		this.offscreenMaskRenderer.render(scene1, camera);
 
-		// // Clone object for render pass 2
-		// renderpass2obj = controlGroup.clone();
-		// let objectMatlist = [];
-		// renderpass2obj.traverse((child) => {
-		// 	if (child.isMesh && child.material) {
-		// 		objectMatlist.push(child.material);
-		// 	}
-		// });
-		// renderpass2obj.traverse((child) => {
-		// 	if (child.isMesh && child.material && objectMatlist.includes(child.material)) {
-		// 		if (child.material === objectMatlist[0]) {
-		// 			child.material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
-		// 		} else if (child.material === objectMatlist[1]) {
-		// 			child.material = new THREE.MeshBasicMaterial({ color: 0x0000ff });
-		// 		} else if (child.material === objectMatlist[2]) {
-		// 			child.material = new THREE.MeshBasicMaterial({ color: 0xffff00 });
-		// 		} else if (child.material === objectMatlist[3]) {
-		// 			child.material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-		// 		} else if (child.material === objectMatlist[4]) {
-		// 			child.material = new THREE.MeshBasicMaterial({ color: 0x00ffff });
-		// 		} else if (child.material === objectMatlist[5]) {
-		// 			child.material = new THREE.MeshBasicMaterial({ color: 0xff00ff });
-		// 		} else if (child.material === objectMatlist[6]) {
-		// 			child.material = new THREE.MeshBasicMaterial({ color: 0x0ffff0 });
-		// 		} else if (child.material === objectMatlist[7]) {
-		// 			child.material = new THREE.MeshBasicMaterial({ color: 0xffffff });
-		// 		} else if (child.material === objectMatlist[8]) {
-		// 			child.material = new THREE.MeshBasicMaterial({ color: 0x00ffd0 });
-		// 		} else if (child.material === objectMatlist[9]) {
-		// 			child.material = new THREE.MeshBasicMaterial({ color: 0xffd000 });
-		// 		} else {
-		// 			child.material = new THREE.MeshBasicMaterial({ color: 0x444444 });
-		// 		}
-		// 	}
-		// });
-
-		// scene2.add(renderpass2obj);
-		// console.log('Pass output render');
-		// passRenderer.render(scene2, camera);
-		// this.offscreenPassRenderer.render(scene2, camera);
+	
 
 		//background decision
 		let saveSceneBG = scene.background;
@@ -680,17 +713,14 @@
 			scene.background = null;
 		}
 
-		// Render the main scene to the off-screen renderer
-		this.offscreenMainRenderer.render(scene, camera);
+	
 
 		// Save rendered scenes as PNG images from off-screen renderers
 		const renderDataUrl = this.offscreenMaskRenderer.domElement.toDataURL('image/png');
-		// const passDataUrl = this.offscreenPassRenderer.domElement.toDataURL('image/png');
-		const viewportDataUrl = this.offscreenMainRenderer.domElement.toDataURL('image/png');
 
 		// Create download links
 		setTimeout(() => {
-			downloadImage(viewportDataUrl, 'result.png');
+	
 			downloadImage(renderDataUrl, 'mask.png');
 			// downloadImage(passDataUrl, 'pass_scene.png');
 
@@ -702,7 +732,9 @@
 			// Clean up off-screen renderers
 			this.offscreenMaskRenderer.dispose();
 			// this.offscreenPassRenderer.dispose();
-			this.offscreenMainRenderer.dispose();
+		
+			//포스트프로세싱 재적용
+		
 		}, 1000);
 
 		//이미지 내보내기를 위해 임시로 제거했던 것 다시 추가
@@ -725,7 +757,7 @@
 
 	function resizeCanvasAndRenderers(aspectRatio, scaleFactor) {
 		// const scaleFactor = 1; // or whatever value you're using
-		const maxSize = Math.min(window.innerWidth * 0.8, window.innerHeight * 0.8);
+		const maxSize = Math.min(window.innerWidth * 0.6, window.innerHeight * 0.8);
 		const baseSize = 1024 * scaleFactor;
 		let width, height;
 
@@ -827,23 +859,17 @@
 		<div id="main-viewport">
 			<canvas id="viewport" bind:this={canvas}> </canvas>
 			<div id="transform-tool">
-				<button class="transform-btn" on:click={changeTransformMode}>이동</button>
-				<button class="transform-btn" on:click={changeTransformMode}>회전</button>
-				<button class="transform-btn" on:click={changeTransformMode}>크기</button>
+				<button class="transform-btn" on:click={changeTransformMode}><Icon class="transform_tool_icon" icon="iconamoon:move-light" /></button>
+				<button class="transform-btn" on:click={changeTransformMode}><Icon class="transform_tool_icon" icon="tabler:rotate-360" /></button>
+				<button class="transform-btn" on:click={changeTransformMode}><Icon class="transform_tool_icon" icon="icon-park-outline:scale" /></button>
 			</div>
 			<div id="overlay">
 				<div id="overlay-content">
-					<h1>GUIDE</h1>
+					<!-- <h1>GUIDE</h1> -->
 					<p>
-						1.<br /> 왼쪽 패널의 <span class="highlight">"GLB 불러오기"</span> 버튼을 클릭해 3D
-						모델을 불러오거나<br /> <span class="highlight">"라이브러리에서 불러오기"</span> 에서 원하는
-						제품을 고르세요.
-					</p>
-					<p>
-						2.<br /><span class="highlight">"배경 불러오기"</span> 버튼을 통해 배경 이미지를
-						불러오거나<br /><span class="highlight">"AI로 배경 생성"</span> 기능을 통해 배경을
-						생성하면<br /> 배경이 자연스럽게 제품의 주변광으로 적용됩니다.
-					</p>
+						좌측 패널에서 제품을 업로드하거나, <br />
+						라이브러리에서 제품을 선택하여 화면에 표시하세요. </p>	
+				
 				</div>
 			</div>
 		</div>
@@ -854,11 +880,10 @@
 		</div>
 	</div>
 	<div id="viewport-menu">
-		<button on:click={imageOutputRender}>제품 이미지 / 마스크 다운로드</button>
-		<div class="checkBox-wrapper">
+			<div class="checkBox-wrapper">
 			<p>배경 포함</p>
 			<div class="checkBox-section">
-				<p>off</p>
+				
 				<label class="switch">
 					<input
 						type="checkbox"
@@ -868,11 +893,15 @@
 					/>
 					<span class="toggle-slider round"></span>
 				</label>
-				<p>on</p>
+				
 			</div>
 		</div>
+		<button on:click={imageOutputRender}>이미지 다운로드</button>
+			<button on:click={maskOutputRender}>제품 마스크 다운로드</button>
+	
 	</div>
 </div>
+
 
 <style>
 	#viewport-main-wrapper {
@@ -882,24 +911,29 @@
 		flex-direction: column;
 		justify-content: center;
 		align-items: center;
+
 	}
 	#viewport-menu {
+		position:absolute;
+		top: 100%;
+		right: 0;
 		width: 100%;
-		height: 100%;
+		z-index: 999;
 		box-sizing: border-box;
 		display: flex;
 		flex-direction: row;
 		justify-content: center;
-		align-items: center;
-		margin: 8px;
+		align-items:center;
 		gap: 8px;
+		margin-top: 8px;
 	}
 	#viewport-wrapper {
 		display: flex;
 		justify-content: center;
 		align-items: center;
 		width: 100%;
-		height: 90vh;
+		height: 100%;
+			
 	}
 
 	.side-wrapper {
@@ -912,6 +946,7 @@
 	}
 	#main-viewport {
 		position: relative;
+				
 	}
 
 	#overlay {
@@ -924,10 +959,11 @@
 		justify-content: center;
 		align-items: center;
 		color: var(--text-color);
-		background-color: rgba(0, 0, 0, 0.5);
+		background-color: rgba(210, 210, 210, 0.5);
 		box-sizing: border-box;
 		padding: 30px;
 		z-index: 997;
+		border-radius: 8px;
 	}
 	#overlay-content {
 		width: 100%;
@@ -959,40 +995,58 @@
 		flex-direction: column;
 		box-sizing: border-box;
 		position: absolute;
-		left: 0;
+		right: 100%;
 		top: 0;
 		z-index: 100;
-		padding: 6px;
+		margin-right: 10px;
+
 	}
+
 
 	#transform-tool button {
 		box-sizing: border-box;
-		width: 72px;
-		height: 72px;
-		border: 1px solid var(--primary-color);
-
+		width: 64px;
+		height: 64px;
+		border: 1px solid var(--border-color);
+display: flex;
+		justify-content: center;
+		align-items: center;
 		margin-bottom: 6px;
 	}
+
+		div :global(.transform_tool_icon ) {
+		font-size: 1.8rem;
+		color: var(--text-color);
+
+	}
+
 	#transform-tool button:hover {
-		background-color: var(--accent-color);
+		background-color: var(--secondary-color);
+		color: var(--onSurface-color);
 	}
 
 	#viewport {
+		box-sizing: border-box;
 		max-width: 80vw;
-		max-height: 80vh;
+		max-height: 90vh;
 		width: auto;
 		height: auto;
+		background-color: var(--background-color);
+		border: 1px solid var(--border-color);
+			border-radius: 8px;
 	}
 	#preview-wrapper {
 		display: flex;
 		flex-direction: column;
+				background-color: var(--background-color);
+				border-radius: 8px;
 	}
 
 	#mask-canvas,
 	#pass-canvas {
 		box-sizing: border-box;
-
-		border: 1px solid black;
+display: none;
+		border: 1px solid var(--border-color);
 		background-color: var(--accent-hover-color);
 		margin-bottom: 0; /* Space between render and pass canvases */
 	}
@@ -1002,12 +1056,31 @@
 	}
 
 	button {
+			font-family:
+		'Pretendard Variable',
+		Pretendard,
+		-apple-system,
+		BlinkMacSystemFont,
+		system-ui,
+		Roboto,
+		'Helvetica Neue',
+		'Segoe UI',
+		'Apple SD Gothic Neo',
+		'Noto Sans KR',
+		'Malgun Gothic',
+		'Apple Color Emoji',
+		'Segoe UI Emoji',
+		'Segoe UI Symbol',
+		sans-serif;
+		font-size: 0.9rem;
+		font-weight: 500;
 		box-sizing: border-box;
-		width: 50%;
+		width: 100%;
 		height: 42px;
 		border: none;
-		background-color: var(--secondary-color);
+		background-color: var(--onSurface-color);
 		color: var(--text-color);
+		border-radius: 8px;
 	}
 
 	button:hover {
@@ -1027,32 +1100,51 @@
 		height: auto;
 	}
 
-	.checkBox-wrapper {
-		display: flex;
-		flex-direction: row;
-		justify-content: center;
-		align-items: center;
-		gap: 8px;
-	}
+.checkBox-wrapper {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    background-color: var(--border-color);
+    padding: 8px 18px;
+    border-radius: 8px;
+    height: 42px;
+    width: 50%;
+    box-sizing: border-box;
+}
 
 	.checkBox-section {
-		display: flex;
-		flex-direction: row;
-		justify-content: center;
-		align-items: center;
-		gap: 8px;
-	}
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0; /* Prevents the toggle from shrinking */
+}
 
 	.checkBox-wrapper p {
-		color: var(--text-color);
-		font-size: 1rem;
-	}
+    font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, 
+        system-ui, Roboto, 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 
+        'Noto Sans KR', 'Malgun Gothic', 'Apple Color Emoji', 'Segoe UI Emoji', 
+        'Segoe UI Symbol', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-color);
+    /* Add these properties to prevent text wrapping */
+    white-space: nowrap;
+    flex-shrink: 0; /* Prevents the text from shrinking */
+    margin: 0; /* Optional: removes any margin that might cause issues */
+}
 
 	.switch {
+
 		position: relative;
 		display: inline-block;
 		width: 42px;
 		height: 24px;
+	
 	}
 
 	/* Hide default HTML checkbox */
@@ -1069,7 +1161,7 @@
 		left: 0;
 		right: 0;
 		bottom: 0;
-		background-color: #ccc;
+		background-color: var(--secondary-color);
 		-webkit-transition: 0.4s;
 		transition: 0.4s;
 	}
@@ -1087,11 +1179,11 @@
 	}
 
 	input:checked + .toggle-slider {
-		background-color: #2196f3;
+		background-color: var(--accent-color);
 	}
 
 	input:focus + .toggle-slider {
-		box-shadow: 0 0 1px #2196f3;
+		box-shadow: 0 0 1px var(--border-color);
 	}
 
 	input:checked + .toggle-slider:before {

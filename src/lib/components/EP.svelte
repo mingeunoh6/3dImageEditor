@@ -17,7 +17,7 @@
 		control_image: null,
 		guidance_scale: 2.5,
 		output_quality: 100,
-		negative_prompt: 'unreal, fantasy, dreamlike, abstract, blurry',
+		negative_prompt: 'unreal, fantasy, dreamlike, abstract, blurry, monitor',
 		control_strength: 0.45,
 		aspect_ratio: '1:1'
 	};
@@ -96,7 +96,9 @@
 	<!-- <div class="main-title">
 		<h5>AI 배경 생성</h5>
 	</div> -->
-	<div class="sub-title model-info">
+	<div class="sub-title">
+		<h5>AI로 배경 이미지를 생성해보세요.</h5>
+			<div class="model-info">
 		<h5>현재 모델</h5>
 		{#if formData.base_model === 'FLUX' && controlImage}
 			<h5>FLUX.1 DEV ControlNet</h5>
@@ -107,11 +109,63 @@
 		{:else if formData.base_model === 'STABLE DIFFUSION' && !controlImage}
 			<h5>STABLE DIFFUSION 3 Medium</h5>
 		{/if}
+		</div>
 	</div>
 
 	<div class="result-group">
 		<!-- Result Display -->
-		{#if result}
+		 {#if loading}
+			<div class="loading-container">
+				<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 50" width="50" height="50">
+  <!-- Outer circle gradient -->
+  <defs>
+    <linearGradient id="spinner-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ff5c5c"/>
+      <stop offset="100%" stop-color="#ff7474"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Background circle -->
+  <circle 
+    cx="25" 
+    cy="25" 
+    r="20" 
+    stroke="#DDDDDD" 
+    stroke-width="4" 
+    fill="none"
+  />
+  
+  <!-- Animated spinner arc -->
+  <circle 
+    cx="25" 
+    cy="25" 
+    r="20"
+    stroke="url(#spinner-gradient)"
+    stroke-width="4"
+    fill="none"
+    stroke-linecap="round"
+    stroke-dasharray="94.2477796076938"
+    stroke-dashoffset="47.123889803847"
+  >
+    <animateTransform
+      attributeName="transform"
+      type="rotate"
+      dur="1s"
+      values="0 25 25;360 25 25"
+      repeatCount="indefinite"
+      additive="sum"
+    />
+    <animate
+      attributeName="stroke-dashoffset"
+      values="94.2477796076938;0"
+      dur="1s"
+      repeatCount="indefinite"
+    />
+  </circle>
+</svg>
+			</div>
+		
+		{:else if result}
 			<div class="result">
 				<img src={result} alt="Generated image" />
 				<button id="applyBG" class="btn btn-sub" on:click={handleBGImport}
@@ -205,9 +259,9 @@
 						<option value="3:2">3:2</option>
 						<option value="4:5">4:5</option>
 						<option value="5:4">5:4</option>
-						<option value="3:2">9:16</option>
-						<option value="3:2">3:4</option>
-						<option value="3:2">4:3</option>
+						<option value="9:16">9:16</option>
+						<option value="3:4">3:4</option>
+						<option value="4:3">4:3</option>
 					</select>
 				</div>
 			</div>
@@ -272,15 +326,18 @@
 		height: 100%;
 		padding: 10px;
 		overflow: auto;
-		background-color: var(--primary-color);
+		background-color: var(--background-color);
 	}
 
 	.result-group {
+			box-sizing: border-box;
 		display: flex;
 		flex-direction: left;
 		justify-content: center;
 		align-items: center;
 		width: 100%;
+		
+		padding: 10px;
 	}
 
 	.result {
@@ -290,17 +347,37 @@
 		align-items: center;
 		width: 100%;
 		height: 100%;
+
 	}
 
 	.result img {
+		box-sizing: border-box;
 		max-width: 100%;
 		max-height: 100%;
+		border-radius: 8px;
+		border: 1px solid var(--border-color);
 	}
 
+	.loading-container {
+  width: 100%;
+  position: relative;
+  padding-top: 100%; /* Creates a square container */
+}
+
+.loading-container svg {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 20%;
+  height: 20%;
+}
+
 	label {
-		font-size: 1rem;
+		font-size: 0.85rem;
 		color: var(--text-color);
 		margin-bottom: 8px;
+		font-weight: 600;
 	}
 
 	.sub-card {
@@ -310,22 +387,43 @@
 		width: 100%;
 
 		padding: 10px;
-		background-color: var(--primary-color);
+
 	}
 	.sub-title {
 		display: flex;
 		justify-content: flex-start;
-		align-items: center;
+		flex-direction: column;
 		box-sizing: border-box;
 		width: 100%;
 
 		color: var(--text-color);
-		background-color: var(--primary-color);
-		padding: 18px 0 18px 0;
+	
+		padding: 10px;
+		gap: 8px;
 	}
+
 	.sub-title h5 {
 		font-size: 1rem;
 	}
+
+		.model-info {
+		display: flex;
+		justify-content: flex-start;
+		flex-direction: row;
+		box-sizing: border-box;
+		width: 100%;
+
+	
+		
+		gap: 8px;
+	}
+	
+	.model-info h5{
+		font-weight: 500;
+font-size: 0.8rem;
+		color: var(--text-color);
+	}
+
 
 	.prompt-input {
 		font-family:
@@ -347,10 +445,10 @@
 		width: 100%;
 		height: 130px;
 		box-sizing: border-box;
-		padding: 6px;
-		border: 1px solid var(--text-color);
-
-		background-color: var(--primary-color);
+		padding: 8px;
+		border: 1.5px solid var(--border-color);
+border-radius: 8px;
+		background-color: var(--background-color);
 		color: var(--text-color);
 		font-size: 1rem;
 		resize: none;
@@ -376,12 +474,12 @@
 		width: 100%;
 
 		box-sizing: border-box;
-		padding: 6px;
-		border: 1px solid var(--text-color);
-
-		background-color: var(--primary-color);
+		padding: 8px;
+		border: 1px solid var(--border-color);
+border-radius: 6px;
+		background-color: var(--background-color);
 		color: var(--text-color);
-		font-size: 1rem;
+		font-size: 0.8rem;
 		resize: none;
 	}
 
@@ -396,42 +494,42 @@
 	}
 
 	.btn {
-		font-size: 1.2em;
 		font-family:
-			'Pretendard Variable',
-			Pretendard,
-			-apple-system,
-			BlinkMacSystemFont,
-			system-ui,
-			Roboto,
-			'Helvetica Neue',
-			'Segoe UI',
-			'Apple SD Gothic Neo',
-			'Noto Sans KR',
-			'Malgun Gothic',
-			'Apple Color Emoji',
-			'Segoe UI Emoji',
-			'Segoe UI Symbol',
-			sans-serif;
-
+		'Pretendard Variable',
+		Pretendard,
+		-apple-system,
+		BlinkMacSystemFont,
+		system-ui,
+		Roboto,
+		'Helvetica Neue',
+		'Segoe UI',
+		'Apple SD Gothic Neo',
+		'Noto Sans KR',
+		'Malgun Gothic',
+		'Apple Color Emoji',
+		'Segoe UI Emoji',
+		'Segoe UI Symbol',
+		sans-serif;
+		font-size: 0.85rem;
+		font-weight: 500;
 		width: 100%;
-		height: 40px;
+	height: 42px;
 		box-sizing: border-box;
 		padding: 6px;
+		border-radius: 8px;
 		border: none;
-
-		background-color: var(--onSurface-color);
-		color: var(--background-color);
-		font-weight: 600;
+		background-color: var(--border-color);
+		color: var(--text-color);
+	
 
 		cursor: pointer;
 	}
 
 	.btn:hover {
-		background-color: var(--accent-color);
-		color: var(--text-color);
+		background-color: var(--secondary-color);
 		cursor: pointer;
 		border: none;
+		color: var(--onSurface-color)
 	}
 
 	.btn:disabled {
@@ -445,20 +543,15 @@
 		color: var(--text-color);
 		margin-top: 10px;
 		margin-bottom: 10px;
+		font-weight: 600;
 	}
 
 	.btn-sub:hover {
 		background-color: var(--accent-highlight-color);
-		color: var(--background-color);
+		color: var(--text-color);
 	}
 
-	div :global(.button-icon) {
-		font-size: 1.4rem;
-	}
 
-	div :global(.desc-icon) {
-		font-size: 1.2rem;
-	}
 
 	.btn-icon-group {
 		width: 100%;
@@ -468,20 +561,7 @@
 		align-items: center;
 		gap: 4px;
 	}
-	.btn-icon-group p {
-		text-align: center;
-		color: var(--text-color);
-	}
 
-	.btn-icon-group .icon {
-		display: flex;
-		justify-content: center;
-		align-items: center;
-		margin: 0;
-		height: 100%;
-
-		margin-right: 10px;
-	}
 
 	.desc {
 		box-sizing: border-box;
@@ -490,12 +570,12 @@
 		align-items: center;
 		padding: 4px;
 		color: var(--text-color);
-		margin-top: 8px;
+		margin-top: 6px;
 	}
 
 	.desc p {
 		text-align: right;
-		margin-right: 8px;
+		margin-right: 6px;
 		font-size: 0.8rem;
 	}
 
@@ -509,6 +589,7 @@
 	}
 
 	.error {
+				font-size: 0.8rem;
 		text-align: center;
 		color: var(--highlight-color);
 	}
@@ -539,6 +620,9 @@
 		width: 100%;
 		height: auto;
 		display: block;
+		border: 1px solid var(--border-color);
+		border-radius: 8px;
+		box-sizing: border-box;
 	}
 
 	input[type='range'] {
@@ -557,10 +641,11 @@
 
 	.range-container label {
 		margin: 0;
+		
 	}
 
 	.range-result {
-		font-size: 1rem;
+		font-size: 0.9rem;
 	}
 
 	.selector-group {
@@ -571,7 +656,9 @@
 	}
 
 	.model-input {
-		font-size: 1.2em;
+		appearance: none;
+	  -webkit-appearance: none;
+		font-size: 0.9rem;
 		font-family:
 			'Pretendard Variable',
 			Pretendard,
@@ -590,57 +677,61 @@
 			sans-serif;
 
 		width: 100%;
-		height: 40px;
+		height: 42px;
 		box-sizing: border-box;
-		padding: 6px;
+		padding-left: 10px;
 		border: none;
+		border-radius: 8px;
 		outline: 0;
-		background-color: var(--onSurface-color);
-		color: var(--background-color);
+		background-color: var(--block-color);
+		color: var(--text-color);
 		font-weight: 600;
-
 		cursor: pointer;
 	}
+
+
+
 
 	.delete-control-image-btn {
 		display: flex;
 		justify-content: center;
 		align-items: center;
 		width: 100%;
-		height: 40px;
+		height: 42px;
+		border: 1px solid var(--border-color);
+		border-radius: 8px;
+		box-sizing: border-box;
 		background-color: var(--highlight-color);
 		color: var(--background-color);
 		cursor: pointer;
+		margin-top: 4px;
 	}
 
 	.delete-control-image-btn:hover {
 		color: var(--text-color);
 	}
 
-	.model-info {
-		display: flex;
-		flex-direction: column;
-		gap: 10px;
-	}
 
 	.slider {
 		appearance: none;
-		background: var(--background-color);
+		background: var(--secondary-color);
 		outline: none;
 		border-radius: 12px;
 		font-size: 0.9rem;
 		color: var(--text-color);
 		flex-grow: 1;
-		min-width: 100px;
-		max-width: 160px;
+		min-width: 80px;
+		max-width: 120px;
 		height: 8px;
 	}
 	.slider::-webkit-slider-thumb {
 		appearance: none;
 		width: 10px;
-		height: 16px;
-		border-radius: 8px;
-		background: var(--text-color);
+	height: 18px;
+	border-radius: 6px;
+		background: var(--handle-color);
 		cursor: pointer;
+				box-shadow: 0px 0px 2px 0px var(--secondary-color);
+
 	}
 </style>
