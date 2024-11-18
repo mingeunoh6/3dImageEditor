@@ -84,6 +84,8 @@
 		hdrLoader
 			.loadImageBackground(bgFile)
 			.then((texture) => {
+				      const aspectRatio = texture.image.width / texture.image.height;
+            resizeCanvasAndRenderers(aspectRatio, scaleFactor);
 				console.log('texture', texture);
 			})
 			.catch((error) => {
@@ -526,16 +528,17 @@
 			alert('선택된 모델이 없습니다');
 			return;
 		}
+		console.log('event', event.target.id);
 
-		const mode = event.target.innerText;
+		const mode = event.target.id;
 		switch (mode) {
-			case '이동':
+			case 'move':
 				controller.setMode('translate');
 				break;
-			case '회전':
+			case 'rotate':
 				controller.setMode('rotate');
 				break;
-			case '크기':
+			case 'scale':
 				controller.setMode('scale');
 				break;
 		}
@@ -548,204 +551,231 @@
 			controller.object.scale.set(1, 1, 1);
 		}
 	}
+function imageOutputRender() {
+    if (addedModel.length === 0) {
+        console.error('No model added to the scene');
+        alert('Please upload product model first.');
+        return;
+    }
 
-	function imageOutputRender() {
-		//clear scene
-		//reset scene1
-		while (scene1.children.length > 0) {
-			scene1.remove(scene1.children[0]);
-		}
+    // Clear scene1
+    while (scene1.children.length > 0) {
+        scene1.remove(scene1.children[0]);
+    }
 
-	
-		if (controller) {
-			controller.detach();
-		}
+    // Temporarily hide UI elements
+    if (controller) {
+        controller.detach();
+    }
+    if (ground) {
+        ground.gridOption(false);
+    }
+    if (shadowLight) {
+        shadowLight.toggleShadowHelper(false);
+    }
 
-		// 그리드 제거
-		if (ground) {
-			ground.gridOption(false);
-		}
-		//helper 제거
-		if (shadowLight) {
-			shadowLight.toggleShadowHelper(false);
-		}
+    // Calculate output dimensions based on aspect ratio
+    let aspectRatio = 1;
+    if (scene.background && scene.background.isTexture) {
+        aspectRatio = scene.background.image.width / scene.background.image.height;
+    }
 
-		if (addedModel.length === 0) {
-			console.error('No model added to the scene');
-			alert('Please upload product model first.');
-			return;
-		}
+    // Base size is 1024 * scaleFactor
+    let outputWidth, outputHeight;
+    if (aspectRatio >= 1) {
+        // Landscape or square
+        outputWidth = 1024 * scaleFactor;
+        outputHeight = (1024 / aspectRatio) * scaleFactor;
+    } else {
+        // Portrait
+        outputHeight = 1024 * scaleFactor;
+        outputWidth = 1024 * aspectRatio * scaleFactor;
+    }
 
-		// Create off-screen renderers
-		// Reuse or create off-screen renderers
+    // Create or reuse off-screen renderer
+    if (!this.offscreenMainRenderer) {
+        this.offscreenMainRenderer = new THREE.WebGLRenderer({
+            alpha: true,
+            antialias: true,
+            logarithmicDepthBuffer: true
+        });
+    }
 
-		// Adjust this value to increase/decrease resolution
-		const aspectRatio = maskCanvas.width / maskCanvas.height;
-		const offscreenWidth = 1024 * scaleFactor;
-		const offscreenHeight = offscreenWidth / aspectRatio;
+    // Set up renderer with calculated dimensions
+    this.offscreenMainRenderer.setSize(outputWidth, outputHeight);
+    this.offscreenMainRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Use exact pixel ratio for consistent output
+    this.offscreenMainRenderer.shadowMap.enabled = true;
+    this.offscreenMainRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.offscreenMainRenderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.offscreenMainRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.offscreenMainRenderer.toneMappingExposure = 1.0;
+
+    // Store current camera settings
+    const originalAspect = camera.aspect;
+    const originalFov = camera.fov;
+
+    // Update camera for render
+    camera.aspect = outputWidth / outputHeight;
+    camera.updateProjectionMatrix();
+
+    // Handle background
+    let saveSceneBG = scene.background;
+    if (!isBackground) {
+        scene.background = null;
+    }
+
+    // Render and capture image
+    this.offscreenMainRenderer.render(scene, camera);
+    const viewportDataUrl = this.offscreenMainRenderer.domElement.toDataURL('image/png');
+
+    // Restore camera settings
+    camera.aspect = originalAspect;
+    camera.fov = originalFov;
+    camera.updateProjectionMatrix();
+
+    // Download image
+    if (viewportDataUrl) {
+        downloadImage(viewportDataUrl, 'result.png');
+    } else {
+        console.error('Failed to generate image');
+    }
+
+    // Restore scene state
+    if (!isBackground) {
+        scene.background = saveSceneBG;
+    }
+    if (ground) {
+        ground.gridOption(isGrid);
+    }
+    if (shadowLight) {
+        shadowLight.toggleShadowHelper(isShadowHelper);
+    }
+
+    // Clean up
+    this.offscreenMainRenderer.dispose();
+}
+
+function maskOutputRender() {
+    if (addedModel.length === 0) {
+        console.error('No model added to the scene');
+        alert('Please upload product model first.');
+        return;
+    }
+
+    // Clear scene1
+    while (scene1.children.length > 0) {
+        scene1.remove(scene1.children[0]);
+    }
+
+    // Temporarily hide UI elements
+    if (controller) {
+        controller.detach();
+    }
+    if (ground) {
+        ground.gridOption(false);
+    }
+    if (shadowLight) {
+        shadowLight.toggleShadowHelper(false);
+    }
+
+    // Calculate output dimensions based on aspect ratio
+    let aspectRatio = 1;
+    if (scene.background && scene.background.isTexture) {
+        aspectRatio = scene.background.image.width / scene.background.image.height;
+    }
+
+    // Base size is 1024 * scaleFactor
+    let outputWidth, outputHeight;
+    if (aspectRatio >= 1) {
+        // Landscape or square
+        outputWidth = 1024 * scaleFactor;
+        outputHeight = (1024 / aspectRatio) * scaleFactor;
+    } else {
+        // Portrait
+        outputHeight = 1024 * scaleFactor;
+        outputWidth = 1024 * aspectRatio * scaleFactor;
+    }
+
+    // Create or reuse off-screen mask renderer
+    if (!this.offscreenMaskRenderer) {
+        this.offscreenMaskRenderer = new THREE.WebGLRenderer({
+            antialias: true,
+            alpha: false
+        });
+    }
+
+    // Set up renderer with calculated dimensions
+    this.offscreenMaskRenderer.setSize(outputWidth, outputHeight);
+    this.offscreenMaskRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));; // Use exact pixel ratio for consistent output
 
 
-		if (!this.offscreenMainRenderer) {
-			this.offscreenMainRenderer = new THREE.WebGLRenderer({
-				alpha: true,
-				antialias: true,
-				logarithmicDepthBuffer: true
-			});
-			this.offscreenMainRenderer.setSize(offscreenWidth, offscreenHeight);
-			this.offscreenMainRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-			//shadows
-			this.offscreenMainRenderer.shadowMap.enabled = true;
-			this.offscreenMainRenderer.shadowMap.type = THREE.PCFSoftShadowMap; // Use soft shadows for smoother edges
+    // Store current camera settings
+    const originalAspect = camera.aspect;
+    const originalFov = camera.fov;
 
-			this.offscreenMainRenderer.outputColorSpace = THREE.SRGBColorSpace;
-			this.offscreenMainRenderer.toneMapping = THREE.ACESFilmicToneMapping;
-			this.offscreenMainRenderer.toneMappingExposure = 1.0;
-		} else {
-			this.offscreenMainRenderer.setSize(offscreenWidth, offscreenHeight);
-			this.offscreenMainRenderer.clear();
-		}
+    // Update camera for render
+    camera.aspect = outputWidth / outputHeight;
+    camera.updateProjectionMatrix();
 
-	
-		//background decision
-		let saveSceneBG = scene.background;
-		if (!isBackground) {
-			scene.background = null;
-		}
+    // Create mask material
+    const maskMat = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        side: THREE.DoubleSide,
+        alphaTest: 0.5
+    });
 
-		// Render the main scene to the off-screen renderer
-	
-		this.offscreenMainRenderer.render(scene, camera);
+    // Clone object for mask render
+    renderpass1obj = controlGroup.clone();
+    renderpass1obj.traverse((child) => {
+        if (child.isMesh) {
+            child.material = maskMat;
+        }
+    });
 
-		// const passDataUrl = this.offscreenPassRenderer.domElement.toDataURL('image/png');
-		const viewportDataUrl = this.offscreenMainRenderer.domElement.toDataURL('image/png');
+    // Add to scene
+    scene1.add(renderpass1obj);
+    scene1.background = null; // Ensure transparent background for mask
 
-		// Create download links
-		setTimeout(() => {
-			downloadImage(viewportDataUrl, 'result.png');
-			// downloadImage(passDataUrl, 'pass_scene.png');
+    // Render mask
+    this.offscreenMaskRenderer.render(scene1, camera);
 
-			// Reset scene background
-			if (!isBackground) {
-				scene.background = saveSceneBG;
-			}
+    // Capture mask image
+    const renderDataUrl = this.offscreenMaskRenderer.domElement.toDataURL('image/png');
 
-			// Clean up off-screen renderers
-			this.offscreenMainRenderer.dispose();
-			//포스트프로세싱 재적용
-		
-		}, 1000);
+    // Restore camera settings
+    camera.aspect = originalAspect;
+    camera.fov = originalFov;
+    camera.updateProjectionMatrix();
 
-		//이미지 내보내기를 위해 임시로 제거했던 것 다시 추가
-		if (ground) {
-			ground.gridOption(isGrid);
-		}
+    // Download image
+    if (renderDataUrl) {
+        downloadImage(renderDataUrl, 'mask.png');
+    } else {
+        console.error('Failed to generate mask image');
+    }
 
-		if (shadowLight) {
-			shadowLight.toggleShadowHelper(isShadowHelper);
-		}
-	}
-	function maskOutputRender() {
-		//clear scene
-		//reset scene1
-		while (scene1.children.length > 0) {
-			scene1.remove(scene1.children[0]);
-		}
+    // Cleanup and restore scene state
+    scene1.remove(renderpass1obj);
+    renderpass1obj.traverse((child) => {
+        if (child.isMesh) {
+            child.material.dispose();
+        }
+    });
+    renderpass1obj = null;
 
-		if (controller) {
-			controller.detach();
-		}
+    if (ground) {
+        ground.gridOption(isGrid);
+    }
+    if (shadowLight) {
+        shadowLight.toggleShadowHelper(isShadowHelper);
+    }
 
-		// 그리드 제거
-		if (ground) {
-			ground.gridOption(false);
-		}
-		//helper 제거
-		if (shadowLight) {
-			shadowLight.toggleShadowHelper(false);
-		}
-
-		if (addedModel.length === 0) {
-			console.error('No model added to the scene');
-			alert('Please upload product model first.');
-			return;
-		}
-
-		// Create off-screen renderers
-		// Reuse or create off-screen renderers
-
-		// Adjust this value to increase/decrease resolution
-		const aspectRatio = maskCanvas.width / maskCanvas.height;
-		const offscreenWidth = 1024 * scaleFactor;
-		const offscreenHeight = offscreenWidth / aspectRatio;
-
-		if (!this.offscreenMaskRenderer) {
-			this.offscreenMaskRenderer = new THREE.WebGLRenderer({ antialias: true });
-			this.offscreenMaskRenderer.setSize(offscreenWidth, offscreenHeight);
-			this.offscreenMaskRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-		} else {
-			this.offscreenMaskRenderer.setSize(offscreenWidth, offscreenHeight);
-			this.offscreenMaskRenderer.clear();
-		}
+    // Clean up
+    maskMat.dispose();
+    this.offscreenMaskRenderer.dispose();
+}
 
 
-
-		// Clone object for render pass 1
-		const maskMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-		maskMat.side = THREE.DoubleSide;
-		maskMat.alphaTest = 0.5;
-		renderpass1obj = controlGroup.clone();
-		renderpass1obj.traverse((child) => {
-			if (child.isMesh) {
-				child.material = maskMat;
-			}
-		});
-
-		scene1.add(renderpass1obj);
-		console.log('Image output render');
-		maskRenderer.render(scene1, camera);
-		this.offscreenMaskRenderer.render(scene1, camera);
-
-	
-
-		//background decision
-		let saveSceneBG = scene.background;
-		if (!isBackground) {
-			scene.background = null;
-		}
-
-	
-
-		// Save rendered scenes as PNG images from off-screen renderers
-		const renderDataUrl = this.offscreenMaskRenderer.domElement.toDataURL('image/png');
-
-		// Create download links
-		setTimeout(() => {
-	
-			downloadImage(renderDataUrl, 'mask.png');
-			// downloadImage(passDataUrl, 'pass_scene.png');
-
-			// Reset scene background
-			if (!isBackground) {
-				scene.background = saveSceneBG;
-			}
-
-			// Clean up off-screen renderers
-			this.offscreenMaskRenderer.dispose();
-			// this.offscreenPassRenderer.dispose();
-		
-			//포스트프로세싱 재적용
-		
-		}, 1000);
-
-		//이미지 내보내기를 위해 임시로 제거했던 것 다시 추가
-		if (ground) {
-			ground.gridOption(isGrid);
-		}
-
-		if (shadowLight) {
-			shadowLight.toggleShadowHelper(isShadowHelper);
-		}
-	}
 
 	function setRendererResolution(renderer, canvas, scaleFactor) {
 		const width = canvas.clientWidth * scaleFactor;
@@ -755,35 +785,87 @@
 		canvas.style.height = canvas.clientHeight + 'px';
 	}
 
-	function resizeCanvasAndRenderers(aspectRatio, scaleFactor) {
-//check device orientation
-		// const scaleFactor = 1; // or whatever value you're using
-		const maxSize = Math.min(window.innerWidth * 0.8, window.innerHeight);
-		const baseSize = 1024 * scaleFactor;
-		let width, height;
-		const isLandscape = window.innerWidth > window.innerHeight;
-		if(isLandscape){
+
+function resizeCanvasAndRenderers(aspectRatio, scaleFactor) {
+    const parentContainer = canvas.parentElement.parentElement;
+    const containerWidth = parentContainer.clientWidth;
+    const containerHeight = parentContainer.clientHeight;
+    const containerAspect = containerWidth / containerHeight;
+
+    let width, height;
+
+    if (aspectRatio > containerAspect) {
+        width = containerWidth;
+        height = width / aspectRatio;
+        if (height > containerHeight) {
+            height = containerHeight;
+            width = height * aspectRatio;
+        }
+    } else {
+        height = containerHeight;
+        width = height * aspectRatio;
+        if (width > containerWidth) {
+            width = containerWidth;
+            height = width / aspectRatio;
+        }
+    }
+
+    // Update main renderer and canvas
+    renderer.setSize(width * scaleFactor, height * scaleFactor, false);
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+
+    // Update mask renderer and canvas
+    if (maskRenderer) {
+        maskRenderer.setSize(width * scaleFactor / 2, height * scaleFactor / 2, false);
+        maskCanvas.style.width = `${width / 2}px`;
+        maskCanvas.style.height = `${height / 2}px`;
+    }
+
+    // Update camera
+    camera.aspect = width / height;
+    camera.updateProjectionMatrix();
+
+    // Update viewports
+    renderer.setViewport(0, 0, width * scaleFactor, height * scaleFactor);
+    if (maskRenderer) {
+        maskRenderer.setViewport(0, 0, (width * scaleFactor) / 2, (height * scaleFactor) / 2);
+    }
+
+    // Force a render to update the view
+    renderer.render(scene, camera);
+}
+
+
+// 	function resizeCanvasAndRenderers(aspectRatio, scaleFactor) {
+// //check device orientation
+// 		// const scaleFactor = 1; // or whatever value you're using
+// 		const maxSize = Math.min(window.innerWidth * 0.8, window.innerHeight);
+// 		const baseSize = 1024 * scaleFactor;
+// 		let width, height;
+// 		const isLandscape = window.innerWidth > window.innerHeight;
+// 		if(isLandscape){
 			
-		if (aspectRatio > 1) {
-				width = window.innerWidth*0.7;
-			height = width / aspectRatio;
+// 		if (aspectRatio > 1) {
+// 				width = window.innerWidth*0.7;
+// 			height = width / aspectRatio;
 	
-		} else {
-			// Portrait or square
-	height = window.innerHeight*0.8;
-			width = height * aspectRatio;
-		}
-		} else {
-				if (aspectRatio > 1) {
-			// Landscape
-			width = maxSize;
-			height = maxSize / aspectRatio;
-		} else {
-			// Portrait or square
-			height = maxSize;
-			width = maxSize * aspectRatio;
-		}
-		}
+// 		} else {
+// 			// Portrait or square
+// 	height = window.innerHeight*0.8;
+// 			width = height * aspectRatio;
+// 		}
+// 		} else {
+// 				if (aspectRatio > 1) {
+// 			// Landscape
+// 			width = maxSize;
+// 			height = maxSize / aspectRatio;
+// 		} else {
+// 			// Portrait or square
+// 			height = maxSize;
+// 			width = maxSize * aspectRatio;
+// 		}
+// 		}
 
 
 
@@ -791,70 +873,126 @@
 
 	
 
-		// Resize main renderer and canvas
-		renderer.setSize(width * scaleFactor, height * scaleFactor, false);
-		canvas.style.width = `${width}px`;
-		canvas.style.height = `${height}px`;
+// 		// Resize main renderer and canvas
+// 		renderer.setSize(width * scaleFactor, height * scaleFactor, false);
+// 		canvas.style.width = `${width}px`;
+// 		canvas.style.height = `${height}px`;
 
-		// Resize render renderer and canvas
-		maskRenderer.setSize((width * scaleFactor) / 2, (height * scaleFactor) / 2, false);
-		maskCanvas.style.width = `${width / 2}px`;
-		maskCanvas.style.height = `${height / 2}px`;
+// 		// Resize render renderer and canvas
+// 		maskRenderer.setSize((width * scaleFactor) / 2, (height * scaleFactor) / 2, false);
+// 		maskCanvas.style.width = `${width / 2}px`;
+// 		maskCanvas.style.height = `${height / 2}px`;
 
-		// Resize pass renderer and canvas
-		// passRenderer.setSize((width * scaleFactor) / 2, (height * scaleFactor) / 2, false);
-		// passCanvas.style.width = `${width / 2}px`;
-		// passCanvas.style.height = `${height / 2}px`;
+// 		// Resize pass renderer and canvas
+// 		// passRenderer.setSize((width * scaleFactor) / 2, (height * scaleFactor) / 2, false);
+// 		// passCanvas.style.width = `${width / 2}px`;
+// 		// passCanvas.style.height = `${height / 2}px`;
 
-		// Update camera aspect ratio
-		camera.aspect = width / height;
-		camera.updateProjectionMatrix();
-	}
+// 		// Update camera aspect ratio
+// 		camera.aspect = width / height;
+// 		camera.updateProjectionMatrix();
+// 	}
 
-	function downloadImage(dataUrl, fileName) {
-		const link = document.createElement('a');
-		link.href = dataUrl;
-		link.download = fileName;
-		document.body.appendChild(link);
-		link.click();
-		document.body.removeChild(link);
-	}
+function downloadImage(dataUrl, fileName) {
+    if (!dataUrl) {
+        console.error('No data URL provided for download');
+        return;
+    }
+
+    try {
+        const link = document.createElement('a');
+        link.href = dataUrl;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        setTimeout(() => {
+            document.body.removeChild(link);
+        }, 100);
+    } catch (error) {
+        console.error('Error downloading image:', error);
+        alert('Failed to download image. Please try again.');
+    }
+}
 
 	function onWindowResize() {
-		if (scene.background && scene.background.isTexture) {
-			const aspectRatio = scene.background.image.width / scene.background.image.height;
-			resizeCanvasAndRenderers(aspectRatio, scaleFactor);
-		}
+    // Get parent container dimensions
+    const parentContainer = canvas.parentElement.parentElement;
+    const containerWidth = parentContainer.clientWidth;
+    const containerHeight = parentContainer.clientHeight;
+    
+    // Calculate aspect ratio
+    let aspectRatio = 1;
+    if (scene.background && scene.background.isTexture) {
+        aspectRatio = scene.background.image.width / scene.background.image.height;
+    }
 
-		const width = canvas.clientWidth;
-		const height = canvas.clientHeight;
+    // Resize everything
+    resizeCanvasAndRenderers(aspectRatio, scaleFactor);
 
-		camera.aspect = width / height;
-		camera.updateProjectionMatrix();
+    // Update main renderer resolution
+    const width = canvas.clientWidth;
+    const height = canvas.clientHeight;
+    
+    // Update camera
+    camera.aspect = width / height;
+    camera.updateProjectionMatrix();
 
-		setRendererResolution(renderer, canvas, scaleFactor);
-		setRendererResolution(maskRenderer, maskCanvas, scaleFactor);
-		// setRendererResolution(passRenderer, passCanvas,scaleFactor);
-	}
+    // Update renderer resolutions
+    setRendererResolution(renderer, canvas, scaleFactor);
+    setRendererResolution(maskRenderer, maskCanvas, scaleFactor);
+
+    // Force a render to update the view
+    renderer.render(scene, camera);
+}
+
+function recreateRenderer() {
+    if (renderer) {
+        renderer.dispose();
+        renderer = new THREE.WebGLRenderer({
+            canvas: canvas,
+            antialias: true,
+            logarithmicDepthBuffer: true,
+            alpha: true
+        });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.outputColorSpace = THREE.SRGBColorSpace;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.0;
+    }
+}
+
 
 	onMount(() => {
-		console.log('viewport component mounted');
-		init();
+    console.log('viewport component mounted');
+    init();
+    
+    // Initial resize
+    resizeCanvasAndRenderers(1, scaleFactor);
+    
+    // Add debounced resize handler
+    let resizeTimeout;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(() => {
+            onWindowResize();
+        }, 100);
+    });
 
-		return () => {
-			// Cleanup on destroy
-			renderer.dispose();
-
-			transformController.dispose();
-
-			renderer.dispose();
-			controls.dispose();
-			controller.dispose();
-			canvas.removeEventListener('click', onSelect);
-			window.removeEventListener('keydown', handleKeyDown);
-			window.removeEventListener('resize', onWindowResize);
-		};
-	});
+    return () => {
+        // Cleanup
+        clearTimeout(resizeTimeout);
+        if (renderer) renderer.dispose();
+        if (maskRenderer) maskRenderer.dispose();
+        if (this.offscreenMainRenderer) this.offscreenMainRenderer.dispose();
+        controls.dispose();
+        controller.dispose();
+        canvas.removeEventListener('click', onSelect);
+        window.removeEventListener('keydown', handleKeyDown);
+        window.removeEventListener('resize', onWindowResize);
+    };
+});
 
 	function handleBackgroundOption(e) {
 		isBackground = e.target.checked;
@@ -876,30 +1014,9 @@
 
 <div id="viewport-main-wrapper">
 	<div id="viewport-wrapper">
+	
 		<div id="main-viewport">
-			<canvas id="viewport" bind:this={canvas}> </canvas>
-			<div id="transform-tool">
-				<button class="transform-btn" on:click={changeTransformMode}><Icon class="transform_tool_icon" icon="iconamoon:move-light" /></button>
-				<button class="transform-btn" on:click={changeTransformMode}><Icon class="transform_tool_icon" icon="tabler:rotate-360" /></button>
-				<button class="transform-btn" on:click={changeTransformMode}><Icon class="transform_tool_icon" icon="icon-park-outline:scale" /></button>
-			</div>
-			<div id="overlay">
-				<div id="overlay-content">
-					<!-- <h1>GUIDE</h1> -->
-					<p>
-						좌측 패널에서 제품을 업로드하거나, <br />
-						라이브러리에서 제품을 선택하여 화면에 표시하세요. </p>	
-				
-				</div>
-			</div>
-		</div>
-
-		<div id="preview-wrapper">
-			<canvas id="mask-canvas" bind:this={maskCanvas}></canvas>
-			<!-- <canvas id="pass-canvas" bind:this={passCanvas}></canvas> -->
-		</div>
-	</div>
-	<div id="viewport-menu">
+				<div id="viewport-menu">
 			<div class="checkBox-wrapper">
 			<p>배경 포함</p>
 			<div class="checkBox-section">
@@ -920,20 +1037,116 @@
 			<button on:click={maskOutputRender}>제품 마스크 다운로드</button>
 	
 	</div>
+			<canvas id="viewport" bind:this={canvas}> 	</canvas>
+			<div id="transform-tool">
+				<button class="transform-btn" id="move" on:click={changeTransformMode}><Icon class="transform_tool_icon" icon="iconamoon:move-light" /></button>
+				<button class="transform-btn" id="rotate" on:click={changeTransformMode}><Icon class="transform_tool_icon" icon="tabler:rotate-360" /></button>
+				<button class="transform-btn" id="scale" on:click={changeTransformMode}><Icon class="transform_tool_icon" icon="icon-park-outline:scale" /></button>
+			</div>
+			<div id="overlay">
+				<div id="overlay-content">
+					<!-- <h1>GUIDE</h1> -->
+					<p>
+						좌측 패널에서 제품을 업로드하거나, <br />
+						라이브러리에서 제품을 선택하여 화면에 표시하세요. </p>	
+				
+				</div>
+			
+			</div>
+		</div>
+
+		<div id="preview-wrapper">
+			<canvas id="mask-canvas" bind:this={maskCanvas}></canvas>
+			<!-- <canvas id="pass-canvas" bind:this={passCanvas}></canvas> -->
+		</div>
+	</div>
+
 </div>
 
 
 <style>
-	#viewport-main-wrapper {
-		position: relative;
-		box-sizing: border-box;
+#viewport-main-wrapper {
+    position: relative;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start; /* Changed from center to flex-start */
+    align-items: center;
+    width: 100%;
+    height: 100%;
+    padding: 1rem;
+    /* Add min-height to ensure content fits */
+    min-height: 100vh;
+	
+}
+
+#viewport-wrapper {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    /* Set a specific height that leaves room for the menu */
+    height: calc(100vh - 120px); /* Adjust the 120px based on your menu height */
+    margin-bottom: 60px; /* Space for the menu */
+
+}
+
+#main-viewport {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+
+		
+}
+
+#viewport-menu {
+    position: fixed; /* Changed from absolute to fixed */
+    bottom: 1.5rem; /* Position from bottom */
+    width: 100%;
+
+    max-width: 500px;
+    z-index: 99;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+
+
+}
+
+#viewport {
+	box-sizing: border-box;
+	border: 1px solid var(--border-color);
+	background-color: var(--background-color);
+	border-radius: 8px;
+	width: 100%;
+	height: 100%;
+	position: relative;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+
+}
+
+@media (max-width: 480px) {
+
+}
+
+	.side-wrapper {
 		display: flex;
 		flex-direction: column;
 		justify-content: center;
 		align-items: center;
-
+		gap: 8px;
+		height: 90vh;
 	}
-	#viewport-menu {
+
+	/* #viewport-menu {
 		position:absolute;
 		top: 100%;
 		right: 0;
@@ -947,56 +1160,36 @@
 		align-items:center;
 		gap: 8px;
 		margin-top: 8px;
-	}
-	#viewport-wrapper {
-		display: flex;
-		justify-content: center;
-		align-items: center;
-		width: 100%;
-		height: 100%;
-			
-	}
+	} */
+#overlay {
+    position: absolute;
+    inset: 0;  /* This replaces top, right, bottom, left: 0 */
+    margin: auto;
+    width: 100%;  /* Match canvas width */
+    height: 100%; /* Match canvas height */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: var(--text-color);
+    background-color: var(--background-color);
+    box-sizing: border-box;
+    padding: 30px;
+    z-index: 997;
+    border-radius: 8px;
+    pointer-events: none;
+}
 
-	.side-wrapper {
-		display: flex;
-		flex-direction: column;
-		justify-content: center;
-		align-items: center;
-		gap: 8px;
-		height: 90vh;
-	}
-	#main-viewport {
-		position: relative;
-				
-	}
-
-	#overlay {
-		position: absolute;
-		top: 0;
-		left: 0;
-		width: 100%;
-		height: 100%;
-		display: flex;
-		justify-content: center;
-		align-items: center;
-		color: var(--text-color);
-		background-color: rgba(210, 210, 210, 0.5);
-		box-sizing: border-box;
-		padding: 30px;
-		z-index: 997;
-		border-radius: 8px;
-	}
-	#overlay-content {
-		width: 100%;
-		height: 100%;
-		text-align: center;
-		display: flex;
-		flex-direction: column;
-		justify-content: center;
-		align-items: center;
-
-		gap: 10px;
-	}
+#overlay-content {
+    width: 100%;
+    height: 100%;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    pointer-events: auto;
+}
 	#overlay-content h1 {
 		font-size: 2rem;
 		margin-bottom: 32px;
@@ -1039,6 +1232,7 @@ display: flex;
 		div :global(.transform_tool_icon ) {
 		font-size: 1.8rem;
 		color: var(--text-color);
+		pointer-events: none;
 
 	}
 
@@ -1047,16 +1241,7 @@ display: flex;
 		color: var(--onSurface-color);
 	}
 
-	#viewport {
-		box-sizing: border-box;
-		max-width: 80vw;
-		max-height: 90vh;
-		width: auto;
-		height: auto;
-		background-color: var(--background-color);
-		border: 1px solid var(--border-color);
-			border-radius: 8px;
-	}
+
 	#preview-wrapper {
 		display: flex;
 		flex-direction: column;

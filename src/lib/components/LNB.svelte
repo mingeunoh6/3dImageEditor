@@ -368,11 +368,11 @@
 <section>
 	<div class="Top-bar">
 		<div class="main-title">
-			<h5>PROJECT DASH 3D BETA 3.0.0 </h5>
+			<h5>PROJECT DASH 3D BETA 3.0.1 </h5>
 				<h5>HSAD</h5>
 		</div>
 		<div class="main-title-sub">
-			<h5>LAST UPDATE 2024-11-16</h5>
+			<h5>LAST UPDATE 2024-11-18</h5>
 				
 		</div>
 	
