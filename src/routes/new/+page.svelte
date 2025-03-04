@@ -1,3 +1,4 @@
+<!-- +page.svelte -->
 <script>
 import { onMount } from 'svelte';
 import LT from '$lib/newcomp/LT.svelte';
@@ -6,7 +7,13 @@ import RT from '$lib/newcomp/RT.svelte';
 import PROMPT from '$lib/newcomp/PROMPT.svelte';
 import VIEWPORT from '$lib/newcomp/VIEWPORT.svelte';
 
+let newModel = $state(null);
 
+
+function addModelToScene(file){
+    console.log(file);
+    newModel = file;
+}
 
 onMount(() => {
     console.log('new page mounted');
@@ -44,7 +51,7 @@ onMount(() => {
 
 <!-- bottom prompt input section -->
 
-<PROMPT/>
+<PROMPT add3dModel={(file)=>{addModelToScene(file)}}/>
 
 
 
@@ -52,7 +59,7 @@ onMount(() => {
 
 <!-- 3d canvas section -->
 
-<VIEWPORT/>
+<VIEWPORT {newModel}/>
 
 
 
@@ -64,7 +71,7 @@ onMount(() => {
         position: relative;
         width: 100vw;
         height: 100vh;
-        border: 5px solid green;
+      
         
     }
 
