@@ -3,6 +3,7 @@
 	import Viewport from '../lib/components/viewport.svelte';
 	import LNB from '../lib/components/LNB.svelte';
 	let viewportRef;
+	let language = 'en';
 	let glbFile = null;
 	let bgFile = null;
 	function handleGLBImport(event) {

@@ -5,6 +5,7 @@
 	import GLBPanel from './EP-GLB.svelte';
 
 
+	let language = 'en';
 	let aiPanelStatus = false;
 	let glbPanelStatus = false;
 	let fov = 10;
@@ -323,6 +324,7 @@
 				document.getElementById('camera').style.display = 'none';
 				document.getElementById('shadow').style.display = 'none';
 				document.getElementById('light').style.display = 'none';
+					document.getElementById('system').style.display = 'none';
 				closeAIpanel();
 				break;
 			case 'BG-setting':
@@ -331,6 +333,7 @@
 				document.getElementById('camera').style.display = 'none';
 				document.getElementById('shadow').style.display = 'none';
 				document.getElementById('light').style.display = 'none';
+					document.getElementById('system').style.display = 'none';
 				close3Dpanel();
 				break;
 			case 'camera-setting':
@@ -339,6 +342,7 @@
 				document.getElementById('camera').style.display = 'block';
 				document.getElementById('shadow').style.display = 'none';
 				document.getElementById('light').style.display = 'none';
+					document.getElementById('system').style.display = 'none';
 				closeAllExtendedPanel();
 				break;
 			case 'shadow-setting':
@@ -347,6 +351,7 @@
 				document.getElementById('camera').style.display = 'none';
 				document.getElementById('shadow').style.display = 'block';
 				document.getElementById('light').style.display = 'none';
+					document.getElementById('system').style.display = 'none';
 				closeAllExtendedPanel();
 				break;
 			case 'light-setting':
@@ -355,6 +360,16 @@
 				document.getElementById('camera').style.display = 'none';
 				document.getElementById('shadow').style.display = 'none';
 				document.getElementById('light').style.display = 'block';
+				document.getElementById('system').style.display = 'none';
+				closeAllExtendedPanel();
+				break;
+			case 'system-setting':
+				document.getElementById('product').style.display = 'none';
+				document.getElementById('bg').style.display = 'none';
+				document.getElementById('camera').style.display = 'none';
+				document.getElementById('shadow').style.display = 'none';
+				document.getElementById('light').style.display = 'none';
+				document.getElementById('system').style.display = 'block';
 				closeAllExtendedPanel();
 				break;
 		}
@@ -401,6 +416,14 @@
 				<Icon icon="mdi:television-ambient-light" class="setting-icon" />
 				<div class="setting-title">조명</div>
 			</div>
+
+			
+				<div class="margin-block"></div>
+				<!-- <div class="setting-btn" id="system-setting" on:click={handleSettingSwitch}>
+					<Icon icon="lets-icons:setting-fill" class="setting-icon" />
+					<div class="setting-title">설정</div>
+				</div> -->
+		
 		</div>
 		<div class="sectionWrapper">
 				<div class="margin-block-S"></div>
@@ -861,6 +884,27 @@
 				<div class="margin-block-L"></div>
 			
 			</div>
+
+					<!-- 전체 설정 -->
+			<div id="system" class="setting-detail system-detail">
+				<div class="sub-title">
+					<h5>앱 설정을 변경합니다.</h5>
+				</div>
+				<div class="sub-sub-card">
+					<div class="sub-sub-card-content">
+					
+							<div class="selector-group">
+			<label for="basemodel">앱 언어 선택</label>
+			<select id="basemodel" class="model-input" bind:value={language} required>
+				<option value="KOREAN">한글</option>
+				<option value="ENGLISH">영어</option>
+			</select>
+		</div>
+				
+					</div>
+				</div>
+				
+			</div>
 		</div>
 	</div>
 </section>
@@ -1139,6 +1183,13 @@ font-weight: 500;
 		margin-right: 10px;
 	}
 
+	.selector-group {
+		display: flex;
+		flex-direction: column;
+
+		width: 100%;
+	}
+
 	button {
 		box-sizing: border-box;
 		width: 80%;
@@ -1345,6 +1396,10 @@ font-weight: 500;
 		display: none;
 	}
 	#light {
+		display: none;
+	}
+
+	#system{
 		display: none;
 	}
 </style>
