@@ -1,12 +1,22 @@
+// main-canvas.js
+
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { CopyShader } from 'three/addons/shaders/CopyShader.js';
+import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
+import { OutlinePass } from 'three/addons/postprocessing/OutlinePass.js';
+import { ParallelMeshBVHWorker } from 'three-mesh-bvh/src/workers/ParallelMeshBVHWorker';
+import { WebGLPathTracer } from 'three-gpu-pathtracer/build/index.module.js';
 
 export class mainRenderer {
 	constructor(canvas, options = {}) {
-        console.log(canvas)
+		console.log(canvas);
 		this.canvas = canvas;
-	
+
 		this.options = Object.assign(
 			{
 				pixelRatio: Math.min(window.devicePixelRatio, 2), // Limit for performance
@@ -32,6 +42,7 @@ export class mainRenderer {
 		this.scene = null;
 		this.camera = null;
 		this.renderer = null;
+		this.pathTracer = null;
 		this.controls = null;
 		this.pmremGenerator = null;
 		this.envMap = null;
@@ -43,6 +54,15 @@ export class mainRenderer {
 		this.isInitialized = false;
 		this.isAnimating = false;
 		this.resizeObserver = null;
+		this.objectsInScene = [];
+		this.pathTracingEnabled = false;
+
+		//extra render properties
+		this.composer = null;
+		this.renderPass = null;
+		this.outlinePass = null;
+		this.fxaaPass = null;
+		this.highlightedObjects = [];
 
 		// Bind methods
 		this.init = this.init.bind(this);
@@ -52,15 +72,21 @@ export class mainRenderer {
 		this.dispose = this.dispose.bind(this);
 		this.checkOrientation = this.checkOrientation.bind(this);
 		this.loadHDRI = this.loadHDRI.bind(this);
+		this.getObjectsInScene = this.getObjectsInScene.bind(this);
+
+		this.initPostProcessing = this.initPostProcessing.bind(this);
+		this.highlightObject = this.highlightObject.bind(this);
+		this.clearHighlight = this.clearHighlight.bind(this);
+		this.hideAllHighlight = this.hideAllHighlight(this);
 
 		if (this.canvas) {
 			this.init();
 		}
 	}
 
-	init() {
+	async init() {
 		if (this.isInitialized) return;
-console.log('create-main-renderer');
+
 		// Create scene
 		this.scene = new THREE.Scene();
 		if (!this.options.useHDRI) {
@@ -70,11 +96,11 @@ console.log('create-main-renderer');
 		this.resize();
 
 		// Create camera
-		this.camera = new THREE.PerspectiveCamera(75, this.width / this.height, 0.1, 1000);
+		this.camera = new THREE.PerspectiveCamera(60, this.width / this.height, 0.01, 1000);
 		this.camera.position.set(0, 2, 5);
-		this.scene.add(this.camera); 
+		this.scene.add(this.camera);
 
-        let canvas = this.canvas;
+		let canvas = this.canvas;
 
 		// Create renderer
 		this.renderer = new THREE.WebGLRenderer({
@@ -90,6 +116,15 @@ console.log('create-main-renderer');
 		this.renderer.toneMapping = this.options.toneMapping;
 		this.renderer.toneMappingExposure = this.options.toneMappingExposure;
 
+		//PathTrace settings
+		this.pathTracer = new WebGLPathTracer(this.renderer);
+		this.pathTracer.setBVHWorker(new ParallelMeshBVHWorker());
+		this.pathTracer.tiles.set(3, 3);
+		this.pathTracer.multipleImportanceSampling = true;
+		this.pathTracer.transmissiveBounces = 10;
+		this.pathTracer.minSamples = 5;
+
+		// this.pathTracer.setScene(this.scene, this.camera);
 		// Enable shadows
 		if (this.options.shadows) {
 			this.renderer.shadowMap.enabled = true;
@@ -98,10 +133,14 @@ console.log('create-main-renderer');
 
 		// Create orbit controls
 		this.controls = new OrbitControls(this.camera, this.canvas);
-		this.controls.enableDamping = true;
-		this.controls.dampingFactor = 0.05;
-		this.controls.autoRotate = this.options.autoRotate;
-		this.controls.autoRotateSpeed = this.options.autoRotateSpeed;
+		this.controls.addEventListener('change', () => {
+			// When camera changes position, we need to reset the path tracer
+			if (this.pathTracer) {
+				// Update camera in the path tracer
+				this.pathTracer.updateCamera();
+			}
+		});
+		this.controls.update();
 
 		// Setup PMREM for environment maps
 		this.pmremGenerator = new THREE.PMREMGenerator(this.renderer);
@@ -128,11 +167,123 @@ console.log('create-main-renderer');
 		this.isInitialized = true;
 	}
 
+	initPostProcessing() {
+		// Ensure renderer exists
+		if (!this.renderer) return;
+
+		// Create composer
+		this.composer = new EffectComposer(this.renderer);
+
+		// Render pass
+		this.renderPass = new RenderPass(this.scene, this.camera);
+		this.composer.addPass(this.renderPass);
+
+		// Outline pass
+		const size = this.renderer.getSize(new THREE.Vector2());
+		this.outlinePass = new OutlinePass(size, this.scene, this.camera);
+
+		// Configure default outline appearance
+		this.outlinePass.edgeStrength = 3;
+		this.outlinePass.edgeGlow = 0;
+		this.outlinePass.edgeThickness = 1;
+		this.outlinePass.visibleEdgeColor.set(0x00ff00);
+		this.outlinePass.hiddenEdgeColor.set(0x00ff00);
+
+		this.composer.addPass(this.outlinePass);
+
+		// FXAA for anti-aliasing
+		this.fxaaPass = new ShaderPass(FXAAShader);
+		this.fxaaPass.uniforms['resolution'].value.set(
+			1 / (this.canvas.width * window.devicePixelRatio),
+			1 / (this.canvas.height * window.devicePixelRatio)
+		);
+		this.composer.addPass(this.fxaaPass);
+
+		this.composer.renderer.outputColorSpace = this.renderer.outputColorSpace;
+		this.composer.renderer.toneMapping = this.renderer.toneMapping;
+		this.composer.renderer.toneMappingExposure = this.renderer.toneMappingExposure;
+	}
+
+	highlightObject(object, options = {}) {
+		// Clear previous highlights
+		this.clearHighlight();
+
+		// Store the current highlighted object
+		this.currentHighlightedObject = object;
+
+		// Create an outline mesh
+		if (object) {
+			const outlineMaterial = new THREE.MeshBasicMaterial({
+				color: options.color || 0x00ff00,
+				side: THREE.BackSide,
+				transparent: true,
+				opacity: 0.5
+			});
+
+			// Traverse the object and create outline for each mesh
+			const outlineMeshes = [];
+			object.traverse((child) => {
+				if (child.isMesh) {
+					// Create an outline mesh by slightly scaling the geometry
+					const outlineGeometry = child.geometry.clone();
+					const outlineMesh = new THREE.Mesh(outlineGeometry, outlineMaterial);
+
+					// Scale up slightly to create an outline effect
+					outlineMesh.scale.multiplyScalar(1.02);
+
+					// Copy the original mesh's world matrix
+					outlineMesh.applyMatrix4(child.matrixWorld);
+
+					// Mark as highlight mesh
+					outlineMesh.userData.isHighlight = true;
+
+					// Add to scene and tracking array
+					this.scene.add(outlineMesh);
+					outlineMeshes.push(outlineMesh);
+				}
+			});
+
+			// Store reference to outline meshes
+			this.currentHighlightedObject.userData.highlightMeshes = outlineMeshes;
+		}
+	}
+
+	clearHighlight() {
+		// Remove previous highlight meshes
+		if (this.currentHighlightedObject) {
+			const highlightMeshes = this.currentHighlightedObject.userData.highlightMeshes;
+
+			if (highlightMeshes) {
+				highlightMeshes.forEach((mesh) => {
+					this.scene.remove(mesh);
+					mesh.geometry.dispose();
+					mesh.material.dispose();
+				});
+
+				// Clear the reference
+				delete this.currentHighlightedObject.userData.highlightMeshes;
+			}
+
+			this.currentHighlightedObject = null;
+		}
+	}
+
+	hideAllHighlight() {
+		if (this.currentHighlightedObject) {
+			const highlightMeshes = this.currentHighlightedObject.userData.highlightMeshes;
+			if (highlightMeshes) {
+				highlightMeshes.visible = false;
+				highlightMeshes.forEach((mesh) => {
+					mesh.visible = false;
+				});
+			}
+		}
+	}
+
 	resize() {
 		if (!this.canvas) return;
 
-        console.log('canvas resizing')
-
+		console.log('canvas resizing');
 
 		//get canvas dimensions
 		const rect = this.canvas.getBoundingClientRect();
@@ -152,6 +303,18 @@ console.log('create-main-renderer');
 		if (this.renderer) {
 			this.renderer.setSize(this.width, this.height);
 		}
+
+		if (this.composer && this.renderer) {
+			const size = this.renderer.getSize(new THREE.Vector2());
+			this.fxaaPass.uniforms['resolution'].value.set(
+				1 / (size.width * window.devicePixelRatio),
+				1 / (size.height * window.devicePixelRatio)
+			);
+		}
+
+		if (this.pathTracer) {
+			this.pathTracer.updateCamera();
+		}
 	}
 
 	checkOrientation() {
@@ -162,17 +325,40 @@ console.log('create-main-renderer');
 		return wasPortrait !== this.isPortrait;
 	}
 
+	async enablePathTracing(enable) {
+		console.log('패스렌더', enable);
+		this.pathTracingEnabled = enable;
+		this.hideAllHighlight();
+		if (enable && this.pathTracer) {
+			//하이라이트 오브젝트 숨기기
+
+			// 모든 오브젝트가 추가된 후 한 번만 호출
+			let options = { onProgress: (v) => console.log(v) };
+			await this.pathTracer.setSceneAsync(this.scene, this.camera, options);
+		}
+	}
+
 	loadHDRI(path) {
 		return new Promise((resolve, reject) => {
 			new RGBELoader().load(
 				path,
 				(texture) => {
-					this.envMap = this.pmremGenerator?.fromEquirectangular(texture).texture;
+					// 기존 환경 맵이 있으면 dispose
+					if (this.envMap) {
+						this.envMap.dispose();
+						this.scene.environment.dispose();
+					}
+					texture.mapping = THREE.EquirectangularReflectionMapping;
+					// 새 환경 맵 설정
+
+					this.envMap = texture;
+
 					this.scene.background = this.envMap;
 					this.scene.environment = this.envMap;
 
+					// pathTracer 환경 맵 업데이트
+					this.pathTracer.updateEnvironment();
 					texture.dispose();
-					this.pmremGenerator.dispose();
 
 					resolve(this.envMap);
 				},
@@ -181,7 +367,6 @@ console.log('create-main-renderer');
 			);
 		});
 	}
-
 	createDefaultEnvironment() {
 		// Create a simple gradient environment
 		const envScene = new THREE.Scene();
@@ -269,10 +454,20 @@ console.log('create-main-renderer');
 		const fillLight = new THREE.DirectionalLight(0xffffff, 0.5);
 		fillLight.position.set(-5, 2, -7.5);
 		this.scene.add(fillLight);
+
+		this.pathTracer.updateLights();
 	}
 
-	addObject(object, centerAndScale = true) {
-     
+	generateUniqueId() {
+		return 'obj_' + Math.random().toString(36).substring(2, 11);
+	}
+
+	async addObject(object, centerAndScale = true, filename = null) {
+		this.clearHighlight();
+		// Generate a unique ID for tracking
+		const objectId = this.generateUniqueId();
+		object.userData.objectId = objectId;
+
 		if (centerAndScale) {
 			// Center and scale the object
 			const box = new THREE.Box3().setFromObject(object);
@@ -319,9 +514,61 @@ console.log('create-main-renderer');
 				}
 			});
 		}
-
+		this.objectsInScene = [
+			...this.objectsInScene,
+			{
+				id: objectId,
+				name: filename,
+				object: object
+			}
+		];
 		this.scene.add(object);
+		if (this.pathTracer) {
+			// 모든 오브젝트가 추가된 후 한 번만 호출
+			let options = { onProgress: (v) => console.log(v) };
+			await this.pathTracer.setSceneAsync(this.scene, this.camera, options);
+		}
+
+		// add to the scene object list
+
 		return object;
+	}
+
+	// Remove an object from the scene and tracking array
+	async removeObject(object) {
+		if (!object) return;
+		this.clearHighlight();
+		// Find the object in our tracking array
+		const index = this.objectsInScene.findIndex(
+			(obj) => obj.object === object || obj.id === object.userData?.objectId
+		);
+
+		if (index !== -1) {
+			// Remove from tracking array
+			this.objectsInScene.splice(index, 1);
+		}
+
+		// Remove from scene
+		this.scene.remove(object);
+		// pathTracer 업데이트
+		if (this.pathTracer) {
+			// 모든 오브젝트가 추가된 후 한 번만 호출
+			let options = { onProgress: (v) => console.log(v) };
+			await this.pathTracer.setSceneAsync(this.scene, this.camera, options);
+		}
+	}
+
+	async updateObjectForPathTracer() {
+		if (this.pathTracer) {
+			// 모든 오브젝트가 추가된 후 한 번만 호출
+			let options = { onProgress: (v) => console.log(v) };
+			await this.pathTracer.setSceneAsync(this.scene, this.camera, options);
+		}
+	}
+
+	// Get all objects in scene
+	getObjectsInScene() {
+		return [...this.objectsInScene];
 	}
 
 	createGround(size = 20, material = null) {
@@ -363,11 +610,14 @@ console.log('create-main-renderer');
 			}
 		});
 	}
-	render() {
-		if (!this.renderer || !this.scene || !this.camera) return;
 
-		this.controls.update();
-		this.renderer.render(this.scene, this.camera);
+	render() {
+		if (this.composer) {
+			this.composer.render();
+		} else if (this.renderer && this.scene && this.camera) {
+			// Fallback to original render method
+			this.renderer.render(this.scene, this.camera);
+		}
 	}
 
 	animate() {
@@ -378,7 +628,28 @@ console.log('create-main-renderer');
 
 		const loop = () => {
 			this.frameId = requestAnimationFrame(loop);
-			this.render();
+
+			if (this.pathTracingEnabled && this.pathTracer) {
+				try {
+					this.pathTracer.pausePathTracing = this.pathTracer.samples >= 64;
+					this.pathTracer.renderSample();
+					console.log('path 렌더중', this.pathTracer.samples);
+				} catch (error) {
+					console.error('Error during path tracing:', error);
+					this.pathTracingEnabled = false;
+				}
+			} else {
+				if (this.composer) {
+					this.composer.render();
+				} else if (this.renderer && this.scene && this.camera) {
+					console.log('일반 렌더중');
+					this.renderer.render(this.scene, this.camera);
+				}
+			}
+
+			if (this.controls && this.controls.enableDamping) {
+				this.controls.update();
+			}
 		};
 
 		loop();
@@ -400,7 +671,7 @@ console.log('create-main-renderer');
 	 */
 	dispose() {
 		this.stop();
-
+		this.clearHighlight();
 		// Unregister resize observer
 		if (this.resizeObserver) {
 			this.resizeObserver.disconnect();
@@ -411,6 +682,12 @@ console.log('create-main-renderer');
 		if (this.renderer) {
 			this.renderer.dispose();
 			this.renderer = null;
+		}
+
+		// Dispose of composer resources
+		if (this.composer) {
+			this.composer.dispose();
+			this.composer = null;
 		}
 
 		if (this.controls) {
@@ -428,6 +705,14 @@ console.log('create-main-renderer');
 			this.disposeSceneObjects(this.scene);
 			this.scene = null;
 		}
+
+		if (this.pathTracer) {
+			this.pathTracer.dispose();
+			this.pathTracer = null;
+		}
+
+		// Clear object tracking array
+		this.objectsInScene = [];
 
 		this.camera = null;
 		this.canvas = null;
@@ -500,7 +785,6 @@ console.log('create-main-renderer');
 
 		// If we need to resize for the screenshot
 		if (width || height) {
-			this.renderer.setSize(useWidth, useHeight);
 			this.camera.aspect = useWidth / useHeight;
 			this.camera.updateProjectionMatrix();
 		}

@@ -14,5 +14,11 @@ export default defineConfig({
 			cert: fs.readFileSync('cert.pem')
 		},
 		proxy: {}
+	},
+	optimizeDeps: {
+		exclude: ['three-mesh-bvh', 'three-gpu-pathtracer']
+	},
+	worker: {
+		format: 'es'
 	}
 });
