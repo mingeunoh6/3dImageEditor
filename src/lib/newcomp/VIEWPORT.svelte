@@ -52,6 +52,8 @@
     let contextMenuVisible = $state(false);
     let contextMenuPosition = $state({ x: 0, y: 0 });
     let contextMenuOptions = $state([]);
+    
+    let sceneObjects = $state([])
 
 
     // Monitor new model changes from parent component
@@ -92,6 +94,8 @@
             type: determineObjectType(obj.object),
             visible: obj.object.visible !== false
         }));
+
+        
         
         onSceneObjectsChanged(objectsList);
     }
@@ -124,29 +128,32 @@
     }
 
 // Add a public method to select objects by ID
-   export function selectObjectById(objectId) {
-        if (!viewportRenderer) return;
+  export function selectObjectById(objectId) {
+    if (!viewportRenderer) return;
+    
+    // First, clear any existing selection
+    viewportRenderer.clearHighlight();
+    viewportRenderer.removeTransformControl();
+    
+    const objects = viewportRenderer.getObjectsInScene();
+    const targetObject = objects.find(obj => obj.id === objectId);
+    
+    if (targetObject) {
+        // Update selected object
+        selectedObject = targetObject;
         
-        const objects = viewportRenderer.getObjectsInScene();
-        const targetObject = objects.find(obj => obj.id === objectId);
+        // Highlight the object
+        viewportRenderer.highlightObject(targetObject.object, {
+            color: 0x00ff00
+        });
         
-        if (targetObject) {
-            console.log(targetObject)
-            // Update selected object
-            selectedObject = targetObject;
-            
-            // Clear existing highlight
-            viewportRenderer.clearHighlight();
-            
-            // Highlight the object
-            viewportRenderer.highlightObject(targetObject.object, {
-                color: 0x00ff00
-            });
-            
-            // Optionally focus camera on object
-            focusCameraOnObject(targetObject.object);
-        }
+        // Activate transform controls
+        viewportRenderer.transformControlActivate(targetObject.object);
+        
+        // Optionally focus camera on object
+        focusCameraOnObject(targetObject.object);
     }
+}
 // Toggle object visibility
   // Toggle object visibility - this is a public method
     export function toggleObjectVisibility(objectId) {
@@ -461,23 +468,57 @@
             
             // Use raycasting to find intersected objects
             raycaster.setFromCamera(mouse, viewportRenderer.camera);
+                const intersects = raycaster.intersectObjects(
+            viewportRenderer.scene.children, 
+            true
+        ).filter(intersect => {
+            const obj = intersect.object;
             
-            const intersects = raycaster.intersectObjects(
-                viewportRenderer.scene.children, 
-                true
-            ).filter(intersect => 
-                intersect.object.isMesh && 
-                intersect.object.visible && 
-                !intersect.object.userData.isHighlight &&
-                intersect.object.parent !== viewportRenderer.scene
-            );
+            // Skip invisible objects
+            if (!obj.visible) return false;
             
+            // Skip non-mesh objects
+            if (!obj.isMesh) return false;
+            
+            // Skip objects marked as not selectable (including ground)
+            if (!isSelectable(obj)) return false;
+            
+            // Skip highlight objects
+            if (obj.userData && obj.userData.isHighlight) return false;
+            if (hasHighlightParent(obj)) return false;
+            
+            // Skip transform control objects
+            if (
+                hasTransformControlParent(obj) || 
+                obj.type === "TransformControlsGizmo" || 
+                obj.isTransformControlsPlane || 
+                obj.isTransformControls ||
+                obj.name?.includes('TransformControls')
+            ) {
+                return false;
+            }
+            
+            return true;
+        });
             if (intersects.length > 0) {
                 // Get the closest visible mesh
                 const selectedMesh = intersects[0].object;
-                
+                console.log(selectedMesh)
                 // Find the top-level parent group
                 const topGroup = findTopParentGroup(selectedMesh);
+                console.log('top',topGroup)
+                     
+            // Extra safety check for transform controls
+           if (
+                !isSelectable(topGroup) ||
+                topGroup.type === "TransformControlsGizmo" || 
+                topGroup.isTransformControlsPlane || 
+                topGroup.isTransformControls ||
+                topGroup.name?.includes('TransformControls') ||
+                hasTransformControlParent(topGroup)
+            ) {
+                return;
+            }
                 
                 // Get scene objects for tracking
                 const currentSceneObjects = viewportRenderer.getObjectsInScene();
@@ -497,9 +538,12 @@
                 viewportRenderer.highlightObject(topGroup, {
                     color: 0x00ff00
                 });
+
+                viewportRenderer.transformControlActivate(topGroup)
             } else {
                 // Clear selection
                 viewportRenderer.clearHighlight();
+                viewportRenderer.removeTransformControl()
                 selectedObject = null;
             }
         }
@@ -508,6 +552,73 @@
         isMouseDown = false;
         isDragging = false;
     }
+
+    function hasTransformControlParent(object) {
+    let current = object.parent;
+    
+    while (current) {
+        if (
+            current.type === "TransformControlsGizmo" || 
+            current.isTransformControlsPlane || 
+            current.isTransformControls ||
+            current.name?.includes('TransformControls')
+        ) {
+            return true;
+        }
+        current = current.parent;
+    }
+    
+    return false;
+}
+
+function isSelectable(object) {
+    // Check if the object itself is marked as not selectable
+    if (object.userData && (object.userData.notSelectable || object.userData.isGround)) {
+        return false;
+    }
+    
+    // Check if any parent is marked as not selectable
+    let parent = object.parent;
+    while (parent) {
+        if (parent.userData && (parent.userData.notSelectable || parent.userData.isGround)) {
+            return false;
+        }
+        parent = parent.parent;
+    }
+    
+    return true;
+}
+
+function hasHighlightParent(object) {
+    let current = object.parent;
+    
+    while (current) {
+        if (current.userData && current.userData.isHighlight) {
+            return true;
+        }
+        current = current.parent;
+    }
+    
+    return false;
+}
+
+function isHighlightObject(object) {
+    // Check if the object itself is marked as a highlight
+    if (object.userData && object.userData.isHighlight) {
+        return true;
+    }
+    
+    // Check if any parent is a highlight group
+    let parent = object.parent;
+    while (parent) {
+        if (parent.userData && parent.userData.isHighlight) {
+            return true;
+        }
+        parent = parent.parent;
+    }
+    
+    return false;
+}
 
     // Handle touch events for mobile compatibility
     function handleTouchStart(event) {
@@ -544,51 +655,67 @@
     }
 
     // Handle right-click for context menu
-    function handleRightClick(event) {
-        // Prevent default context menu
-        event.preventDefault();
+ function handleRightClick(event) {
+    // Prevent default context menu
+    event.preventDefault();
 
-        // Hide context menu if no object is selected
-        if (!selectedObject) {
-            hideContextMenu();
-            return;
-        }
-
-        // Calculate mouse position
-        const rect = viewport.getBoundingClientRect();
-        mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-        mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-        
-        raycaster.setFromCamera(mouse, viewportRenderer.camera);
-        
-        const intersects = raycaster.intersectObjects(
-            viewportRenderer.scene.children, 
-            true
-        ).filter(intersect => 
-            intersect.object.isMesh && 
-            intersect.object.visible && 
-            !intersect.object.userData.isHighlight &&
-            intersect.object.parent !== viewportRenderer.scene
-        );
-
-        if (intersects.length > 0) {
-            // Set available context menu options
-            contextMenuOptions = [
-                { id: 'delete', label: 'Delete Object', icon: 'carbon:trash-can', action: handleDeleteObject },
-                // Add more options as needed
-            ];
-            
-            // Show context menu at right-click position
-            contextMenuPosition = { 
-                x: event.clientX, 
-                y: event.clientY 
-            };
-            contextMenuVisible = true;
-        } else {
-            // Hide context menu if right-click is not on an object
-            hideContextMenu();
-        }
+    // Hide context menu if no object is selected
+    if (!selectedObject) {
+        hideContextMenu();
+        return;
     }
+
+    // Calculate mouse position
+    const rect = viewport.getBoundingClientRect();
+    mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    
+    raycaster.setFromCamera(mouse, viewportRenderer.camera);
+    
+    const intersects = raycaster.intersectObjects(
+        viewportRenderer.scene.children, 
+        true
+    ).filter(intersect => {
+        const obj = intersect.object;
+        
+        // Skip invisible objects
+        if (!obj.visible) return false;
+        
+        // Skip non-mesh objects
+        if (!obj.isMesh) return false;
+        
+        // Skip objects marked as not selectable (including ground)
+        if (!isSelectable(obj)) return false;
+        
+        // Skip highlight objects
+        if (obj.userData && obj.userData.isHighlight) return false;
+        if (hasHighlightParent(obj)) return false;
+        
+        // Skip transform control objects
+        if (hasTransformControlParent(obj)) return false;
+        
+        return true;
+    });
+
+    if (intersects.length > 0) {
+        // Set available context menu options
+        contextMenuOptions = [
+            { id: 'delete', label: 'Delete Object', icon: 'carbon:trash-can', action: handleDeleteObject },
+            // Add more options as needed
+        ];
+        
+        // Show context menu at right-click position
+        contextMenuPosition = { 
+            x: event.clientX, 
+            y: event.clientY 
+        };
+        contextMenuVisible = true;
+    } else {
+        // Hide context menu if right-click is not on a selectable object
+        hideContextMenu();
+    }
+}
+
 
     // Handle viewport size based on orientation
     function setViewport() {
@@ -736,19 +863,19 @@ this.deleteObjectById = deleteObjectById;
     
     <!-- Model stats (visible when a model is loaded) -->
     {#if currentModel && modelStats.vertices > 0}
-        <div class="model-stats">
+        <!-- <div class="model-stats">
             <span>Vertices: {modelStats.vertices.toLocaleString()}</span>
             <span>Triangles: {modelStats.triangles.toLocaleString()}</span>
             <span>Materials: {modelStats.materials}</span>
-        </div>
+        </div> -->
     {/if}
 
     
     
     <!-- Debug info (can be removed in production) -->
-    <div class="orientation-info">
+    <!-- <div class="orientation-info">
         {isPortrait ? 'Portrait' : 'Landscape'} mode
-    </div>
+    </div> -->
 </div>
 
 <style>

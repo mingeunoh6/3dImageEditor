@@ -2,6 +2,7 @@
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -10,7 +11,11 @@ import { CopyShader } from 'three/addons/shaders/CopyShader.js';
 import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
 import { OutlinePass } from 'three/addons/postprocessing/OutlinePass.js';
 import { ParallelMeshBVHWorker } from 'three-mesh-bvh/src/workers/ParallelMeshBVHWorker';
-import { WebGLPathTracer } from 'three-gpu-pathtracer/build/index.module.js';
+import {
+	WebGLPathTracer,
+	BlurredEnvMapGenerator,
+	GradientEquirectTexture
+} from 'three-gpu-pathtracer/build/index.module.js';
 
 export class mainRenderer {
 	constructor(canvas, options = {}) {
@@ -56,6 +61,13 @@ export class mainRenderer {
 		this.resizeObserver = null;
 		this.objectsInScene = [];
 		this.pathTracingEnabled = false;
+		this.blurredEnvMapGenerator = null;
+		this.blurredEnvMap = null;
+		this.gradientBackground = null;
+		this.transformControl = null;
+		// Add to the constructor properties:
+		this._updatePathTracerBound = null;
+		this.ground = false;
 
 		//extra render properties
 		this.composer = null;
@@ -77,7 +89,6 @@ export class mainRenderer {
 		this.initPostProcessing = this.initPostProcessing.bind(this);
 		this.highlightObject = this.highlightObject.bind(this);
 		this.clearHighlight = this.clearHighlight.bind(this);
-		this.hideAllHighlight = this.hideAllHighlight(this);
 
 		if (this.canvas) {
 			this.init();
@@ -123,6 +134,12 @@ export class mainRenderer {
 		this.pathTracer.multipleImportanceSampling = true;
 		this.pathTracer.transmissiveBounces = 10;
 		this.pathTracer.minSamples = 5;
+		this.blurredEnvMapGenerator = new BlurredEnvMapGenerator(this.renderer);
+		this.gradientBackground = new GradientEquirectTexture();
+		this.gradientBackground.topColor.set('#111111');
+		this.gradientBackground.bottomColor.set('#000000');
+		this.gradientBackground.update();
+		this.scene.background = this.gradientBackground;
 
 		// this.pathTracer.setScene(this.scene, this.camera);
 		// Enable shadows
@@ -142,6 +159,13 @@ export class mainRenderer {
 		});
 		this.controls.update();
 
+		//transform controller
+		this.transformControl = new TransformControls(this.camera, this.renderer.domElement);
+		this.transformControl.addEventListener('dragging-changed', (e) => {
+			this.controls.enabled = !e.value;
+		});
+		this.transformControl.setMode('translate');
+
 		// Setup PMREM for environment maps
 		this.pmremGenerator = new THREE.PMREMGenerator(this.renderer);
 		this.pmremGenerator.compileEquirectangularShader();
@@ -153,9 +177,13 @@ export class mainRenderer {
 			// Create a basic environment map
 			this.createDefaultEnvironment();
 		}
+		this.pathTracer.updateEnvironment();
 
 		// Create lighting setup
 		this.setupLights();
+		if (this.ground) {
+			this.createGround();
+		}
 
 		// Setup resize observer
 		this.resizeObserver = new ResizeObserver(() => {
@@ -208,59 +236,89 @@ export class mainRenderer {
 		// Clear previous highlights
 		this.clearHighlight();
 
+		// Exit if no object to highlight
+		if (!object) return;
+
 		// Store the current highlighted object
 		this.currentHighlightedObject = object;
 
-		// Create an outline mesh
-		if (object) {
-			const outlineMaterial = new THREE.MeshBasicMaterial({
-				color: options.color || 0x00ff00,
-				side: THREE.BackSide,
-				transparent: true,
-				opacity: 0.5
-			});
+		// Create a highlight group that will contain all outline meshes
+		const highlightGroup = new THREE.Group();
+		highlightGroup.name = 'HighlightGroup';
+		highlightGroup.userData.isHighlight = true;
 
-			// Traverse the object and create outline for each mesh
-			const outlineMeshes = [];
-			object.traverse((child) => {
-				if (child.isMesh) {
-					// Create an outline mesh by slightly scaling the geometry
-					const outlineGeometry = child.geometry.clone();
-					const outlineMesh = new THREE.Mesh(outlineGeometry, outlineMaterial);
+		// Make the highlight group a child of the object to follow its transformations
+		object.add(highlightGroup);
 
-					// Scale up slightly to create an outline effect
-					outlineMesh.scale.multiplyScalar(1.02);
+		// Create outlines
+		const outlineMaterial = new THREE.MeshBasicMaterial({
+			color: options.color || 0x00ff00,
+			side: THREE.BackSide,
+			transparent: true,
+			opacity: 0.5
+		});
 
-					// Copy the original mesh's world matrix
-					outlineMesh.applyMatrix4(child.matrixWorld);
+		// Traverse the object and create outline for each mesh
+		const outlineMeshes = [];
+		object.traverse((child) => {
+			if (child.isMesh) {
+				// Create an outline mesh by slightly scaling the geometry
+				const outlineGeometry = child.geometry.clone();
+				const outlineMesh = new THREE.Mesh(outlineGeometry, outlineMaterial);
 
-					// Mark as highlight mesh
-					outlineMesh.userData.isHighlight = true;
+				// Calculate world matrix for positioning
+				const worldMatrix = new THREE.Matrix4();
+				child.updateMatrixWorld(true);
+				worldMatrix.copy(child.matrixWorld);
 
-					// Add to scene and tracking array
-					this.scene.add(outlineMesh);
-					outlineMeshes.push(outlineMesh);
-				}
-			});
+				// Get the inverse matrix of the parent object
+				const inverseParentMatrix = new THREE.Matrix4();
+				object.updateMatrixWorld(true);
+				inverseParentMatrix.copy(object.matrixWorld).invert();
 
-			// Store reference to outline meshes
-			this.currentHighlightedObject.userData.highlightMeshes = outlineMeshes;
-		}
+				// Calculate the local matrix relative to the parent object
+				const localMatrix = new THREE.Matrix4().multiplyMatrices(inverseParentMatrix, worldMatrix);
+
+				// Apply the local matrix
+				outlineMesh.applyMatrix4(localMatrix);
+
+				// Scale up slightly to create an outline effect
+				outlineMesh.scale.multiplyScalar(1.02);
+
+				// Mark as highlight mesh for raycaster filtering
+				outlineMesh.userData.isHighlight = true;
+
+				// Add the outline mesh to the highlight group
+				highlightGroup.add(outlineMesh);
+				outlineMeshes.push(outlineMesh);
+			}
+		});
+
+		// Store reference to the highlight group and outline meshes
+		this.currentHighlightedObject.userData.highlightGroup = highlightGroup;
+		this.currentHighlightedObject.userData.highlightMeshes = outlineMeshes;
 	}
 
 	clearHighlight() {
-		// Remove previous highlight meshes
+		// Remove previous highlight group and meshes
 		if (this.currentHighlightedObject) {
+			const highlightGroup = this.currentHighlightedObject.userData.highlightGroup;
 			const highlightMeshes = this.currentHighlightedObject.userData.highlightMeshes;
 
-			if (highlightMeshes) {
-				highlightMeshes.forEach((mesh) => {
-					this.scene.remove(mesh);
-					mesh.geometry.dispose();
-					mesh.material.dispose();
-				});
+			if (highlightGroup) {
+				// Remove the highlight group from the parent object
+				this.currentHighlightedObject.remove(highlightGroup);
 
-				// Clear the reference
+				// Dispose of all meshes in the group
+				if (highlightMeshes) {
+					highlightMeshes.forEach((mesh) => {
+						if (mesh.geometry) mesh.geometry.dispose();
+						if (mesh.material) mesh.material.dispose();
+					});
+				}
+
+				// Clear the references
+				delete this.currentHighlightedObject.userData.highlightGroup;
 				delete this.currentHighlightedObject.userData.highlightMeshes;
 			}
 
@@ -270,13 +328,24 @@ export class mainRenderer {
 
 	hideAllHighlight() {
 		if (this.currentHighlightedObject) {
+			// Hide the highlight group if it exists
+			const highlightGroup = this.currentHighlightedObject.userData.highlightGroup;
+			if (highlightGroup) {
+				highlightGroup.visible = false;
+			}
+
+			// Also check for individual highlight meshes (for backward compatibility)
 			const highlightMeshes = this.currentHighlightedObject.userData.highlightMeshes;
 			if (highlightMeshes) {
-				highlightMeshes.visible = false;
 				highlightMeshes.forEach((mesh) => {
-					mesh.visible = false;
+					if (mesh) mesh.visible = false;
 				});
 			}
+		}
+
+		// Hide transform controls if they exist
+		if (this.transformControl && this.transformControl.object) {
+			this.transformControl.visible = false;
 		}
 	}
 
@@ -352,8 +421,8 @@ export class mainRenderer {
 					// 새 환경 맵 설정
 
 					this.envMap = texture;
-
-					this.scene.background = this.envMap;
+					this.blurredEnvMap = this.blurredEnvMapGenerator?.generate(this.envMap, 0.35);
+					// this.scene.background = this.envMap;
 					this.scene.environment = this.envMap;
 
 					// pathTracer 환경 맵 업데이트
@@ -422,6 +491,18 @@ export class mainRenderer {
 		// Cleanup
 		envScene.dispose();
 		this.pmremGenerator.dispose();
+	}
+
+	async _updatePathTracerOnTransform() {
+		// If path tracing is enabled, update the scene in the path tracer
+		if (this.pathTracingEnabled && this.pathTracer) {
+			// Reset the samples count to restart the path tracing with the new object position
+			console.log('changing');
+			this.hideAllHighlight();
+			// Update the scene in the path tracer
+			let options = { onProgress: (v) => console.log('Updating path tracer after transform:', v) };
+			await this.pathTracer.setSceneAsync(this.scene, this.camera, options);
+		}
 	}
 
 	setupLights() {
@@ -538,6 +619,7 @@ export class mainRenderer {
 	async removeObject(object) {
 		if (!object) return;
 		this.clearHighlight();
+		this.removeTransformControl();
 		// Find the object in our tracking array
 		const index = this.objectsInScene.findIndex(
 			(obj) => obj.object === object || obj.id === object.userData?.objectId
@@ -558,6 +640,84 @@ export class mainRenderer {
 		}
 	}
 
+	getCurrentTransformControlMode() {
+		return this.transformControl.getMode();
+	}
+
+	transformControlActivate(object) {
+		if (!this.scene.children.includes(this.transformControl)) {
+			this.scene.add(this.transformControl);
+		}
+
+		// Detach from any previous object
+		if (this.transformControl.object) {
+			this.transformControl.detach();
+
+			// Remove previous event listeners to avoid duplicates
+			this.transformControl.removeEventListener('objectChange', this._updatePathTracerBound);
+		}
+
+		console.log('transform', object);
+
+		// Set current mode
+		this.transformControl.setMode(this.getCurrentTransformControlMode());
+
+		// Attach to selected object
+		this.transformControl.attach(object);
+
+		// Make sure transform control is visible
+		this.transformControl.visible = true;
+
+		// Create bound function for path tracer updates
+		if (!this._updatePathTracerBound) {
+			this._updatePathTracerBound = this._updatePathTracerOnTransform.bind(this);
+		}
+
+		// Add listener for transform changes to update path tracer
+		this.transformControl.addEventListener('objectChange', this._updatePathTracerBound);
+	}
+
+	removeTransformControl() {
+		if (this.transformControl) {
+			// Remove event listener if it exists
+			if (this._updatePathTracerBound) {
+				this.transformControl.removeEventListener('objectChange', this._updatePathTracerBound);
+			}
+
+			// Detach from any object first
+			this.transformControl.detach();
+
+			// Make sure it's removed from the scene
+			if (this.scene.children.includes(this.transformControl)) {
+				this.scene.remove(this.transformControl);
+			}
+
+			this.transformControl.visible = false;
+
+			// Force a render to update the scene
+			this.render();
+		}
+	}
+
+	changeTransformMode(mode) {
+		if (!this.transformControl.object) {
+			alert('No selected object');
+			return;
+		}
+
+		switch (mode) {
+			case 'move':
+				this.transformControl.setMode('translate');
+				break;
+			case 'rotate':
+				this.transformControl.setMode('rotate');
+				break;
+			case 'scale':
+				this.transformControl.setMode('scale');
+				break;
+		}
+	}
+
 	async updateObjectForPathTracer() {
 		if (this.pathTracer) {
 			// 모든 오브젝트가 추가된 후 한 번만 호출
@@ -571,20 +731,23 @@ export class mainRenderer {
 		return [...this.objectsInScene];
 	}
 
-	createGround(size = 20, material = null) {
+	createGround(size = 200, material = null) {
 		const geometry = new THREE.PlaneGeometry(size, size);
 		const defaultMaterial =
 			material ||
-			new THREE.MeshStandardMaterial({
-				color: 0x999999,
-				metalness: 0.1,
-				roughness: 0.9
+			new THREE.ShadowMaterial({
+				opacity: 0.5
 			});
 
 		const ground = new THREE.Mesh(geometry, defaultMaterial);
 		ground.rotation.x = -Math.PI / 2;
 		ground.position.y = -0.001; // Slight offset to prevent z-fighting
 		ground.receiveShadow = this.options.shadows;
+
+		// Mark the ground as not selectable
+		ground.userData.isGround = true;
+		ground.userData.notSelectable = true;
+		ground.name = 'Ground';
 
 		this.scene.add(ground);
 		return ground;
@@ -631,7 +794,7 @@ export class mainRenderer {
 
 			if (this.pathTracingEnabled && this.pathTracer) {
 				try {
-					this.pathTracer.pausePathTracing = this.pathTracer.samples >= 64;
+					this.pathTracer.pausePathTracing = this.pathTracer.samples >= 1024;
 					this.pathTracer.renderSample();
 					console.log('path 렌더중', this.pathTracer.samples);
 				} catch (error) {
@@ -688,6 +851,17 @@ export class mainRenderer {
 		if (this.composer) {
 			this.composer.dispose();
 			this.composer = null;
+		}
+
+		if (this.transformControl) {
+			this.transformControl.dispose();
+			this.transformControl = null;
+		}
+
+		// Clean up transform control event listener
+		if (this.transformControl && this._updatePathTracerBound) {
+			this.transformControl.removeEventListener('objectChange', this._updatePathTracerBound);
+			this._updatePathTracerBound = null;
 		}
 
 		if (this.controls) {
