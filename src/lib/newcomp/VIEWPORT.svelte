@@ -880,6 +880,7 @@ this.deleteObjectById = deleteObjectById;
 
 <style>
     .viewport-container {
+        box-sizing: border-box ;
         position: relative;
         width: 100%;
         height: 100%;
@@ -887,12 +888,15 @@ this.deleteObjectById = deleteObjectById;
         justify-content: center;
         align-items: center;
         overflow: hidden;
+       
     }
 
     #viewport {
+ 
         box-sizing: border-box;
         margin: auto;
         touch-action: none;
+        border-radius: 16px;
     }
 
     .orientation-info {

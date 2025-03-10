@@ -45,6 +45,7 @@ export class mainRenderer {
 
 		// Internal properties
 		this.scene = null;
+		this.pathTracerScene = null;
 		this.camera = null;
 		this.renderer = null;
 		this.pathTracer = null;
@@ -191,7 +192,10 @@ export class mainRenderer {
 		});
 		this.resizeObserver.observe(this.canvas);
 
+		this.setupPathTracingDefaults();
+
 		// Mark as initialized
+
 		this.isInitialized = true;
 	}
 
@@ -395,16 +399,44 @@ export class mainRenderer {
 	}
 
 	async enablePathTracing(enable) {
-		console.log('패스렌더', enable);
-		this.pathTracingEnabled = enable;
-		this.hideAllHighlight();
-		if (enable && this.pathTracer) {
-			//하이라이트 오브젝트 숨기기
+		console.log('Path tracing enabled:', enable);
 
-			// 모든 오브젝트가 추가된 후 한 번만 호출
-			let options = { onProgress: (v) => console.log(v) };
-			await this.pathTracer.setSceneAsync(this.scene, this.camera, options);
+		// If there's no change in state, do nothing
+		if (this.pathTracingEnabled === enable) return;
+
+		// Update tracking state
+		this.pathTracingEnabled = enable;
+
+		// Hide highlight objects and transform controls
+		this.hideAllHighlight();
+
+		if (enable) {
+			if (this.pathTracer) {
+
+				// Create or update the path tracing scene
+				await this.updatePathTracerScene();
+			} else {
+				console.error('Path tracer not initialized');
+				this.pathTracingEnabled = false;
+			}
+		} else {
+			// When disabling path tracing, ensure we render the main scene once
+			if (this.renderer && this.scene && this.camera) {
+				this.renderer.render(this.scene, this.camera);
+			}
 		}
+	}
+
+	setupPathTracingDefaults() {
+		this.excludeObjectTypeFromPathTracing((object) => {
+			return (
+				object.isTransformControls ||
+				object.isHelper ||
+				object.type.includes('Helper') ||
+				object.userData.isUI === true ||
+				object.userData.excludeFromPathTracer === true
+			);
+		});
 	}
 
 	loadHDRI(path) {
@@ -543,11 +575,13 @@ export class mainRenderer {
 		return 'obj_' + Math.random().toString(36).substring(2, 11);
 	}
 
-	async addObject(object, centerAndScale = true, filename = null) {
+	async addObject(object, centerAndScale = true, filename = null, visibleInPathTracer = true) {
 		this.clearHighlight();
 		// Generate a unique ID for tracking
 		const objectId = this.generateUniqueId();
 		object.userData.objectId = objectId;
+
+		this.setObjectPathTracingVisibility(object, visibleInPathTracer);
 
 		if (centerAndScale) {
 			// Center and scale the object
@@ -604,10 +638,8 @@ export class mainRenderer {
 			}
 		];
 		this.scene.add(object);
-		if (this.pathTracer) {
-			// 모든 오브젝트가 추가된 후 한 번만 호출
-			let options = { onProgress: (v) => console.log(v) };
-			await this.pathTracer.setSceneAsync(this.scene, this.camera, options);
+		if (this.pathTracingEnabled && this.pathTracer) {
+			await this.updatePathTracerScene();
 		}
 
 		// add to the scene object list
@@ -731,7 +763,7 @@ export class mainRenderer {
 		return [...this.objectsInScene];
 	}
 
-	createGround(size = 200, material = null) {
+	createGround(size = 200, material = null, visibleInPathTracer = true) {
 		const geometry = new THREE.PlaneGeometry(size, size);
 		const defaultMaterial =
 			material ||
@@ -748,6 +780,9 @@ export class mainRenderer {
 		ground.userData.isGround = true;
 		ground.userData.notSelectable = true;
 		ground.name = 'Ground';
+
+		// Set path tracing visibility
+		ground.userData.visibleInPathTracer = visibleInPathTracer;
 
 		this.scene.add(ground);
 		return ground;
@@ -775,14 +810,18 @@ export class mainRenderer {
 	}
 
 	render() {
-		if (this.composer) {
-			this.composer.render();
-		} else if (this.renderer && this.scene && this.camera) {
-			// Fallback to original render method
-			this.renderer.render(this.scene, this.camera);
+		if (this.pathTracingEnabled && this.pathTracer) {
+			// When path tracing is enabled, the pathTracer will handle rendering
+			// No need to call the standard renderer here
+		} else {
+			// Standard rendering
+			if (this.composer) {
+				this.composer.render();
+			} else if (this.renderer && this.scene && this.camera) {
+				this.renderer.render(this.scene, this.camera);
+			}
 		}
 	}
-
 	animate() {
 		if (!this.isInitialized || this.isAnimating) return;
 
@@ -794,22 +833,29 @@ export class mainRenderer {
 
 			if (this.pathTracingEnabled && this.pathTracer) {
 				try {
+					// Path tracing mode - render with pathTracer
 					this.pathTracer.pausePathTracing = this.pathTracer.samples >= 1024;
 					this.pathTracer.renderSample();
-					console.log('path 렌더중', this.pathTracer.samples);
+
+					// Reduce logging frequency for better performance
+					if (this.pathTracer.samples % 10 === 0) {
+						console.log('Path tracing samples:', this.pathTracer.samples);
+					}
 				} catch (error) {
 					console.error('Error during path tracing:', error);
 					this.pathTracingEnabled = false;
+
+					// Fall back to standard rendering if path tracing fails
+					if (this.renderer && this.scene && this.camera) {
+						this.renderer.render(this.scene, this.camera);
+					}
 				}
 			} else {
-				if (this.composer) {
-					this.composer.render();
-				} else if (this.renderer && this.scene && this.camera) {
-					console.log('일반 렌더중');
-					this.renderer.render(this.scene, this.camera);
-				}
+				// Standard rendering mode
+				this.render();
 			}
 
+			// Update orbital controls if damping is enabled
 			if (this.controls && this.controls.enableDamping) {
 				this.controls.update();
 			}
@@ -978,5 +1024,114 @@ export class mainRenderer {
 		}
 
 		return dataURL;
+	}
+
+	setObjectPathTracingVisibility(object, isVisible) {
+		if (!object) return;
+
+		object.userData.visibleInPathTracer = isVisible;
+
+		object.traverse((child) => {
+			child.userData.visibleInPathTracer = isVisible;
+		});
+
+		if (this.pathTracingEnabled && this.pathTracer) {
+			this.updatePathTracerScene();
+		}
+	}
+
+	async updatePathTracerScene() {
+		if (!this.pathTracer) return;
+
+		// Create path tracer scene if it doesn't exist
+		if (!this.pathTracerScene) {
+			this.pathTracerScene = new THREE.Scene();
+		} else {
+			while (this.pathTracerScene.children.length > 0) {
+				const child = this.pathTracerScene.children[0];
+				this.pathTracerScene.remove(child);
+			}
+		}
+
+		// Copy environment and background settings
+		this.pathTracerScene.background = this.scene.background;
+		this.pathTracerScene.environment = this.scene.environment;
+
+		// Add lights first
+		this.scene.traverse((object) => {
+			if (object.isLight) {
+				// Create a new light clone
+				const lightClone = object.clone();
+				this.pathTracerScene.add(lightClone);
+			}
+		});
+
+		// Add objects that should be visible in path tracing
+		this.scene.traverse((object) => {
+			// Skip lights as we've already handled them
+			if (object.isLight) return;
+
+			// Skip objects explicitly marked as not visible in path tracer
+			if (object.userData.visibleInPathTracer === false) return;
+
+			// Skip transform controls and helpers
+			if (
+				object.isTransformControls ||
+				object.isHelper ||
+				object.type.includes('Helper') ||
+				object.userData.isUI === true ||
+				object.userData.isHighlight === true
+			) {
+				return;
+			}
+
+			// Only add top-level objects that aren't already in a hierarchy
+			if (object.parent === this.scene) {
+				const clone = object.clone(true); // deep clone
+				this.pathTracerScene.add(clone);
+			}
+		});
+
+		// Update the path tracer with the new scene
+		let options = { onProgress: (v) => console.log('Updating path tracer scene:', v) };
+
+		// Important fix: use this.pathTracerScene instead of pathTracerScene
+		await this.pathTracer.setSceneAsync(this.pathTracerScene, this.camera, options);
+	}
+
+	excludeFromPathTracing(object) {
+		this.setObjectPathTracingVisibility(object, false);
+	}
+
+	includeInPathTracing(object) {
+		this.setObjectPathTracingVisibility(object, true);
+	}
+
+	excludeObjectTypeFromPathTracing(predicate) {
+		this.scene?.traverse((object) => {
+			if (predicate(object)) {
+				this.excludeFromPathTracing(object);
+			}
+		});
+
+		if (this.pathTracingEnabled && this.pathTracer) {
+			this.updatePathTracerScene();
+		}
+	}
+
+	excludeHelpersFromPathTracing() {
+		this.excludeObjectTypeFromPathTracing((object) => {
+			return (
+				object.isHelper ||
+				object.type.includes('Helper') ||
+				(object.name && object.name.includes('Helper'))
+			);
+		});
+	}
+
+	excludeGroundFromPathTracing() {
+		this.excludeObjectTypeFromPathTracing((object) => {
+			return object.userData.isGround === true || (object.name && object.name === 'Ground');
+		});
 	}
 }

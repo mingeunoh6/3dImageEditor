@@ -116,7 +116,7 @@ table {
 	border-spacing: 0;
 }
 
-:root {
+:root, .theme-default {
 	--primary-color: #0e0e0e;
 	--surface-color: #FFFFFE;
 	--secondary-color: #555555;
@@ -132,6 +132,17 @@ table {
 	--onSecondary-color: #e0e0e0;
 	--block-color: #DDDDDD;
 	--handle-color: #FFFFFE;
+}
+
+.theme-dark {
+	--primary-color: #170202;
+	--text-color-standard:#dedadb;
+	--text-color-bright: #ffffff;
+	--secondary-color: #140a0a;
+	--hover-color: #4d3842;
+	--highlight-color: #34232b;
+	--dim-color: #75696db6;
+
 }
 
 h1 {
@@ -186,4 +197,112 @@ box-sizing: border-box;
 	background: var(--border-color); /* Darker color on hover */
 	border: 1px solid var(--onBackground-color); /* Adds padding around the handle */
 
+}
+
+/* Reset for input field focus and highlight */
+input, 
+textarea {
+  /* Remove default outline on focus */
+  outline: none;
+  
+  /* Remove default focus ring for WebKit/Blink browsers */
+  -webkit-appearance: none;
+  
+  /* Remove text selection highlight */
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  
+  /* Remove default blue highlight when tapping on mobile devices */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Remove blue highlight on Chrome autocomplete */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 30px white inset !important;
+}
+
+/* Remove Firefox's focus outline/ring */
+input::-moz-focus-inner {
+  border: 0;
+}
+
+/* Optional: Add your own subtle focus style if needed */
+input:focus,
+textarea:focus {
+  /* You can add a subtle border or box-shadow here if desired */
+  /* border: 1px solid #ddd; */
+  /* box-shadow: 0 0 3px rgba(0,0,0,0.1); */
+}
+
+
+button {
+  /* Remove all background styling */
+  background: none;
+  background-color: transparent;
+  
+  /* Remove borders */
+  border: none;
+  outline: none;
+  
+  /* Reset padding and margin */
+  padding: 0;
+  margin: 0;
+  
+  /* Reset font properties */
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  color: inherit;
+  
+  /* Reset cursor */
+  cursor: pointer;
+  
+  /* Remove any text decoration */
+  text-decoration: none;
+  
+  /* Remove text alignment */
+  text-align: inherit;
+  
+  /* Remove border-radius */
+  border-radius: 0;
+  
+  /* Remove box-shadow */
+  box-shadow: none;
+  
+  /* Reset line-height */
+  line-height: normal;
+  
+  /* Disable default appearance */
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  
+  /* Remove focus outline/ring */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Reset focus states */
+button:focus {
+  outline: none;
+}
+
+button::-moz-focus-inner {
+  border: 0;
+}
+
+/* Reset hover and active states */
+button:hover,
+button:active {
+  background-color: transparent;
+}
+
+/* Reset disabled state */
+button:disabled {
+  cursor: default;
+  opacity: 1;
 }

@@ -131,6 +131,7 @@ onMount(() => {
     {uploadError}
   />
 
+
   <VIEWPORT 
     bind:this={viewportRef}
     {newModel} 
@@ -142,6 +143,8 @@ onMount(() => {
     onSceneObjectsChanged={updateSceneObjects}
   />
 
+
+
   {#if uploadError}
     <div class="error-message">
       <p>{uploadError}</p>
@@ -151,13 +154,17 @@ onMount(() => {
 </main>
 
 <style>
+
+  /* #1a0611 */
+  /* #230817 */
   main {
     box-sizing: border-box;
     position: relative;
     width: 100vw;
     height: 100vh;
+    background: linear-gradient(to top, #170202, #140a0a);
   }
-  
+
   .error-message {
     position: fixed;
     top: 20px;
