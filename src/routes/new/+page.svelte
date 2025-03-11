@@ -94,10 +94,10 @@ function handleObjectDelete(objectId) {
   
   }}
 
-  function changeBG(image){
-    console.log('new hdr', image)
+  function changeBG(file){
+    console.log('new hdr', file)
      if (viewportRef) {
-    viewportRef.changeBG(image, true)
+    viewportRef.changeBG(file, true)
      }
   }
 

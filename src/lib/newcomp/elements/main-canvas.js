@@ -140,7 +140,7 @@ export class mainRenderer {
 		this.gradientBackground.topColor.set('#111111');
 		this.gradientBackground.bottomColor.set('#000000');
 		this.gradientBackground.update();
-		this.scene.background = this.gradientBackground;
+		this.scene.background = null;
 
 		// this.pathTracer.setScene(this.scene, this.camera);
 		// Enable shadows
@@ -438,107 +438,88 @@ export class mainRenderer {
 		});
 	}
 
-	loadHDRI(path, BG = false) {
-		// Don't proceed if path is null (for removing background)
-		if (!path) {
-			this.scene.background = this.gradientBackground;
-			return Promise.resolve();
-		}
-
+	loadHDRI(path) {
 		return new Promise((resolve, reject) => {
 			const loader = new RGBELoader();
-
-			loader.load(
+			new RGBELoader().load(
 				path,
 				(texture) => {
-					// Dispose of previous environment maps
+					// 기존 환경 맵이 있으면 dispose
 					if (this.envMap) {
 						this.envMap.dispose();
-					}
-					if (this.scene.environment) {
 						this.scene.environment.dispose();
 					}
-
+					texture.colorSpace = THREE.SRGBColorSpace;
 					texture.mapping = THREE.EquirectangularReflectionMapping;
+					// 새 환경 맵 설정
 
-					// Set new environment map
 					this.envMap = texture;
 					this.blurredEnvMap = this.blurredEnvMapGenerator?.generate(this.envMap, 0.35);
+					// this.scene.background = this.envMap;
 					this.scene.environment = this.envMap;
 
-					// Set as background if requested
-					if (BG) {
-						this.scene.background = this.envMap;
-					}
-
-					// Update pathTracer environment
-					if (this.pathTracer) {
-						this.pathTracer.updateEnvironment();
-					}
-
-					// Force a render to see the changes
-					this.render();
+					// pathTracer 환경 맵 업데이트
+					this.pathTracer.updateEnvironment();
+					texture.dispose();
 
 					resolve(this.envMap);
 				},
 				undefined,
-				(error) => {
-					console.error('Error loading HDRI:', error);
-					reject(error);
-				}
+				reject
 			);
 		});
 	}
 
-	loadBGasHDRI(path, BG = false) {
-		// Don't proceed if path is null (for removing background)
-		if (!path) {
-			this.scene.background = this.gradientBackground;
-			return Promise.resolve();
-		}
+	resetHDRI() {
+		this.loadHDRI(this.options.hdriPath);
+		this.scene.background = null;
+	}
 
+	loadImageBackground(file) {
 		return new Promise((resolve, reject) => {
-			const loader = new THREE.TextureLoader();
+			const reader = new FileReader();
 
-			loader.load(
-				path,
-				(texture) => {
-					// Dispose of previous environment maps
-					if (this.envMap) {
-						this.envMap.dispose();
-					}
-					if (this.scene.environment) {
-						this.scene.environment.dispose();
-					}
+			reader.onload = (event) => {
+				const dataUrl = event.target.result;
 
-					texture.mapping = THREE.EquirectangularReflectionMapping;
+				const loader = new THREE.TextureLoader();
+				loader.load(
+					dataUrl,
+					(texture) => {
+						// 기존 환경 맵이 있으면 dispose
+						if (this.envMap) {
+							this.envMap.dispose();
+							this.scene.environment.dispose();
+						}
+						texture.colorSpace = THREE.SRGBColorSpace;
+						this.scene.background = texture;
 
-					// Set new environment map
-					this.envMap = texture;
-					this.blurredEnvMap = this.blurredEnvMapGenerator?.generate(this.envMap, 0.35);
-					this.scene.environment = this.envMap;
+						const envTexture = texture.clone();
+						envTexture.mapping = THREE.EquirectangularReflectionMapping;
 
-					// Set as background if requested
-					if (BG) {
-						this.scene.background = this.envMap;
-					}
+						this.envMap = envTexture;
+						this.blurredEnvMap = this.blurredEnvMapGenerator?.generate(this.envMap, 0.35);
+						// this.scene.background = this.envMap;
+						this.scene.environment = this.envMap;
 
-					// Update pathTracer environment
-					if (this.pathTracer) {
+						// pathTracer 환경 맵 업데이트
 						this.pathTracer.updateEnvironment();
+						texture.dispose();
+
+						resolve(texture);
+					},
+					undefined,
+					(error) => {
+						reject(error);
 					}
+				);
+			};
 
-					// Force a render to see the changes
-					this.render();
+			reader.onerror = () => {
+				reject(new Error('Failed to read the background image file.'));
+			};
 
-					resolve(this.envMap);
-				},
-				undefined,
-				(error) => {
-					console.error('Error loading HDRI:', error);
-					reject(error);
-				}
-			);
+			reader.readAsDataURL(file);
 		});
 	}
 
@@ -675,34 +656,34 @@ export class mainRenderer {
 		}
 
 		// Add material environment maps if needed
-		if (this.envMap) {
-			object.traverse((child) => {
-				if (child.isMesh && child.material) {
-					// Handle material arrays
-					if (Array.isArray(child.material)) {
-						child.material.forEach((material) => {
-							if (material.isMeshStandardMaterial || material.isMeshPhysicalMaterial) {
-								material.envMap = this.envMap;
-								material.envMapIntensity = this.options.envMapIntensity;
-								material.needsUpdate = true;
-							}
-						});
-					}
-					// Handle single materials
-					else if (child.material.isMeshStandardMaterial || child.material.isMeshPhysicalMaterial) {
-						child.material.envMap = this.envMap;
-						child.material.envMapIntensity = this.options.envMapIntensity;
-						child.material.needsUpdate = true;
-					}
+		// if (this.envMap) {
+		// 	object.traverse((child) => {
+		// 		if (child.isMesh && child.material) {
+		// 			// Handle material arrays
+		// 			if (Array.isArray(child.material)) {
+		// 				child.material.forEach((material) => {
+		// 					if (material.isMeshStandardMaterial || material.isMeshPhysicalMaterial) {
+		// 						material.envMap = this.envMap;
+		// 						material.envMapIntensity = this.options.envMapIntensity;
+		// 						material.needsUpdate = true;
+		// 					}
+		// 				});
+		// 			}
+		// 			// Handle single materials
+		// 			else if (child.material.isMeshStandardMaterial || child.material.isMeshPhysicalMaterial) {
+		// 				child.material.envMap = this.envMap;
+		// 				child.material.envMapIntensity = this.options.envMapIntensity;
+		// 				child.material.needsUpdate = true;
+		// 			}
 
-					// Enable shadows
-					if (this.options.shadows) {
-						child.castShadow = true;
-						child.receiveShadow = true;
-					}
-				}
-			});
-		}
+		// 			// Enable shadows
+		// 			if (this.options.shadows) {
+		// 				child.castShadow = true;
+		// 				child.receiveShadow = true;
+		// 			}
+		// 		}
+		// 	});
+		// }
 		this.objectsInScene = [
 			...this.objectsInScene,
 			{

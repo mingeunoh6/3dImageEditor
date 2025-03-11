@@ -41,6 +41,7 @@
 	//setting state
 	let isBG = $state(false);
 	let currentBG = $state("");
+	let currentBGratio = $state("1:1")
 	let bgRotation = $state(180);
 	$effect(() => {
 		console.log(bgRotation);
@@ -264,24 +265,44 @@
         currentBG = imageUrl;
         
         // Update thumbnail immediately
-        changeBGThumbnail(currentBG);
+		setTimeout(()=>{
+   changeBGThumbnail(currentBG);
+		},0)
+     
         
         // Send to parent component for scene update
-        BGimport(currentBG);
+        BGimport(file);
     }
 }
 
 	function changeBGThumbnail(currentBG) {
 		const thumbnailImg = document.querySelector('.bg-preview-thumbnail img');
-		if (thumbnailImg) {
+
+	if (thumbnailImg) {
 			thumbnailImg.src = currentBG;
+
+
+	
+		
 
 			// Optional: Free memory when the image is no longer needed
 			thumbnailImg.onload = () => {
+				console.log(thumbnailImg.width, thumbnailImg.height)
+				let ratio =thumbnailImg.height/thumbnailImg.width
+				if(ratio === 1){
+currentBGratio = 'FIT 1:1'
+				} else if(ratio > 1){
+					//세로
+					currentBGratio = `FIT 1:${ratio.toFixed(2)}`
+				} else if(ratio < 1){
+					currentBGratio = `FIT ${ratio.toFixed(2)}:1`
+				}
+				
 				// We can revoke the object URL after the image has loaded to free memory
 				// URL.revokeObjectURL(imageUrl);
 				// Note: Keep commented unless you're handling cleanup elsewhere
 			};
+			currentBGratio = 'FIT'
 		} else {
 			console.error('Thumbnail image element not found');
 		}
@@ -293,10 +314,6 @@
     }
     console.log('removeBG');
     
-    // Revoke object URL when removing background
-    if (currentBG && currentBG.startsWith('blob:')) {
-        URL.revokeObjectURL(currentBG);
-    }
     
     isBG = false;
     currentBG = "";
@@ -421,7 +438,7 @@
 					{/if}
 				</button>
 				<button id="image-ratio-set" class="toolbtn image-ratio" onclick={menuToggle}>
-					3:4
+					{currentBGratio}
 
 					{#if activeMenu === 'image-ratio-set'}
 						<div class="add-item-list" transition:slide>
@@ -465,7 +482,7 @@
 								{#if isBG}
 							
 									<div class="bg-preview-thumbnail" transition:fade>
-										<img src="bg/bg_landscape2.png" alt="bg-preview" />
+										<img src={currentBG} alt="bg-preview" />
 									</div>
 							
 									<div class="slider-setting-group" transition:fade>

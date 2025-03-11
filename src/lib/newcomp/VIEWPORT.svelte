@@ -27,6 +27,7 @@
     let viewportRenderer;
     let objectHighlighter;
     let edgeHighlighter;
+    let aspectRatio = $state(1)
 
     // Model loading state
     let isLoading = $state(false);
@@ -127,18 +128,26 @@
         return 'object';
     }
 
-   export function changeBG(image) {
+   export async function changeBG(file) {
     if (!viewportRenderer) return;
-    
-    if (!image) {
-        // Handle removing the background
-        viewportRenderer.scene.background = viewportRenderer.gradientBackground;
-        console.log('Background removed');
-        return;
+
+    if(file ===null){
+        viewportRenderer.resetHDRI()
     }
-    
     // Pass true to set as both environment and background
-    viewportRenderer.loadBGasHDRI(image, true);
+    viewportRenderer.loadImageBackground(file).then((texture)=>{
+        console.log(texture)
+        aspectRatio = texture.image.width / texture.image.height;
+        setViewport()
+    }).catch((error)=>{
+        console.error('Error loading hdri', error)
+    });
+}
+
+export function resetBG(){
+        if (!viewportRenderer) return;
+    // Pass true to set as both environment and background
+    viewportRenderer.resetHDRI();
 }
 
 // Add a public method to select objects by ID
@@ -732,28 +741,52 @@ function isHighlightObject(object) {
 
 
     // Handle viewport size based on orientation
-    function setViewport() {
-        // Check if the screen is portrait or landscape
-        isPortrait = window.innerHeight > window.innerWidth;
-
-        let size;
-        if (isPortrait) {
-            size = Math.round(window.innerWidth * 0.8);
-        } else {
-            size = Math.round(window.innerHeight * 0.8);
-        }
+   function setViewport() {
+    // Calculate available space
+    const maxWidth = window.innerWidth * 0.9;  // 90% of window width
+    const maxHeight = window.innerHeight * 0.9;  // 90% of window height
+    
+    // Check current screen orientation
+    isPortrait = window.innerHeight > window.innerWidth;
+    
+    // Calculate dimensions based on aspect ratio and available space
+    if (aspectRatio === 1) {
+        // Square image
+        viewportWidth = Math.min(maxWidth, maxHeight);
+        viewportHeight = viewportWidth;
+    } else if (aspectRatio > 1) {
+        // Landscape image (width > height)
+        // First try to fit by width
+        viewportWidth = maxWidth;
+        viewportHeight = maxWidth / aspectRatio;
         
-        // Set dimensions to maintain 1:1 ratio
-        viewport.style.width = size + 'px';
-        viewport.style.height = size + 'px';
-        viewportWidth = size;
-        viewportHeight = size;
-
-        // Update renderer if it exists
-        if (viewportRenderer) {
-            viewportRenderer.resize();
+        // If too tall, constrain by height instead
+        if (viewportHeight > maxHeight) {
+            viewportHeight = maxHeight;
+            viewportWidth = maxHeight * aspectRatio;
+        }
+    } else {
+        // Portrait image (height > width)
+        // First try to fit by height
+        viewportHeight = maxHeight;
+        viewportWidth = maxHeight * aspectRatio;
+        
+        // If too wide, constrain by width instead
+        if (viewportWidth > maxWidth) {
+            viewportWidth = maxWidth;
+            viewportHeight = maxWidth / aspectRatio;
         }
     }
+    
+    // Apply calculated dimensions
+    viewport.style.width = `${viewportWidth}px`;
+    viewport.style.height = `${viewportHeight}px`;
+    
+    // Update renderer if it exists
+    if (viewportRenderer) {
+        viewportRenderer.resize();
+    }
+}
 
     // Component lifecycle hooks
     onMount(() => {
@@ -902,7 +935,7 @@ this.deleteObjectById = deleteObjectById;
         justify-content: center;
         align-items: center;
         overflow: hidden;
-       
+
     }
 
     #viewport {
@@ -910,6 +943,7 @@ this.deleteObjectById = deleteObjectById;
         box-sizing: border-box;
         margin: auto;
         touch-action: none;
+        border: 1px solid var(--dim-color);
         border-radius: 16px;
     }
 
