@@ -94,6 +94,13 @@ function handleObjectDelete(objectId) {
   
   }}
 
+  function changeBG(image){
+    console.log('new hdr', image)
+     if (viewportRef) {
+    viewportRef.changeBG(image, true)
+     }
+  }
+
  
 
 
@@ -129,6 +136,7 @@ onMount(() => {
     pathTracingRender={(state)=>startPathTracing(state)} 
     {viewportLoading}
     {uploadError}
+    BGimport={(image)=>changeBG(image)}
   />
 
 

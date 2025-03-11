@@ -412,7 +412,6 @@ export class mainRenderer {
 
 		if (enable) {
 			if (this.pathTracer) {
-
 				// Create or update the path tracing scene
 				await this.updatePathTracerScene();
 			} else {
@@ -439,35 +438,110 @@ export class mainRenderer {
 		});
 	}
 
-	loadHDRI(path) {
+	loadHDRI(path, BG = false) {
+		// Don't proceed if path is null (for removing background)
+		if (!path) {
+			this.scene.background = this.gradientBackground;
+			return Promise.resolve();
+		}
+
 		return new Promise((resolve, reject) => {
-			new RGBELoader().load(
+			const loader = new RGBELoader();
+
+			loader.load(
 				path,
 				(texture) => {
-					// 기존 환경 맵이 있으면 dispose
+					// Dispose of previous environment maps
 					if (this.envMap) {
 						this.envMap.dispose();
+					}
+					if (this.scene.environment) {
 						this.scene.environment.dispose();
 					}
-					texture.mapping = THREE.EquirectangularReflectionMapping;
-					// 새 환경 맵 설정
 
+					texture.mapping = THREE.EquirectangularReflectionMapping;
+
+					// Set new environment map
 					this.envMap = texture;
 					this.blurredEnvMap = this.blurredEnvMapGenerator?.generate(this.envMap, 0.35);
-					// this.scene.background = this.envMap;
 					this.scene.environment = this.envMap;
 
-					// pathTracer 환경 맵 업데이트
-					this.pathTracer.updateEnvironment();
-					texture.dispose();
+					// Set as background if requested
+					if (BG) {
+						this.scene.background = this.envMap;
+					}
+
+					// Update pathTracer environment
+					if (this.pathTracer) {
+						this.pathTracer.updateEnvironment();
+					}
+
+					// Force a render to see the changes
+					this.render();
 
 					resolve(this.envMap);
 				},
 				undefined,
-				reject
+				(error) => {
+					console.error('Error loading HDRI:', error);
+					reject(error);
+				}
 			);
 		});
 	}
+
+	loadBGasHDRI(path, BG = false) {
+		// Don't proceed if path is null (for removing background)
+		if (!path) {
+			this.scene.background = this.gradientBackground;
+			return Promise.resolve();
+		}
+
+		return new Promise((resolve, reject) => {
+			const loader = new THREE.TextureLoader();
+
+			loader.load(
+				path,
+				(texture) => {
+					// Dispose of previous environment maps
+					if (this.envMap) {
+						this.envMap.dispose();
+					}
+					if (this.scene.environment) {
+						this.scene.environment.dispose();
+					}
+
+					texture.mapping = THREE.EquirectangularReflectionMapping;
+
+					// Set new environment map
+					this.envMap = texture;
+					this.blurredEnvMap = this.blurredEnvMapGenerator?.generate(this.envMap, 0.35);
+					this.scene.environment = this.envMap;
+
+					// Set as background if requested
+					if (BG) {
+						this.scene.background = this.envMap;
+					}
+
+					// Update pathTracer environment
+					if (this.pathTracer) {
+						this.pathTracer.updateEnvironment();
+					}
+
+					// Force a render to see the changes
+					this.render();
+
+					resolve(this.envMap);
+				},
+				undefined,
+				(error) => {
+					console.error('Error loading HDRI:', error);
+					reject(error);
+				}
+			);
+		});
+	}
+
 	createDefaultEnvironment() {
 		// Create a simple gradient environment
 		const envScene = new THREE.Scene();

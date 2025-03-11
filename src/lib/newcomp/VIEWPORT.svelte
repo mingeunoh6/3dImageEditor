@@ -127,6 +127,20 @@
         return 'object';
     }
 
+   export function changeBG(image) {
+    if (!viewportRenderer) return;
+    
+    if (!image) {
+        // Handle removing the background
+        viewportRenderer.scene.background = viewportRenderer.gradientBackground;
+        console.log('Background removed');
+        return;
+    }
+    
+    // Pass true to set as both environment and background
+    viewportRenderer.loadBGasHDRI(image, true);
+}
+
 // Add a public method to select objects by ID
   export function selectObjectById(objectId) {
     if (!viewportRenderer) return;

@@ -3,14 +3,16 @@
 <script>
 	import { onMount } from 'svelte';
 	import Icon from '@iconify/svelte';
-	import { slide } from 'svelte/transition';
+	import { fade, slide } from 'svelte/transition';
+	import Slider from '$lib/newcomp/elements/menu-slider.svelte';
 
 	// Props from parent
 	let {
 		add3dModel,
 		pathTracingRender = (state) => console.log(`render: ${state}`),
 		viewportLoading,
-		uploadError
+		uploadError,
+		BGimport,
 	} = $props();
 
 	// Upload states
@@ -35,6 +37,19 @@
 	// Component state
 	let isBusy = $state(false);
 	let abortController = null;
+
+	//setting state
+	let isBG = $state(false);
+	let currentBG = $state("");
+	let bgRotation = $state(180);
+	$effect(() => {
+		console.log(bgRotation);
+	});
+
+	let bgBrightness = $state(1);
+	$effect(() => {
+		console.log(bgBrightness);
+	});
 
 	// Monitor loading state from parent to update UI
 	$effect(() => {
@@ -63,11 +78,17 @@
 	}
 
 	function menuToggle(e) {
-		if (activeMenu !== null && activeMenu === e.target.id) {
-			//같은 메뉴 토글
-			activeMenu = null;
-		} else if (activeMenu !== e.target.id) {
-			activeMenu = e.target.id;
+		// Only respond to clicks on menu buttons directly, not their children
+		if (e.currentTarget && e.currentTarget.id) {
+			const clickedMenuId = e.currentTarget.id;
+
+			if (activeMenu === clickedMenuId) {
+				// Same menu - toggle it off
+				activeMenu = null;
+			} else {
+				// Different menu - switch to it
+				activeMenu = clickedMenuId;
+			}
 		}
 	}
 
@@ -218,6 +239,79 @@
 		document.getElementById('toggleButton')?.removeAttribute('disabled');
 	}
 
+	function handleBGImport(event) {
+    const file = event.target.files[0];
+
+    if (file) {
+        console.log('Background image selected:', file);
+
+        // Check if file is an image
+        if (!file.type.startsWith('image/')) {
+            console.error('Selected file is not an image');
+            return;
+        }
+
+        // Revoke previous object URL if it exists to prevent memory leaks
+        if (currentBG && currentBG.startsWith('blob:')) {
+            URL.revokeObjectURL(currentBG);
+        }
+
+        // Create a URL for the selected image file
+        const imageUrl = URL.createObjectURL(file);
+        
+        // Update state
+        isBG = true;
+        currentBG = imageUrl;
+        
+        // Update thumbnail immediately
+        changeBGThumbnail(currentBG);
+        
+        // Send to parent component for scene update
+        BGimport(currentBG);
+    }
+}
+
+	function changeBGThumbnail(currentBG) {
+		const thumbnailImg = document.querySelector('.bg-preview-thumbnail img');
+		if (thumbnailImg) {
+			thumbnailImg.src = currentBG;
+
+			// Optional: Free memory when the image is no longer needed
+			thumbnailImg.onload = () => {
+				// We can revoke the object URL after the image has loaded to free memory
+				// URL.revokeObjectURL(imageUrl);
+				// Note: Keep commented unless you're handling cleanup elsewhere
+			};
+		} else {
+			console.error('Thumbnail image element not found');
+		}
+	}
+
+	function removeBG() {
+    if (currentBG === "" || !isBG) {
+        return;
+    }
+    console.log('removeBG');
+    
+    // Revoke object URL when removing background
+    if (currentBG && currentBG.startsWith('blob:')) {
+        URL.revokeObjectURL(currentBG);
+    }
+    
+    isBG = false;
+    currentBG = "";
+    
+    // Let the parent component know the background is removed
+    BGimport(null);
+}
+
+	function downloadBG(){
+		if(currentBG === "" || !isBG){
+			return
+		}
+		console.log('downloadBG')
+	}
+
 	function render() {
 		console.log('Rendering...');
 		pathTracingRender(true); // 경로 추적 모드로 전환
@@ -311,15 +405,6 @@
 					style="display: none;"
 					oninput={addModel}
 				/>
-				<button id="image-ratio-set" class="toolbtn image-ratio" onclick={menuToggle}>
-					3:4 PNG
-
-					{#if activeMenu === 'image-ratio-set'}
-						<div class="add-item-list" transition:slide>
-							<button> image </button>
-						</div>
-					{/if}
-				</button>
 				<button id="3d-add-set" class="toolbtn upload-btn" onclick={menuToggle}>
 					<Icon class="tool-icon" icon="iconoir:cube" />
 
@@ -335,11 +420,88 @@
 						</div>
 					{/if}
 				</button>
+				<button id="image-ratio-set" class="toolbtn image-ratio" onclick={menuToggle}>
+					3:4
+
+					{#if activeMenu === 'image-ratio-set'}
+						<div class="add-item-list" transition:slide>
+							<button> Fit to current BG </button>
+							<button> 1:1 </button>
+							<div class="ratio-selection-group">
+								<div class="ratio-selection ratio-list-portrait">
+									<div class="ratio-type-title">Portrait</div>
+									<div class="ratio-type-list">
+										<button> 2:3 </button>
+										<button> 3:4 </button>
+										<button> 4:5 </button>
+										<button> 9:16 </button>
+									</div>
+								</div>
+								<div class="ratio-selection ratio-list-landscape">
+									<div class="ratio-type-title">landscape</div>
+									<div class="ratio-type-list">
+										<button> 3:2 </button>
+										<button> 4:3 </button>
+										<button> 5:4 </button>
+										<button> 16:9 </button>
+									</div>
+								</div>
+							</div>
+						</div>
+					{/if}
+				</button>
 
 				<button id="bg-set" class="toolbtn BG" onclick={menuToggle}>
 					{#if activeMenu === 'bg-set'}
+						<input
+							type="file"
+							id="bg-import"
+							accept=".png,.jpg,.jpeg, .webp"
+							style="display: none;"
+							onchange={handleBGImport}
+						/>
 						<div class="add-item-list" transition:slide>
-							<button id="bg-upload-btn"> BG-upload </button>
+							<div class="bg-preview-group" >
+								{#if isBG}
+							
+									<div class="bg-preview-thumbnail" transition:fade>
+										<img src="bg/bg_landscape2.png" alt="bg-preview" />
+									</div>
+							
+									<div class="slider-setting-group" transition:fade>
+										<Slider
+											value={bgRotation}
+											min={0}
+											max={360}
+											scale={1}
+											name="BG Rotation"
+											unit="°"
+											onValueChange={(newValue) => (bgRotation = newValue)}
+										/>
+									</div>
+									<div class="slider-setting-group" transition:fade>
+										<Slider
+											value={bgBrightness}
+											min={0}
+											max={2}
+											scale={0.1}
+											name="BG Brightness"
+											unit=""
+											onValueChange={(newValue) => (bgBrightness = newValue)}
+										/>
+									</div>
+											<button transition:fade onclick={() => document.getElementById('bg-import').click()}>
+										Change Background
+									</button>
+									<button transition:fade onclick={downloadBG}> Download BG </button>
+									<button transition:fade onclick={removeBG}> Remove BG </button>
+							
+								{:else}
+									<button onclick={() => document.getElementById('bg-import').click()}>
+										Upload Background
+									</button>
+								{/if}
+							</div>
 						</div>
 					{/if}
 					<Icon class="tool-icon" icon="material-symbols:landscape-2-outline-rounded" /></button
@@ -499,6 +661,58 @@
 		width: auto;
 		padding: 6px;
 		pointer-events: none;
+	}
+
+	.bg-preview-group {
+		box-sizing: border-box;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		align-items: center;
+	}
+
+	.bg-preview-group > div {
+		border-bottom: 1px solid var(--dim-color);
+	}
+
+	.bg-preview-group > div:first-child {
+		border-bottom: none;
+	}
+
+	.bg-preview-group button {
+		border-bottom: 1px solid var(--dim-color);
+	}
+
+	.bg-preview-group button:last-child {
+		border-bottom: none;
+	}
+
+	.bg-preview-group > button:only-child {
+		border: none;
+	}
+
+	.bg-preview-thumbnail {
+		box-sizing: border-box;
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		padding: 6px;
+		width: 250px;
+
+		background-color: var(--secondary-color);
+	}
+	.bg-preview-thumbnail img {
+		width: 100%;
+		height: 100%;
+		max-height: 300px;
+		object-fit: contain;
+		border: 1px solid var(--dim-color);
+		border-radius: 8px;
+	}
+	.slider-setting-group {
+		position: relative;
+		width: 100%;
+		height: 42px;
 	}
 
 	.prompt-input-wrapper {
@@ -793,7 +1007,7 @@
 		width: 100%;
 		white-space: nowrap;
 		border-radius: 0;
-		font-size: 1rem;
+		font-size: 0.9rem;
 		background-color: var(--primary-color);
 		color: var(--dim-color);
 		transition: all ease-in-out 300ms;
@@ -810,5 +1024,44 @@
 		cursor: pointer;
 		background-color: var(--highlight-color);
 		color: white;
+	}
+
+	.ratio-selection-group {
+		display: flex;
+		flex-direction: row;
+		width: 100%;
+		box-sizing: border-box;
+		border-top: 1px solid var(--dim-color);
+	}
+
+	.ratio-selection {
+		box-sizing: border-box;
+		width: 100px;
+	}
+
+	.ratio-selection:first-child {
+		border-right: 1px solid var(--dim-color);
+	}
+
+	.ratio-type-title {
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		font-size: 0.9rem;
+		padding: 10px 0px;
+		cursor: default;
+		border-bottom: 1px solid var(--dim-color);
+	}
+
+	.ratio-type-list {
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		align-items: center;
+	}
+	.ratio-type-list button {
+		font-size: 0.9rem;
+		padding: 10px 0px;
+		border: none !important;
 	}
 </style>
