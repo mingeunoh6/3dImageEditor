@@ -6,6 +6,7 @@
 	import { fade, slide } from 'svelte/transition';
 	import Slider from '$lib/newcomp/elements/menu-slider.svelte';
 
+
 	// Props from parent
 	let {
 		add3dModel,
@@ -13,7 +14,36 @@
 		viewportLoading,
 		uploadError,
 		BGimport,
+		BGfromURL
 	} = $props();
+
+	let FLUX_API_KEY = import.meta.env.VITE_FLUX_API_KEY;
+	let isGenerating = $state(false);
+	let generationProgress = $state(0); // 이미지 생성 진행률
+	let generationError = $state(null); // 에러 메시지
+	let generatedImageUrl = $state(''); // 생성된 이미지 URL
+	let cachedImageBlob = $state(null);  // Store the actual image blob
+let cachedImageUrl = $state('');    // Store a local blob URL
+	let taskId = $state(''); // FLUX API 작업 ID
+	let flux_polling_url = $state(''); // FLUX API 작업 상태 확인 URL
+		let pollingInterval = $state(null);
+	let pollingTimeout = $state(null);
+	let isPending = $state(false);
+	let onPreview= $state(false);
+
+	//Flux promt body
+	let fluxPrompt = $state({
+    prompt: 'Beautiful living room interior design with modern furniture and decor',
+    image_prompt: 'mountain',
+    width: 1024,
+    height: 1024,
+    prompt_upsampling: false,
+    seed: 42,
+    safety_tolerance: 2,
+    output_format: 'png',
+    webhook_url: '',
+    webhook_secret: ''
+	});
 
 	// Upload states
 	let isUploading = $state(false);
@@ -40,8 +70,8 @@
 
 	//setting state
 	let isBG = $state(false);
-	let currentBG = $state("");
-	let currentBGratio = $state("1:1")
+	let currentBG = $state('');
+	let currentBGratio = $state('1:1');
 	let bgRotation = $state(180);
 	$effect(() => {
 		console.log(bgRotation);
@@ -50,6 +80,12 @@
 	let bgBrightness = $state(1);
 	$effect(() => {
 		console.log(bgBrightness);
+	});
+
+		$effect(() => {
+		if (currentBG && isBG) {
+			BGfromURL(currentBG);
+		}
 	});
 
 	// Monitor loading state from parent to update UI
@@ -71,6 +107,230 @@
 			}
 		}
 	});
+
+	function onPrompt(event) {
+		fluxPrompt.prompt = event.target.value;
+	}
+
+
+async function runImageGen() {
+  if (isGenerating) return; // 이미 생성 중이라면 중복 호출 방지
+
+  // 상태 초기화
+  // 상태 초기화
+  isGenerating = true;
+  isPending = false; // Start with pending state
+  generationProgress = 0;
+  generationError = null;
+  taskId = '';
+  clearPollingTimers();
+
+  try {
+    // UI 비활성화
+    disableUI();
+
+    // FLUX API 요청을 위한 올바른 형식의 입력 데이터 준비
+    // 문서에 따라 FluxPro11Inputs 스키마와 일치하도록 구성
+    const apiRequestData = {
+      prompt: fluxPrompt.prompt,
+
+      width: fluxPrompt.width,
+      height: fluxPrompt.height,
+      prompt_upsampling: fluxPrompt.prompt_upsampling,
+      seed: fluxPrompt.seed,
+      safety_tolerance: fluxPrompt.safety_tolerance,
+      output_format: fluxPrompt.output_format,
+
+    };
+
+    console.log('API 요청 데이터:', apiRequestData);
+
+    // 서버 엔드포인트로 요청 전송
+    const response = await fetch('api/flux', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ input: apiRequestData })
+    });
+
+    console.log('응답 상태:', response.status, response.statusText);
+
+    // 응답 데이터 가져오기
+    const data = await response.json();
+    console.log('응답 데이터:', data);
+
+    // 에러 처리
+    if (!response.ok || data.error) {
+      throw new Error(data.error?.msg || 'Image generation request failed');
+    }
+
+    // 작업 ID 저장
+    taskId = data.id;
+	flux_polling_url = data.polling_url;
+    console.log('이미지 생성 요청 성공, 작업 ID:', taskId);
+
+	// 이미지 생성 상태 모니터링 시작
+	fluxPolling(flux_polling_url);
+
+   // Add a timeout for generation (5 minutes max)
+    pollingTimeout = setTimeout(() => {
+      if (isGenerating) {
+        clearInterval(pollingInterval);
+        generationError = "Generation timeout - please try again";
+        isGenerating = false;
+        isPending = false;
+        enableUI();
+      }
+    }, 300000); // 5 minutes
+  
+
+  } catch (error) {
+    console.error('이미지 생성 실패:', error);
+    generationError = error.message;
+	 isGenerating = false;
+    isPending = false;
+  } finally {
+    // 성공 여부와 상관없이 UI 활성화
+  if (generationError) {
+      enableUI();
+      isGenerating = false;
+      isPending = false;
+    }
+  }
+}
+function fluxPolling(pollingURL) {
+  console.log('pollingURL:', pollingURL);
+
+  if (!pollingURL) {
+    generationError = "Invalid polling URL";
+    isGenerating = false;
+    return;
+  }
+
+  pollingInterval = setInterval(async () => {
+    try {
+      const response = await fetch(pollingURL);
+      if (!response.ok) {
+        throw new Error(`Polling failed with status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log('polling data:', data);
+
+      if (data.status === 'Ready') {
+		isPending = false;
+        console.log('이미지 생성 완료:', data.result.sample);
+        // Get the original URL from the API response
+        const originalImageUrl = data.result.sample;
+        // Create proxied URL to avoid CORS issues
+        const proxiedImageUrl = `/api/flux?url=${encodeURIComponent(originalImageUrl)}`;
+        
+        // Set the generated image URL and call completeFluxTask
+        generatedImageUrl = proxiedImageUrl;
+		
+        completeFluxTask(proxiedImageUrl);
+        
+        clearPollingTimers();
+      } else if (data.status === 'Error') {
+        console.error('이미지 생성 실패:', data.error);
+        generationError = data.error;
+        isGenerating = false;
+		isPending = false;
+        clearPollingTimers();
+      }else if (data.status === 'Pending') {
+        // Handle the Pending status - job is in queue
+        isPending = true;
+        generationProgress = 0; // Use 0 for an indeterminate progress bar
+        console.log('Request is in queue, waiting to be processed');
+      }  else {
+            isPending = false;
+        generationProgress = data.progress || 0;
+        console.log('Generation in progress:', data.progress);
+      }
+    } catch (error) {
+      console.error('polling error:', error);
+      generationError = error.message || "Error during image generation polling";
+      isGenerating = false;
+	  isPending = false;
+      clearPollingTimers();
+    }
+  }, 1000);
+}
+
+async function completeFluxTask(imageURL) {
+  try {
+    // Show loading state
+    isGenerating = true;
+    
+    // Fetch the image immediately
+    console.log('Fetching image from:', imageURL);
+    const response = await fetch(imageURL);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch image: ${response.statusText}`);
+    }
+    
+    // Get the image as a blob and cache it
+    cachedImageBlob = await response.blob();
+    
+    // Create a local URL for the blob (for display purposes)
+    if (cachedImageUrl) {
+      // Revoke previous URL if it exists to prevent memory leaks
+      URL.revokeObjectURL(cachedImageUrl);
+    }
+    cachedImageUrl = URL.createObjectURL(cachedImageBlob);
+    
+    // Update the generated image URL to use our cached URL
+    generatedImageUrl = cachedImageUrl;
+    
+    console.log('Image successfully cached locally');
+    
+    // Generation complete
+    isGenerating = false;
+    onPreview = true;
+    
+    // Ensure UI is enabled
+    enableUI();
+  } catch (error) {
+    console.error('Error caching image:', error);
+    generationError = `Failed to load generated image: ${error.message}`;
+    isGenerating = false;
+    enableUI();
+  }
+}
+
+
+	function clearPollingTimers() {
+		if (pollingInterval) {
+			clearInterval(pollingInterval);
+			pollingInterval = null;
+		}
+		
+		if (pollingTimeout) {
+			clearTimeout(pollingTimeout);
+			pollingTimeout = null;
+		}
+	}
+
+	// Clean up function for when component is destroyed
+function cleanupImageCache() {
+  if (cachedImageUrl) {
+    URL.revokeObjectURL(cachedImageUrl);
+    cachedImageUrl = '';
+  }
+  cachedImageBlob = null;
+}
+
+
+
+function cancelGeneration() {
+  clearPollingTimers();
+  isGenerating = false;
+  isPending = false;
+  generationProgress = 0;
+  enableUI();
+}
 
 	// Toggle the add menu
 	function toggleAddMenu() {
@@ -240,93 +500,231 @@
 		document.getElementById('toggleButton')?.removeAttribute('disabled');
 	}
 
+	function changeBGratio(e){
+		let ratio = e.target.id;
+		switch (ratio) {
+			case 'FIT':
+				currentBGratio = 'FIT';
+				//current BG width, height
+				if(currentBG){
+					let img = new Image();
+					img.src = currentBG;
+					img.onload = function(){
+						fluxPrompt.width = img.width;
+						fluxPrompt.height = img.height;
+						console.log('currentBG width, height:', img.width, img.height);
+					}
+				}
+				break;
+			case 'r11':
+				currentBGratio = '1:1';
+				fluxPrompt.width = 1024;
+				fluxPrompt.height = 1024;
+				break;
+			case 'r23':
+				currentBGratio = '2:3';
+				fluxPrompt.width = 896;
+				fluxPrompt.height = 1344 ;
+				break;
+			case 'r34':
+				currentBGratio = '3:4';
+				fluxPrompt.width = 768;
+				fluxPrompt.height = 1024;
+				break;
+			case 'r45':
+				currentBGratio = '4:5';
+				fluxPrompt.width = 1024;
+				fluxPrompt.height = 1280;
+				break;
+			case 'r916':
+				currentBGratio = '9:16';
+				fluxPrompt.width = 736 ;
+				fluxPrompt.height = 1280;
+				break;
+			case 'r32':
+				currentBGratio = '3:2';
+				fluxPrompt.width = 1344;
+				fluxPrompt.height = 896;
+				break;
+			case 'r43':
+				currentBGratio = '4:3';
+				fluxPrompt.width = 1024;
+				fluxPrompt.height = 768;
+				break;
+			case 'r54':
+				currentBGratio = '5:4';
+				fluxPrompt.width = 1280 ;
+				fluxPrompt.height = 1024;
+				break;
+			case 'r169':
+				currentBGratio = '16:9';
+				fluxPrompt.width = 1280;
+				fluxPrompt.height = 736 ;
+				break;
+			default:
+				currentBGratio = 'FIT';
+					fluxPrompt.width = 1024;
+				fluxPrompt.height = 1024;
+				break;
+		}
+
+
+	}
+
 	function handleBGImport(event) {
-    const file = event.target.files[0];
+		const file = event.target.files[0];
 
-    if (file) {
-        console.log('Background image selected:', file);
+		if (file) {
+			console.log('Background image selected:', file);
 
-        // Check if file is an image
-        if (!file.type.startsWith('image/')) {
-            console.error('Selected file is not an image');
-            return;
-        }
+			// Check if file is an image
+			if (!file.type.startsWith('image/')) {
+				console.error('Selected file is not an image');
+				return;
+			}
 
-        // Revoke previous object URL if it exists to prevent memory leaks
-        if (currentBG && currentBG.startsWith('blob:')) {
-            URL.revokeObjectURL(currentBG);
-        }
+			// Revoke previous object URL if it exists to prevent memory leaks
+			if (currentBG && currentBG.startsWith('blob:')) {
+				URL.revokeObjectURL(currentBG);
+			}
 
-        // Create a URL for the selected image file
-        const imageUrl = URL.createObjectURL(file);
-        
-        // Update state
-        isBG = true;
-        currentBG = imageUrl;
-        
-        // Update thumbnail immediately
-		setTimeout(()=>{
-   changeBGThumbnail(currentBG);
-		},0)
-     
-        
-        // Send to parent component for scene update
-        BGimport(file);
-    }
-}
+			// Create a URL for the selected image file
+			const imageUrl = URL.createObjectURL(file);
+
+			// Update state
+			isBG = true;
+			currentBG = imageUrl;
+
+			// Update thumbnail immediately
+			setTimeout(() => {
+				changeBGThumbnail(currentBG);
+			}, 0);
+
+			// Send to parent component for scene update
+			BGimport(file);
+		}
+	}
 
 	function changeBGThumbnail(currentBG) {
 		const thumbnailImg = document.querySelector('.bg-preview-thumbnail img');
 
-	if (thumbnailImg) {
+		if (thumbnailImg) {
 			thumbnailImg.src = currentBG;
-
-
-	
-		
 
 			// Optional: Free memory when the image is no longer needed
 			thumbnailImg.onload = () => {
-				console.log(thumbnailImg.width, thumbnailImg.height)
-				let ratio =thumbnailImg.height/thumbnailImg.width
-				if(ratio === 1){
-currentBGratio = 'FIT 1:1'
-				} else if(ratio > 1){
+				console.log(thumbnailImg.width, thumbnailImg.height);
+				let ratio = thumbnailImg.height / thumbnailImg.width;
+				if (ratio === 1) {
+					currentBGratio = 'FIT 1:1';
+				} else if (ratio > 1) {
 					//세로
-					currentBGratio = `FIT 1:${ratio.toFixed(2)}`
-				} else if(ratio < 1){
-					currentBGratio = `FIT ${ratio.toFixed(2)}:1`
+					currentBGratio = `FIT 1:${ratio.toFixed(2)}`;
+				} else if (ratio < 1) {
+					currentBGratio = `FIT ${ratio.toFixed(2)}:1`;
 				}
-				
+
 				// We can revoke the object URL after the image has loaded to free memory
 				// URL.revokeObjectURL(imageUrl);
 				// Note: Keep commented unless you're handling cleanup elsewhere
+	let newRatio = convert32ratio(thumbnailImg.width, thumbnailImg.height)
+		fluxPrompt.width = newRatio.width;
+						fluxPrompt.height = newRatio.height;
+					
+						console.log('currentBG width, height:', fluxPrompt.width, fluxPrompt.height);
+					
+				
 			};
-			currentBGratio = 'FIT'
+			currentBGratio = 'FIT';
+
+
 		} else {
 			console.error('Thumbnail image element not found');
 		}
 	}
 
-	function removeBG() {
-    if (currentBG === "" || !isBG) {
-        return;
-    }
-    console.log('removeBG');
-    
-    
-    isBG = false;
-    currentBG = "";
-    
-    // Let the parent component know the background is removed
-    BGimport(null);
+function convert32ratio(width, height) {
+  // Calculate original aspect ratio
+  const aspectRatio = width / height;
+  
+  // Calculate multiples of 32 that are closest to original dimensions
+  // Strategy 1: round width to multiple of 32, adjust height
+  let newWidth1 = Math.round(width / 32) * 32;
+  let newHeight1 = Math.round(newWidth1 / aspectRatio / 32) * 32;
+  
+  // Strategy 2: round height to multiple of 32, adjust width
+  let newHeight2 = Math.round(height / 32) * 32;
+  let newWidth2 = Math.round(newHeight2 * aspectRatio / 32) * 32;
+  
+  // Ensure at least one dimension is 768 or larger
+  const minSize = 768;
+  
+  // Scale up dimensions if needed for Strategy 1
+  if (newWidth1 < minSize && newHeight1 < minSize) {
+    const scale = Math.ceil(minSize / Math.max(newWidth1, newHeight1));
+    newWidth1 = Math.round((newWidth1 * scale) / 32) * 32;
+    newHeight1 = Math.round((newHeight1 * scale) / 32) * 32;
+  }
+  
+  // Scale up dimensions if needed for Strategy 2
+  if (newWidth2 < minSize && newHeight2 < minSize) {
+    const scale = Math.ceil(minSize / Math.max(newWidth2, newHeight2));
+    newWidth2 = Math.round((newWidth2 * scale) / 32) * 32;
+    newHeight2 = Math.round((newHeight2 * scale) / 32) * 32;
+  }
+  
+  // Calculate how much each result deviates from the original aspect ratio
+  const ratio1 = newWidth1 / newHeight1;
+  const ratio2 = newWidth2 / newHeight2;
+  
+  const error1 = Math.abs(ratio1 - aspectRatio);
+  const error2 = Math.abs(ratio2 - aspectRatio);
+  
+  // Choose the strategy that preserves the aspect ratio better
+  if (error1 <= error2) {
+    return {
+      width: newWidth1,
+      height: newHeight1
+    };
+  } else {
+    return {
+      width: newWidth2,
+      height: newHeight2
+    };
+  }
 }
 
-	function downloadBG(){
-		if(currentBG === "" || !isBG){
-			return
+
+	function removeBG() {
+		if (currentBG === '' || !isBG) {
+			return;
 		}
-		console.log('downloadBG')
+		console.log('removeBG');
+
+		isBG = false;
+		currentBG = '';
+
+		// Let the parent component know the background is removed
+		BGimport(null);
+	}
+
+		function downloadBG() {
+		if (currentBG === '' || !isBG) {
+			return;
+		}
+
+		//getcurrenttime
+		const now = new Date();
+		const timestamp = now.toISOString().replace(/[-:]/g, '').split('.')[0];
+
+		
+		// Create a download link
+		const link = document.createElement('a');
+		link.href = currentBG;
+		link.download = 'otr-ai-gen-' + `${timestamp}.` + (currentBG.includes('.jpg') ? 'jpg' : 'png');
+		document.body.appendChild(link);
+		link.click();
+		document.body.removeChild(link);
 	}
 
 	function render() {
@@ -351,6 +749,19 @@ currentBGratio = 'FIT 1:1'
 				break;
 		}
 	}
+
+
+	onMount(() => {
+  return () => {
+    clearPollingTimers();
+    cleanupImageCache();
+    
+    // Clean up any blob URLs
+    if (currentBG && currentBG.startsWith('blob:')) {
+      URL.revokeObjectURL(currentBG);
+    }
+  };
+});
 </script>
 
 <div class="main">
@@ -442,25 +853,25 @@ currentBGratio = 'FIT 1:1'
 
 					{#if activeMenu === 'image-ratio-set'}
 						<div class="add-item-list" transition:slide>
-							<button> Fit to current BG </button>
-							<button> 1:1 </button>
+							<button class={currentBGratio==="FIT"? "btnSelected":""} id="FIT" onclick={changeBGratio}> Fit to current BG </button>
+							<button class={currentBGratio==="1:1"? "btnSelected":""} id="r11" onclick={changeBGratio}> 1:1 </button>
 							<div class="ratio-selection-group">
 								<div class="ratio-selection ratio-list-portrait">
 									<div class="ratio-type-title">Portrait</div>
 									<div class="ratio-type-list">
-										<button> 2:3 </button>
-										<button> 3:4 </button>
-										<button> 4:5 </button>
-										<button> 9:16 </button>
+										<button class={currentBGratio==="2:3"? "btnSelected":""} id="r23" onclick={changeBGratio}> 2:3 </button>
+										<button class={currentBGratio==="3:4"? "btnSelected":""} id="r34" onclick={changeBGratio}> 3:4 </button>
+										<button class={currentBGratio==="4:5"? "btnSelected":""} id="r45" onclick={changeBGratio}> 4:5 </button>
+										<button class={currentBGratio==="9:16"? "btnSelected":""} id="r916" onclick={changeBGratio}> 9:16 </button>
 									</div>
 								</div>
 								<div class="ratio-selection ratio-list-landscape">
 									<div class="ratio-type-title">landscape</div>
 									<div class="ratio-type-list">
-										<button> 3:2 </button>
-										<button> 4:3 </button>
-										<button> 5:4 </button>
-										<button> 16:9 </button>
+										<button class={currentBGratio==="3:2"? "btnSelected":""} id="r32" onclick={changeBGratio}> 3:2 </button>
+										<button class={currentBGratio==="4:3"? "btnSelected":""} id="r43" onclick={changeBGratio}> 4:3 </button>
+										<button class={currentBGratio==="5:4"? "btnSelected":""} id="r54" onclick={changeBGratio}> 5:4 </button>
+										<button class={currentBGratio==="16:9"? "btnSelected":""} id="r169" onclick={changeBGratio}> 16:9 </button>
 									</div>
 								</div>
 							</div>
@@ -478,13 +889,12 @@ currentBGratio = 'FIT 1:1'
 							onchange={handleBGImport}
 						/>
 						<div class="add-item-list" transition:slide>
-							<div class="bg-preview-group" >
+							<div class="bg-preview-group">
 								{#if isBG}
-							
 									<div class="bg-preview-thumbnail" transition:fade>
 										<img src={currentBG} alt="bg-preview" />
 									</div>
-							
+
 									<div class="slider-setting-group" transition:fade>
 										<Slider
 											value={bgRotation}
@@ -507,12 +917,14 @@ currentBGratio = 'FIT 1:1'
 											onValueChange={(newValue) => (bgBrightness = newValue)}
 										/>
 									</div>
-											<button transition:fade onclick={() => document.getElementById('bg-import').click()}>
+									<button
+										transition:fade
+										onclick={() => document.getElementById('bg-import').click()}
+									>
 										Change Background
 									</button>
 									<button transition:fade onclick={downloadBG}> Download BG </button>
 									<button transition:fade onclick={removeBG}> Remove BG </button>
-							
 								{:else}
 									<button onclick={() => document.getElementById('bg-import').click()}>
 										Upload Background
@@ -542,14 +954,124 @@ currentBGratio = 'FIT 1:1'
 			</div>
 
 			<div class="prompt-input-wrapper">
-				<input type="text" id="prompt-input" placeholder="Enter prompt" disabled={isBusy} />
-				<button class="go-btn">
+				<input
+					type="text"
+					id="prompt-input"
+					bind:value={fluxPrompt.prompt}
+					oninput={onPrompt}
+					placeholder="Enter prompt"
+					disabled={isBusy}
+				/>
+				<button class="go-btn" onclick={runImageGen} disabled={isGenerating}>
 					<Icon icon="jam:arrow-up" width="24" height="24" />
 				</button>
 			</div>
 		</div>
 	</section>
 </div>
+
+{#if isGenerating}
+	<div class="generation-container">
+		<div class="upload-progress">
+			<div
+				class="progress-bar"
+				class:indeterminate={generationProgress === 0}
+				class:pending={isPending}
+				style="width: {generationProgress}%"
+			></div>
+		</div>
+
+		<div class="upload-info">
+			<span class="stage-label">
+				{#if isPending}
+					Waiting in queue... Your request will start soon.
+				{:else}
+					Generating image... {generationProgress > 0 ? `${generationProgress}%` : ''}
+				{/if}
+			</span>
+
+			<button class="cancel-btn" onclick={cancelGeneration}>
+				<Icon icon="carbon:close" width="16" height="16" />
+			</button>
+		</div>
+	</div>
+{/if}
+
+<!-- 에러 메시지 표시 -->
+{#if generationError}
+	<div class="error-toast" transition:slide>
+		<p>{generationError}</p>
+		<button onclick={() => (generationError = null)}>
+			<Icon icon="carbon:close" width="16" height="16" />
+		</button>
+	</div>
+{/if}
+
+<!-- 생성된 이미지 미리보기 (옵션) -->
+<!-- Generated image preview - updated condition to show preview whenever 
+     there's a generated image and we're not currently generating -->
+{#if cachedImageUrl && !isGenerating && onPreview}
+	<div class="generated-image-preview" transition:fade>
+		<img src={cachedImageUrl} alt="Generated image" />
+		<div class="image-actions">
+			<button
+				onclick={() => {
+					// Set as background using the cached image
+					if (cachedImageBlob) {
+						// Create a new file from the cached blob
+						const file = new File([cachedImageBlob], 'generated-image.png', { 
+							type: cachedImageBlob.type || 'image/png' 
+						});
+						
+						// Update local state
+						isBG = true;
+						currentBG = cachedImageUrl;
+						
+						// Send to parent component for scene update
+						BGimport(file);
+						
+						// Close the preview
+						onPreview = false;
+					} else {
+						// Fallback in case the blob isn't available (shouldn't happen)
+						generationError = "Image data not available. Please try again.";
+					}
+				}}
+			>
+				Set as Background
+			</button>
+			
+			<button
+				onclick={() => {
+					if (cachedImageBlob) {
+						// Create and trigger download directly from the cached blob
+							const now = new Date();
+		const timestamp = now.toISOString().replace(/[-:]/g, '').split('.')[0];
+						const link = document.createElement('a');
+						link.href = cachedImageUrl;
+						link.download = 'otr-ai-gen-' + `${timestamp}.` + (cachedImageUrl.includes('.jpg') ? 'jpg' : 'png');
+						document.body.appendChild(link);
+						link.click();
+						document.body.removeChild(link);
+					} else {
+						// Fallback in case the blob isn't available (shouldn't happen)
+						generationError = "Image data not available. Please try again.";
+					}
+				}}
+			>
+				Download
+			</button>
+			
+			<button onclick={() => {
+				// Just close the preview - keep the cached image in memory
+				// in case the user wants to reopen it
+				onPreview = false;
+			}}>
+				Close
+			</button>
+		</div>
+	</div>
+{/if}
 
 <!-- Upload progress indicator -->
 {#if isUploading || uploadStage === 'processing'}
@@ -769,7 +1291,6 @@ currentBGratio = 'FIT 1:1'
 
 	.go-btn {
 		box-sizing: border-box;
-
 		border: none;
 		border-radius: 8px;
 		padding: 4px;
@@ -779,12 +1300,17 @@ currentBGratio = 'FIT 1:1'
 		transition: all ease-in-out 300ms;
 	}
 
-	.go-btn:hover {
+	.go-btn:hover:not(:disabled) {
 		background-color: var(--hover-color);
 		cursor: pointer;
 	}
 
-	.upload-container {
+	.go-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.upload-container, .generation-container {
 		position: fixed;
 		bottom: 20px;
 		left: 50%;
@@ -908,95 +1434,6 @@ currentBGratio = 'FIT 1:1'
 		z-index: 999;
 	}
 
-	section {
-		position: relative;
-		box-sizing: border-box;
-		display: flex;
-		flex-direction: row;
-		justify-content: center;
-		align-items: center;
-		height: 100%;
-	}
-
-	#prompt-section {
-		box-sizing: border-box;
-		display: flex;
-		flex-direction: row;
-		justify-content: center;
-		align-items: center;
-		gap: 10px;
-		min-width: 200px;
-		width: 100%;
-		max-width: 800px;
-	}
-
-	#render-btn {
-		box-sizing: border-box;
-		padding: 10px 20px;
-		background-color: #18272e;
-		color: white;
-		border: none;
-		border-radius: 50px;
-		cursor: pointer;
-		display: flex;
-		justify-content: center;
-		align-items: center;
-		gap: 6px;
-	}
-
-	.toggle-container {
-		box-sizing: border-box;
-	}
-
-	.toggle {
-		position: relative;
-		display: inline-block;
-		width: 60px;
-		height: 34px;
-	}
-
-	.toggle input {
-		opacity: 0;
-		width: 0;
-		height: 0;
-	}
-
-	.slider {
-		position: absolute;
-		cursor: pointer;
-		top: 0;
-		left: 0;
-		right: 0;
-		bottom: 0;
-		background-color: #ccc;
-		transition: 0.4s;
-		border-radius: 34px;
-	}
-
-	.slider:before {
-		position: absolute;
-		content: '';
-		height: 26px;
-		width: 26px;
-		left: 4px;
-		bottom: 4px;
-		background-color: white;
-		transition: 0.4s;
-		border-radius: 50%;
-	}
-
-	input:checked + .slider {
-		background-color: #18272e;
-	}
-
-	input:focus + .slider {
-		box-shadow: 0 0 1px #18272e;
-	}
-
-	input:checked + .slider:before {
-		transform: translateX(26px);
-	}
-
 	.add-item-list {
 		box-sizing: border-box;
 		position: absolute;
@@ -1034,12 +1471,14 @@ currentBGratio = 'FIT 1:1'
 		border-bottom: 1px solid var(--dim-color);
 	}
 
-	.add-item-list button:last-child {
-	}
-
 	.add-item-list button:hover {
 		cursor: pointer;
 		background-color: var(--highlight-color);
+		color: white;
+	}
+
+	.add-item-list .btnSelected{
+	
 		color: white;
 	}
 
@@ -1081,4 +1520,88 @@ currentBGratio = 'FIT 1:1'
 		padding: 10px 0px;
 		border: none !important;
 	}
+
+	.generated-image-preview {
+		position: fixed;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+		background-color: var(--primary-color);
+		border-radius: 12px;
+		padding: 16px;
+		z-index: 1000;
+		max-width: 80vw;
+		max-height: 80vh;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+		border: 1px solid var(--dim-color);
+	}
+
+	.generated-image-preview img {
+		max-width: 100%;
+		max-height: 60vh;
+		object-fit: contain;
+		border-radius: 8px;
+		margin-bottom: 16px;
+	}
+
+	.image-actions {
+		display: flex;
+		gap: 12px;
+		margin-top: 12px;
+	}
+
+	.image-actions button {
+		padding: 8px 16px;
+		background-color: var(--highlight-color);
+		color: var(--text-color-standard);
+		border: none;
+		border-radius: 8px;
+		cursor: pointer;
+		transition: all 0.3s ease;
+	}
+
+	.image-actions button:hover {
+		background-color: var(--hover-color);
+	}
+
+	.progress-bar {
+	height: 100%;
+	background-color: #4caf50;
+	transition: width 0.3s ease;
+}
+
+.indeterminate {
+	position: relative;
+	width: 50% !important;
+	animation: indeterminate 1.5s infinite ease-in-out;
+}
+
+.pending {
+	background-color: #ff9800; /* Orange color for pending status */
+	animation: pulse 2s infinite;
+}
+
+@keyframes indeterminate {
+	0% {
+		left: -50%;
+	}
+	100% {
+		left: 100%;
+	}
+}
+
+@keyframes pulse {
+	0% {
+		opacity: 0.6;
+	}
+	50% {
+		opacity: 1;
+	}
+	100% {
+		opacity: 0.6;
+	}
+}
 </style>

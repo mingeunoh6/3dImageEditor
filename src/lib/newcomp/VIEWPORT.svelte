@@ -133,15 +133,52 @@
 
     if(file ===null){
         viewportRenderer.resetHDRI()
+         return;
     }
-    // Pass true to set as both environment and background
-    viewportRenderer.loadImageBackground(file).then((texture)=>{
-        console.log(texture)
-        aspectRatio = texture.image.width / texture.image.height;
-        setViewport()
-    }).catch((error)=>{
-        console.error('Error loading hdri', error)
-    });
+     try {
+        // Pass the file to the renderer - use the consolidated method
+        const texture = await viewportRenderer.loadBackground(file, false, {
+            setAsBackground: true,
+            setAsEnvironment: true
+        });
+        
+        // Update aspect ratio from the loaded texture
+        if (texture && texture.image) {
+            aspectRatio = texture.image.width / texture.image.height;
+            setViewport();
+        }
+    } catch (error) {
+        console.error('Error loading background:', error);
+    }
+}
+
+
+   export async function changeBGfromURL(url) {
+    if (!viewportRenderer) return;
+
+    if (!url) {
+        // Reset to default HDRI
+        viewportRenderer.resetHDRI();
+        aspectRatio = 1; // Reset aspect ratio
+        setViewport();
+        return;
+    }
+    
+    try {
+        // Pass the URL to the renderer - use the consolidated method
+        const texture = await viewportRenderer.loadBackground(url, true, {
+            setAsBackground: true,
+            setAsEnvironment: true
+        });
+        
+        // Update aspect ratio from the loaded texture
+        if (texture && texture.image) {
+            aspectRatio = texture.image.width / texture.image.height;
+            setViewport();
+        }
+    } catch (error) {
+        console.error('Error loading background from URL:', error);
+    }
 }
 
 export function resetBG(){

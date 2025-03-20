@@ -101,6 +101,13 @@ function handleObjectDelete(objectId) {
      }
   }
 
+  function changeBGfromURL(url){
+    console.log('new hdr', url)
+     if (viewportRef) {
+    viewportRef.changeBGfromURL(url)
+     }
+  }
+
  
 
 
@@ -111,8 +118,7 @@ onMount(() => {
   // This is just to demonstrate the UI if no actual models are loaded
   if (sceneObjects.length === 0) {
     sceneObjects = [
-      { id: "obj_1", name: "Example Model", type: "gltf", visible: true },
-      { id: "obj_2", name: "Light Source", type: "light", visible: true }
+
     ];
   }
 
@@ -137,6 +143,7 @@ onMount(() => {
     {viewportLoading}
     {uploadError}
     BGimport={(image)=>changeBG(image)}
+    BGfromURL={(url)=>changeBGfromURL(url)}
   />
 
 

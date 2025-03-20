@@ -476,43 +476,190 @@ export class mainRenderer {
 	}
 
 	loadImageBackground(file) {
+		return this.loadBackground(file, false);
+	}
+
+	loadImageBackgroundFromURL(url) {
+		return this.loadBackground(url, true);
+	}
+
+	async loadBackground(
+		source,
+		isUrl = false,
+		options = { setAsBackground: true, setAsEnvironment: true }
+	) {
+		if (!source) {
+			return this.resetHDRI();
+		}
+
+		try {
+			let texture;
+
+			if (isUrl) {
+				texture = await this.loadTextureFromURL(source);
+			} else {
+				texture = await this.loadTextureFromFile(source);
+			}
+
+			// Set background if requested
+			if (options.setAsBackground) {
+				this.scene.background = texture;
+			}
+
+			// Set environment if requested
+			if (options.setAsEnvironment) {
+				// Create environment map from texture
+				const envTexture = texture.clone();
+				envTexture.mapping = THREE.EquirectangularReflectionMapping;
+
+				// Dispose of previous environment if it exists
+				if (this.envMap) {
+					this.envMap.dispose();
+				}
+
+				// Set new environment
+				this.envMap = envTexture;
+				this.scene.environment = this.envMap;
+
+				// Generate blurred version for path tracing if needed
+				if (this.blurredEnvMapGenerator) {
+					this.blurredEnvMap = this.blurredEnvMapGenerator.generate(this.envMap, 0.35);
+				}
+			}
+
+			// Update path tracer environment if active
+			if (this.pathTracer) {
+				this.pathTracer.updateEnvironment();
+			}
+
+			// Render to show the changes
+			this.render();
+
+			return texture;
+		} catch (error) {
+			console.error('Error loading background:', error);
+			throw error;
+		}
+	}
+
+	setBackgroundOnly(texture) {
+		this.scene.background = texture;
+		this.render();
+	}
+
+	async setEnvironmentOnly(source, isUrl = false) {
+		try {
+			let texture;
+
+			if (typeof source === 'string' && isUrl) {
+				texture = await this.loadTextureFromURL(source);
+			} else if (source instanceof File) {
+				texture = await this.loadTextureFromFile(source);
+			} else {
+				texture = source; // Assume it's already a texture
+			}
+
+			if (texture) {
+				// Create environment map from texture
+				const envTexture = texture.clone();
+				envTexture.mapping = THREE.EquirectangularReflectionMapping;
+
+				// Dispose of previous environment if it exists
+				if (this.envMap) {
+					this.envMap.dispose();
+				}
+
+				// Set new environment
+				this.envMap = envTexture;
+				this.scene.environment = this.envMap;
+
+				// Generate blurred version for path tracing if needed
+				if (this.blurredEnvMapGenerator) {
+					this.blurredEnvMap = this.blurredEnvMapGenerator.generate(this.envMap, 0.35);
+				}
+
+				// Update path tracer environment if active
+				if (this.pathTracer) {
+					this.pathTracer.updateEnvironment();
+				}
+
+				this.render();
+			}
+		} catch (error) {
+			console.error('Error setting environment:', error);
+			throw error;
+		}
+	}
+
+	loadTextureFromURL(url) {
+		return new Promise((resolve, reject) => {
+			// If the URL is already proxied or is a local URL/data URL, use it directly
+			let textureUrl = url;
+
+			// Check if this is an external URL that might need proxying
+			if (
+				url.startsWith('http') &&
+				!url.startsWith(window.location.origin) &&
+				!url.startsWith('data:') &&
+				!url.includes('/api/image-proxy')
+			) {
+				// Use our proxy for external URLs
+				textureUrl = `/api/flux?url=${encodeURIComponent(url)}`;
+			}
+
+			const loader = new THREE.TextureLoader();
+
+			// Add a crossOrigin setting to the loader to handle CORS properly
+			loader.setCrossOrigin('anonymous');
+
+			loader.load(
+				textureUrl,
+				(texture) => {
+					texture.colorSpace = THREE.SRGBColorSpace;
+					resolve(texture);
+				},
+				(progressEvent) => {
+					// Optional progress callback
+					if (progressEvent.lengthComputable) {
+						const progress = Math.round((progressEvent.loaded / progressEvent.total) * 100);
+						console.log(`Loading texture: ${progress}%`);
+					}
+				},
+				(error) => {
+					console.error('Error loading texture from URL:', textureUrl);
+
+					// If we tried to load directly and got an error, try with the proxy as a fallback
+					if (textureUrl === url && !url.includes('/api/flux')) {
+						console.log('Retrying with proxy...');
+						const proxyUrl = `/api/flux?url=${encodeURIComponent(url)}`;
+
+						loader.load(
+							proxyUrl,
+							(texture) => {
+								texture.colorSpace = THREE.SRGBColorSpace;
+								resolve(texture);
+							},
+							undefined,
+							(secondError) => {
+								console.error('Proxy fallback also failed:', secondError);
+								reject(new Error('Failed to load texture even with proxy'));
+							}
+						);
+					} else {
+						reject(error);
+					}
+				}
+			);
+		});
+	}
+
+	loadTextureFromFile(file) {
 		return new Promise((resolve, reject) => {
 			const reader = new FileReader();
 
 			reader.onload = (event) => {
 				const dataUrl = event.target.result;
-
-				const loader = new THREE.TextureLoader();
-				loader.load(
-					dataUrl,
-					(texture) => {
-						// 기존 환경 맵이 있으면 dispose
-						if (this.envMap) {
-							this.envMap.dispose();
-							this.scene.environment.dispose();
-						}
-						texture.colorSpace = THREE.SRGBColorSpace;
-						this.scene.background = texture;
-
-						const envTexture = texture.clone();
-						envTexture.mapping = THREE.EquirectangularReflectionMapping;
-
-						this.envMap = envTexture;
-						this.blurredEnvMap = this.blurredEnvMapGenerator?.generate(this.envMap, 0.35);
-						// this.scene.background = this.envMap;
-						this.scene.environment = this.envMap;
-
-						// pathTracer 환경 맵 업데이트
-						this.pathTracer.updateEnvironment();
-						texture.dispose();
-
-						resolve(texture);
-					},
-					undefined,
-					(error) => {
-						reject(error);
-					}
-				);
+				this.loadTextureFromURL(dataUrl).then(resolve).catch(reject);
 			};
 
 			reader.onerror = () => {

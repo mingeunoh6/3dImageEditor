@@ -118,7 +118,7 @@
         {/if}
     </div>
     
-    <button id="bg-setting-btn" class="main-btn">
+    <!-- <button id="bg-setting-btn" class="main-btn">
         <Icon class="LT-btn" icon="ph:sphere-fill" />
     </button>
     
@@ -128,7 +128,7 @@
     
     <button id="camera-setting-btn" class="main-btn">
         <Icon class="LT-btn" icon="fa:video-camera" />
-    </button>
+    </button> -->
 </div>
 
 <style>
