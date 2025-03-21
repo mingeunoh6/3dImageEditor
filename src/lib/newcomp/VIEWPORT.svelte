@@ -28,6 +28,7 @@
     let objectHighlighter;
     let edgeHighlighter;
     let aspectRatio = $state(1)
+    let resizeObserver;
 
     // Model loading state
     let isLoading = $state(false);
@@ -779,12 +780,20 @@ function isHighlightObject(object) {
 
     // Handle viewport size based on orientation
    function setViewport() {
-    // Calculate available space
-    const maxWidth = window.innerWidth * 0.9;  // 90% of window width
-    const maxHeight = window.innerHeight * 0.9;  // 90% of window height
+    if (!viewport || !viewport.parentElement) return;
     
-    // Check current screen orientation
-    isPortrait = window.innerHeight > window.innerWidth;
+    // Get the container's dimensions
+    const container = viewport.parentElement;
+    const containerRect = container.getBoundingClientRect();
+    const containerWidth = containerRect.width;
+    const containerHeight = containerRect.height;
+    
+    // Use 90% of container dimensions as maximum bounds
+    const maxWidth = containerWidth * 0.9;
+    const maxHeight = containerHeight * 0.9;
+    
+    // Check current container orientation
+    isPortrait = containerHeight > containerWidth;
     
     // Calculate dimensions based on aspect ratio and available space
     if (aspectRatio === 1) {
@@ -838,6 +847,15 @@ function isHighlightObject(object) {
 
         // Add resize event listener
         window.addEventListener('resize', setViewport);
+           // Create ResizeObserver for container
+     resizeObserver = new ResizeObserver(() => {
+        setViewport();
+    });
+
+    // Start observing the container
+    if (viewport?.parentElement) {
+        resizeObserver.observe(viewport.parentElement);
+    }
         
         // In Svelte 5, we should attach event handlers directly to the canvas element
         // instead of using addEventListener when possible
@@ -855,10 +873,7 @@ function isHighlightObject(object) {
         
         // Context menu handling
         viewport.oncontextmenu = handleRightClick;
-        this.selectObjectById = selectObjectById;
-this.toggleObjectVisibility = toggleObjectVisibility;
-this.deleteObjectById = deleteObjectById;
-   this.enablePathTracing = enablePathTracing;
+   
     });
 
     onDestroy(() => {
@@ -879,7 +894,9 @@ this.deleteObjectById = deleteObjectById;
         
         // // Remove event listeners
         // window.removeEventListener('resize', setViewport);
-        
+        if(resizeObserver){
+            resizeObserver.disconnect();
+        }
         // Clear direct event handlers
         if (viewport) {
             viewport.onmousedown = null;
@@ -963,27 +980,25 @@ this.deleteObjectById = deleteObjectById;
 </div>
 
 <style>
-    .viewport-container {
-        box-sizing: border-box ;
-        position: relative;
-        width: 100%;
-        height: 100%;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        overflow: hidden;
+  .viewport-container {
+    box-sizing: border-box;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
 
-    }
+  }
 
-    #viewport {
- 
-        box-sizing: border-box;
-        margin: auto;
-        touch-action: none;
-        border: 1px solid var(--dim-color);
-        border-radius: 16px;
-    }
-
+  #viewport {
+    box-sizing: border-box;
+    max-width: 100%;
+    max-height: 100%;
+    touch-action: none;
+    border: 1px solid var(--dim-color);
+    border-radius: 16px;
+  }
     .orientation-info {
         position: absolute;
         top: 10px;

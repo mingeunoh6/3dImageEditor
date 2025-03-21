@@ -10,11 +10,11 @@ export async function POST({ request }) {
 		console.log('받은 입력:', input);
 
 		if (!fluxAPIKEY) {
-			return json({ error: { msg: 'FLUX API 키가 구성되지 않았습니다' } }, { status: 500 });
+			return json({ error: { msg: 'NO FLUX API KEY!' } }, { status: 500 });
 		}
 
 		// 사용할 모델 및 API 엔드포인트
-		const modelUrl = 'https://api.us1.bfl.ai/v1/flux-pro-1.1';
+		const modelUrl = 'https://api.us1.bfl.ai/v1/flux-dev';
 
 		// FLUX API에 요청 보내기
 		const startResponse = await fetch(modelUrl, {
@@ -40,7 +40,10 @@ export async function POST({ request }) {
 				return json(
 					{
 						error: {
-							msg: errorJson.detail?.[0]?.msg || errorJson.message || '이미지 생성 요청 실패'
+							msg:
+								errorJson.detail?.[0]?.msg ||
+								errorJson.message || errorJson.detail ||
+								'Fail to request generating model'
 						}
 					},
 					{ status: startResponse.status }
@@ -50,7 +53,7 @@ export async function POST({ request }) {
 				return json(
 					{
 						error: {
-							msg: `API 오류: ${startResponse.statusText}`
+							msg: `API error: ${startResponse.statusText}`
 						}
 					},
 					{ status: startResponse.status }
@@ -69,7 +72,7 @@ export async function POST({ request }) {
 		return json(
 			{
 				error: {
-					msg: error.message || '서버 처리 오류'
+					msg: error.message || 'Internal server error'
 				}
 			},
 			{ status: 500 }

@@ -144,6 +144,8 @@
         justify-content: center;
         align-items: flex-start;
         position: absolute;
+        top: 0;
+        left: 0;
         margin: 24px 24px;
         z-index: 999;
     }

@@ -6,7 +6,7 @@ import CT from '$lib/newcomp/CT.svelte';
 import RT from '$lib/newcomp/RT.svelte';
 import PROMPT from '$lib/newcomp/PROMPT.svelte';
 import VIEWPORT from '$lib/newcomp/VIEWPORT.svelte';
-
+import Icon from '@iconify/svelte';
 // Model loading states
 let newModel = $state(null);
 let viewportLoading = $state(false);
@@ -133,32 +133,37 @@ onMount(() => {
     onObjectVisibilityToggle={handleObjectVisibilityToggle}
     onObjectDelete={handleObjectDelete}
   />
-  
+  				
+
   <CT />
   <RT />
+  <div class="main-container">
+    <div class="viewport-wrapper">
+      <VIEWPORT 
+        bind:this={viewportRef}
+        {newModel} 
+        doneLoadingModel={() => {
+          viewportLoading = false;
+          console.log('Model loaded successfully:', currentModelInfo.name);
+        }}
+        onModelError={handleModelError}
+        onSceneObjectsChanged={updateSceneObjects}
+      />
+    </div>
+    <div class="prompt-wrapper">
+      <PROMPT 
+        add3dModel={(file, metadata) => addModelToScene(file, metadata)} 
+        pathTracingRender={(state)=>startPathTracing(state)} 
+        {viewportLoading}
+        {uploadError}
+        BGimport={(image)=>changeBG(image)}
+        BGfromURL={(url)=>changeBGfromURL(url)}
+      />
+    </div>
+  </div>
 
-  <PROMPT 
-    add3dModel={(file, metadata) => addModelToScene(file, metadata)} 
-    pathTracingRender={(state)=>startPathTracing(state)} 
-    {viewportLoading}
-    {uploadError}
-    BGimport={(image)=>changeBG(image)}
-    BGfromURL={(url)=>changeBGfromURL(url)}
-  />
 
-
-  <VIEWPORT 
-    bind:this={viewportRef}
-    {newModel} 
-    doneLoadingModel={() => {
-      viewportLoading = false;
-      console.log('Model loaded successfully:', currentModelInfo.name);
-    }}
-    onModelError={handleModelError}
-    onSceneObjectsChanged={updateSceneObjects}
-  />
-
-
+	
 
   {#if uploadError}
     <div class="error-message">
@@ -172,14 +177,46 @@ onMount(() => {
 
   /* #1a0611 */
   /* #230817 */
-  main {
+   main {
     box-sizing: border-box;
     position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
     width: 100vw;
     height: 100vh;
     background: linear-gradient(to top, #170202, #140a0a);
+    overflow: hidden;
   }
 
+  .main-container {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    position: relative;
+  
+  }
+
+  .viewport-wrapper {
+     box-sizing: border-box;
+    flex: 1;
+    min-height: 0; /* Important for flex container */
+    width: 100%;
+    position: relative;
+ 
+ padding: 10px;
+  }
+
+  .prompt-wrapper {
+     box-sizing: border-box;
+    width: 100%;
+
+    position: relative;
+  padding: 10px;
+     margin-bottom: 32px;
+  }
   .error-message {
     position: fixed;
     top: 20px;
