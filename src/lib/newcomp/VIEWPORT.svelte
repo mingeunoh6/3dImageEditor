@@ -836,6 +836,13 @@ function isHighlightObject(object) {
 
     // Component lifecycle hooks
     onMount(() => {
+
+          function setVhVariable() {
+    let vh = window.innerHeight * 0.01;
+    document.documentElement.style.setProperty('--vh', `${vh}px`);
+  }
+
+
         // Initial setup
         setViewport();
 
@@ -953,14 +960,14 @@ function isHighlightObject(object) {
     {/if}
     
     <!-- Selected object info -->
-    {#if selectedObject && !contextMenuVisible}
+    <!-- {#if selectedObject && !contextMenuVisible}
         <div class="object-info">
             <h3>{selectedObject.name || 'Selected Object'}</h3>
             <button class="close-btn" onclick={() => { selectedObject = null; viewportRenderer.clearHighlight(); }}>
                 <Icon icon="carbon:close" width="16" height="16" />
             </button>
         </div>
-    {/if}
+    {/if} -->
     
     <!-- Model stats (visible when a model is loaded) -->
     {#if currentModel && modelStats.vertices > 0}

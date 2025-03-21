@@ -14,7 +14,7 @@ export async function POST({ request }) {
 		}
 
 		// 사용할 모델 및 API 엔드포인트
-		const modelUrl = 'https://api.us1.bfl.ai/v1/flux-dev';
+		const modelUrl = 'https://api.us1.bfl.ai/v1/flux-pro-1.1-ultra';
 
 		// FLUX API에 요청 보내기
 		const startResponse = await fetch(modelUrl, {

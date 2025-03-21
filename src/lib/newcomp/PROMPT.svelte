@@ -5,6 +5,7 @@
 	import Icon from '@iconify/svelte';
 	import { fade, slide } from 'svelte/transition';
 	import Slider from '$lib/newcomp/elements/menu-slider.svelte';
+	import ImgSlider from '$lib/newcomp/elements/menu-slider-bg.svelte';
 
 	// Props from parent
 	let {
@@ -15,8 +16,11 @@
 		BGimport,
 		BGfromURL
 	} = $props();
-
+let openImagePrompt = $state(false);
 	let isGenerating = $state(false);
+	let isRandomSeed = $state(false);
+	let imagePrompt = $state(""); // Image prompt base64
+	let imagePromptStrength = $state(0.3);
 	let generationProgress = $state(0); // 이미지 생성 진행률
 	let generationError = $state(null); // 에러 메시지
 	let generatedImageUrl = $state(''); // 생성된 이미지 URL
@@ -32,12 +36,13 @@
 	//Flux promt body
 	let fluxPrompt = $state({
 		prompt: 'Beautiful living room interior design with modern furniture and decor',
-		image_prompt: 'mountain',
+		image_prompt: '',
+		image_prompt_strength: 0.3,
 		aspect_ratio: '1:1',
 		width: 1024,
 		height: 1024,
 		prompt_upsampling: false,
-		seed: 42,
+		seed: 930331,
 		safety_tolerance: 2,
 		output_format: 'png',
 		webhook_url: '',
@@ -106,6 +111,21 @@
 		}
 	});
 
+	function handleRandomSeedToggle(event) {
+		isRandomSeed = event.target.checked;
+
+		// if (isRandomSeed) {
+		// 	// Generate a random seed between 0 and 999999 when random mode is enabled
+		// 	fluxPrompt.seed = Math.floor(Math.random() * 1000000);
+		// }
+	}
+
+	$effect(() => {
+		if (isRandomSeed && isGenerating) {
+			fluxPrompt.seed = Math.floor(Math.random() * 1000000);
+		}
+	});
+
 	function onPrompt(event) {
 		fluxPrompt.prompt = event.target.value;
 	}
@@ -113,8 +133,14 @@
 	async function runImageGen() {
 		if (isGenerating) return; // 이미 생성 중이라면 중복 호출 방지
 
+		if (isRandomSeed) {
+			fluxPrompt.seed = Math.floor(Math.random() * 1000000);
+		}
+
 		// 상태 초기화
 		// 상태 초기화
+		activeMenu = null;
+		openImagePrompt = false;
 		isGenerating = true;
 		isPending = false; // Start with pending state
 		generationProgress = 0;
@@ -125,10 +151,11 @@
 		try {
 			// UI 비활성화
 			disableUI();
-
+let apiRequestData;
 			// FLUX API 요청을 위한 올바른 형식의 입력 데이터 준비
 			// 문서에 따라 FluxPro11Inputs 스키마와 일치하도록 구성
-			const apiRequestData = {
+			if(fluxPrompt.image_prompt === ''){
+					apiRequestData = {
 				prompt: fluxPrompt.prompt,
 				aspect_ratio: fluxPrompt.aspect_ratio,
 				width: fluxPrompt.width,
@@ -138,6 +165,21 @@
 				safety_tolerance: fluxPrompt.safety_tolerance,
 				output_format: fluxPrompt.output_format
 			};
+			} else{
+	apiRequestData = {
+				prompt: fluxPrompt.prompt,
+				aspect_ratio: fluxPrompt.aspect_ratio,
+				image_prompt: fluxPrompt.image_prompt,
+				image_prompt_strength: fluxPrompt.image_prompt_strength,
+				width: fluxPrompt.width,
+				height: fluxPrompt.height,
+				prompt_upsampling: fluxPrompt.prompt_upsampling,
+				seed: fluxPrompt.seed,
+				safety_tolerance: fluxPrompt.safety_tolerance,
+				output_format: fluxPrompt.output_format
+			};
+			}
+		
 
 			console.log('API 요청 데이터:', apiRequestData);
 
@@ -630,29 +672,7 @@
 			thumbnailImg.src = currentBG;
 
 			// Optional: Free memory when the image is no longer needed
-			thumbnailImg.onload = () => {
-				// console.log(thumbnailImg.width, thumbnailImg.height);
-				// let ratio = thumbnailImg.height / thumbnailImg.width;
-				// if (ratio === 1) {
-				// 	currentBGratio = 'FIT 1:1';
-				// 	fluxPrompt.aspect_ratio = '1:1';
-				// } else if (ratio > 1) {
-				// 	//세로
-				// 	currentBGratio = `FIT 1:${ratio.toFixed(2)}`;
-				// 	fluxPrompt.aspect_ratio = `1:${ratio.toFixed(2)}`;
-				// } else if (ratio < 1) {
-				// 	currentBGratio = `FIT ${ratio.toFixed(2)}:1`;
-				// 	fluxPrompt.aspect_ratio = `${ratio.toFixed(2)}:1`;
-				// }
-				// We can revoke the object URL after the image has loaded to free memory
-				// URL.revokeObjectURL(imageUrl);
-				// Note: Keep commented unless you're handling cleanup elsewhere
-				// let newRatio = convert32ratio(thumbnailImg.width, thumbnailImg.height)
-				// fluxPrompt.width = newRatio.width;
-				// 				fluxPrompt.height = newRatio.height;
-				// 				console.log('currentBG width, height:', fluxPrompt.width, fluxPrompt.height);
-			};
-			// currentBGratio = 'FIT';
+			thumbnailImg.onload = () => {};
 		} else {
 			console.error('Thumbnail image element not found');
 		}
@@ -763,6 +783,61 @@
 		}
 	}
 
+function handleImagePrompt(event) {
+  const file = event.target.files[0];
+  
+  if (!file) {
+    return;
+  }
+  
+  // Check if file is an image
+  if (!file.type.startsWith('image/')) {
+    generationError = 'Selected file is not an image';
+    event.target.value = '';
+    return;
+  }
+  
+  // Check file size (max 5MB)
+  const maxSize = 5 * 1024 * 1024;
+  if (file.size > maxSize) {
+    generationError = `Image file is too large. Maximum size is 5MB.`;
+    event.target.value = '';
+    return;
+  }
+  
+  // Convert to base64
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    // For display purposes - use the full data URL
+    imagePrompt = e.target.result;
+    
+    // For API request - extract just the base64 part without the prefix
+    // The API might be expecting just the base64 string without the "data:image/jpeg;base64," prefix
+    const base64Content = e.target.result.split(',')[1];
+    
+    // Set it in the flux prompt data - using just the base64 content
+    fluxPrompt.image_prompt = base64Content;
+    
+    console.log('Image reference added');
+  };
+  
+  reader.onerror = () => {
+    generationError = 'Failed to read image file';
+    event.target.value = '';
+  };
+  
+  // Read the file as data URL (base64)
+  reader.readAsDataURL(file);
+  
+  // Reset file input
+  event.target.value = '';
+}
+function removeImagePrompt() {
+  imagePrompt = null;
+  fluxPrompt.image_prompt = ""; // Reset to default value
+  console.log('Image reference removed');
+}
+
 	onMount(() => {
 		return () => {
 			clearPollingTimers();
@@ -835,17 +910,17 @@
 	</section> -->
 
 	<section class="main-ui-wrapper">
-		<div class="logo-wrapper">logo section</div>
+		<div class="logo-wrapper">OMG AI</div>
 		<div class="function-wrapper">
 			<div class="tool-menus">
-				<input
+				<!-- <input
 					type="file"
 					id="glb-import"
 					accept=".glb,.gltf"
 					style="display: none;"
 					oninput={addModel}
-				/>
-				<div id="3d-add-set" class="toolbtn upload-btn" onclick={menuToggle}>
+				/> -->
+				<!-- <div id="3d-add-set" class="toolbtn upload-btn" onclick={menuToggle}>
 					<Icon class="tool-icon" icon="iconoir:cube" />
 
 					{#if activeMenu === '3d-add-set'}
@@ -857,6 +932,50 @@
 								3D Model
 							</button>
 							<button id="add-image-btn"> 3D Wall </button>
+						</div>
+					{/if}
+				</div> -->
+				<div id="seed" class="toolbtn seed-setting" onclick={menuToggle}>
+					
+					<Icon class="tool-icon-mid" icon="mingcute:random-line" />
+					<div class="seed-detail">
+						{#if isRandomSeed}
+							Random
+						{:else}
+							Fixed
+						{/if}
+					</div>
+					{#if activeMenu === 'seed'}
+						<div class="add-item-list" transition:slide>
+							<div class="seed-setting-wrapper">
+								<div class="seed-title">Seed</div>
+								<div class="seed-input-container">
+									<input
+										type="number"
+										id="seed-input"
+										placeholder="Seed"
+										value={fluxPrompt.seed}
+										oninput={(e) => (fluxPrompt.seed = parseInt(e.target.value) || 0)}
+										disabled={isRandomSeed}
+										  onclick={(e) => e.stopPropagation()} 
+									/>
+								</div>
+								<div class="seed-random-toggle" onclick={(e) => e.stopPropagation()}>
+									<label for="random-seed-toggle">Random seed</label>
+									<div class="toggle-container"  onclick={(e) => e.stopPropagation()}>
+										<label class="toggle"  onclick={(e) => e.stopPropagation()}>
+											<input
+												type="checkbox"
+												id="random-seed-toggle"
+												bind:checked={isRandomSeed}
+												onchange={handleRandomSeedToggle}
+												onclick={(e) => e.stopPropagation()}
+											/>
+											<span class="slider"></span>
+										</label>
+									</div>
+								</div>
+							</div>
 						</div>
 					{/if}
 				</div>
@@ -944,7 +1063,7 @@
 					{/if}
 				</div>
 
-				<div id="bg-set" class="toolbtn BG" onclick={menuToggle}>
+				<!-- <div id="bg-set" class="toolbtn BG" onclick={menuToggle}>
 					{#if activeMenu === 'bg-set'}
 						<input
 							type="file"
@@ -1015,10 +1134,61 @@
 						</div>
 					{/if}
 					<Icon class="tool-icon" icon="pajamas:bulb" />
-				</div>
+				</div> -->
 			</div>
 
 			<div class="prompt-input-wrapper">
+				<div class="gen-opt-wrapper">
+  <button 
+    title="upload image reference" 
+    class={imagePrompt ? "IP" : "IP none"} 
+    disabled={isGenerating} 
+    onclick={() => openImagePrompt = !openImagePrompt}
+  >
+    <Icon icon="ri:image-ai-line" width="20" height="20" />
+  </button>
+  
+  {#if openImagePrompt}
+    <div class="image-prompt" transition:slide>
+      <div class="image-prompt-content">
+        {#if imagePrompt}
+          <div class="image-preview-container">
+            <img src={imagePrompt} alt="Reference image" />
+           
+						<div class="ip-strength-slider">
+				<ImgSlider
+					value={fluxPrompt.image_prompt_strength}
+					min={0}
+					max={1}
+					scale={0.1}
+					name="Strength"
+					unit=""
+					onValueChange={(newValue) => (fluxPrompt.image_prompt_strength = newValue)}
+				/>
+			</div>
+ <div class="image-preview-actions">
+              <button onclick={removeImagePrompt} title="Remove image">
+                <Icon icon="carbon:close" width="16" height="16" />
+              </button>
+            </div>
+          </div>
+        {:else}
+          <div class="upload-placeholder" onclick={() => document.getElementById('image-prompt-input').click()}>
+            <Icon icon="material-symbols:cloud-upload" width="24" height="24" />
+            <span>Upload Image Reference</span>
+          </div>
+        {/if}
+      </div>
+      <input 
+        type="file" 
+        id="image-prompt-input" 
+        accept=".png,.jpg,.jpeg,.webp" 
+        style="display: none;" 
+        onchange={handleImagePrompt} 
+      />
+    </div>
+  {/if}
+</div>
 				<input
 					type="text"
 					id="prompt-input"
@@ -1054,7 +1224,7 @@
 					Almost done! Processing image...
 				{:else}
 					Generation will start soon...
-					{/if}
+				{/if}
 			</span>
 
 			<button class="cancel-btn" onclick={cancelGeneration}>
@@ -1222,19 +1392,20 @@
 	}
 
 	.logo-wrapper {
+		text-align: center;
 		padding: 8px;
 		box-sizing: border-box;
 		display: flex;
 		justify-self: center;
 		align-items: center;
-
-		width: 110px;
+	
 		height: 100%;
+		aspect-ratio: 1 / 1;
 		border-right: 1px solid var(--dim-color);
 	}
 
 	.function-wrapper {
-		height: 110px;
+		height: 80px;
 		flex-grow: 1;
 		display: flex;
 		flex-direction: column;
@@ -1245,24 +1416,26 @@
 		width: 100%;
 		display: flex;
 		flex-direction: row;
-		justify-content: space-between;
+		justify-content: center;
 		align-items: center;
 		padding: 10px 0;
 	}
 
 	.tool-menus > div.toolbtn {
 		display: flex;
+		flex-direction: row;
 		justify-content: center;
 		align-items: center;
 		text-align: center;
-		flex-grow: 1;
+
 		border: none;
 		border-right: 1px solid var(--dim-color);
 		font-weight: 500;
-		font-size: 1.1rem;
+		font-size: 0.9rem;
 		background: none;
 		outline: none;
 		height: 100%;
+	padding: 0 10px;
 		color: var(--dim-color);
 		transition: all ease-in-out 300ms;
 		cursor: pointer; /* 버튼처럼 커서 추가 */
@@ -1278,8 +1451,22 @@
 
 	div :global(.tool-icon) {
 		box-sizing: border-box;
-		height: 24px; /* 고정 높이 지정 */
-		width: 24px; /* 고정 너비 지정 */
+		height: 22px; /* 고정 높이 지정 */
+		width: 22px; /* 고정 너비 지정 */
+		padding: 2px;
+		pointer-events: none;
+	}
+	div :global(.tool-icon-mid) {
+		box-sizing: border-box;
+		height: 28px; /* 고정 높이 지정 */
+		width: 28px; /* 고정 너비 지정 */
+		padding: 2px;
+		pointer-events: none;
+	}
+	div :global(.tool-icon-big) {
+		box-sizing: border-box;
+		height: 32px; /* 고정 높이 지정 */
+		width: 32px; /* 고정 너비 지정 */
 		padding: 2px;
 		pointer-events: none;
 	}
@@ -1337,25 +1524,27 @@
 	}
 
 	.prompt-input-wrapper {
+		box-sizing: border-box;
 		width: 100%;
 		height: 50%;
-		padding: 8px;
+		padding: 2px 6px;
 		box-sizing: border-box;
 		display: flex;
 		flex-direction: row;
 		align-items: center;
-		justify-content: center;
+		justify-content: space-between;
 		border-top: 1px solid var(--dim-color);
 	}
 
 	#prompt-input {
 		box-sizing: border-box;
 		display: flex;
+		flex-grow: 1;
 		justify-content: center;
 		align-items: center;
 		padding: 10px 20px;
 		border: none;
-		font-size: 1.1rem;
+		font-size: 0.9rem;
 		color: var(--text-color-bright);
 		width: 100%;
 		height: 100%;
@@ -1372,11 +1561,11 @@
 	}
 
 	.go-btn {
+		box-sizing: border-box;
 		border: none;
 		border-radius: 8px;
+		padding: 2px;
 
-		width: 42px;
-		height: 42px;
 		display: flex;
 		justify-content: center;
 		align-items: center;
@@ -1509,7 +1698,7 @@
 
 		margin-bottom: -10px;
 		overflow: hidden;
-		transition: all ease-in-out 0.5s;
+		transition: all ease-in-out 0.2s;
 		min-width: 150px;
 		background-color: var(--primary-color);
 		border-radius: 12px;
@@ -1544,6 +1733,83 @@
 	}
 
 	.add-item-list .btnSelected {
+		color: white;
+	}
+
+	.gen-opt-wrapper {
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+		justify-content: center;
+		gap: 6px;
+	}
+
+	.gen-opt-btn {
+		border: none;
+		border-radius: 8px;
+		padding: 2px;
+		width: 32px;
+		height: 24px;
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		font-size: 0.8rem;
+		color: var(--text-color-standard);
+		border: 1px solid var(--dim-color);
+		transition: all ease-in-out 300ms;
+		cursor: pointer;
+	}
+
+	.gen-opt-btn:hover {
+		background-color: var(--highlight-color);
+		color: var(--text-color-bright);
+	}
+
+	.gen-option-window {
+		box-sizing: border-box;
+		position: absolute;
+		left: 64px;
+		bottom: 30%;
+
+		display: flex;
+		flex-direction: column;
+
+		overflow: hidden;
+		transition: all ease-in-out 0.5s;
+		min-width: 150px;
+		background-color: var(--primary-color);
+		border-radius: 12px;
+		border: 1px solid var(--dim-color);
+	}
+
+	.gen-option-window button {
+		box-sizing: border-box;
+		display: flex;
+		flex-direction: row;
+		justify-content: center;
+		align-items: center;
+		padding: 15px 20px;
+		text-align: center;
+		width: 100%;
+		white-space: nowrap;
+		border-radius: 0;
+		font-size: 0.9rem;
+		background-color: var(--primary-color);
+		color: var(--dim-color);
+		transition: all ease-in-out 300ms;
+	}
+
+	.gen-option-window button:first-child {
+		border-bottom: 1px solid var(--dim-color);
+	}
+
+	.gen-option-window button:hover {
+		cursor: pointer;
+		background-color: var(--highlight-color);
+		color: white;
+	}
+
+	.gen-option-window .btnSelected {
 		color: white;
 	}
 
@@ -1706,4 +1972,274 @@
 			opacity: 0.6;
 		}
 	}
+.seed-setting .seed-detail{
+	display: flex;
+	justify-content: center;
+	align-items: center;
+font-size: 0.9rem;
+}
+ .seed-setting-wrapper {
+	box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+  }
+  
+  .seed-title {
+	
+    font-size: 0.9rem;
+    padding: 10px 0px;
+    cursor: default;
+    width: 100%;
+    text-align: center;
+    border-bottom: 1px solid var(--dim-color);
+  }
+  
+  .seed-input-container {
+    width: 100%;
+    cursor:default;
+    box-sizing: border-box;
+  }
+  
+  #seed-input {
+  box-sizing: border-box;
+  width: 100%;
+  background: none;
+  border: none;
+ 
+  padding: 8px;
+  color: var(--text-color-bright);
+  text-align: center;
+  font-size: 0.9rem;
+  /* Remove spinner buttons from number input */
+  -moz-appearance: textfield; /* Firefox */
+}
+
+/* Chrome, Safari, Edge, Opera */
+#seed-input::-webkit-outer-spin-button,
+#seed-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+  
+  #seed-input:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  
+  .seed-random-toggle {
+	 box-sizing: border-box;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+
+    border-top: 1px solid var(--dim-color);
+	cursor: default;
+  }
+
+
+  
+  .seed-random-toggle label {
+	text-align: left;
+	
+    font-size: 0.9rem;
+    color: var(--text-color-standard);
+	cursor: pointer;
+margin-left: 10px;
+	flex-grow: 1;
+	transition: all ease-in-out 300ms;
+  }
+  .seed-random-toggle label:hover {
+	color: var(--text-color-bright);
+  }
+  
+  .toggle-container {
+	padding: 10px;
+    display: flex;
+    align-items: center;
+
+  }
+  
+  .toggle {
+    position: relative;
+    display: inline-block;
+    width: 40px;
+    height: 22px;
+  }
+  
+  .toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+  
+  .slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--dim-color);
+    transition: 0.4s;
+    border-radius: 34px;
+  }
+  
+  .slider:before {
+    position: absolute;
+    content: "";
+    height: 16px;
+    width: 16px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: 0.4s;
+    border-radius: 50%;
+  }
+  
+  input:checked + .slider {
+    background-color: var(--highlight-color);
+  }
+  
+  input:checked + .slider:before {
+    transform: translateX(18px);
+  }
+
+ .IP {
+  box-sizing: border-box;
+  border: none;
+  border-radius: 8px;
+  padding: 4px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: var(--highlight-color);
+  color: var(--text-color-standard);
+  transition: all ease-in-out 300ms;
+  margin-right: 8px;
+}
+
+.IP:hover:not(:disabled) {
+  background-color: var(--hover-color);
+  color: var(--text-color-bright);
+  cursor: pointer;
+}
+
+.IP:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.IP.none {
+  background-color: transparent;
+  border: 1px solid var(--dim-color);
+  color: var(--dim-color);
+}
+
+.image-prompt {
+  position: absolute;
+  left: 0;
+  bottom: 100%;
+  margin-bottom: 8px;
+  background-color: var(--primary-color);
+  border-radius: 8px;
+  border: 1px solid var(--dim-color);
+  overflow: hidden;
+  width: 180px;
+  z-index: 10;
+}
+
+.image-prompt-content {
+  box-sizing: border-box;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.upload-placeholder {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  width: 150px;
+  height: 150px;
+  padding: 16px;
+  
+  
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--dim-color);
+  transition: all ease-in-out 300ms;
+}
+
+.upload-placeholder:hover {
+  border-color: var(--highlight-color);
+  background-color: rgba(255, 255, 255, 0.05);
+  color: var(--text-color-bright);
+}
+
+.upload-placeholder span {
+	text-align: center;
+  margin-top: 8px;
+  font-size: 0.9rem;
+}
+
+.image-preview-container {
+  position: relative;
+  width: 150px;
+  height: 150px;
+  margin: 15px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--dim-color);
+}
+
+.image-preview-container img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.image-preview-actions {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.image-preview-actions button {
+  background-color: rgba(0, 0, 0, 0.5);
+  border: none;
+  border-radius: 0 0 0 8px;
+  padding: 6px;
+  cursor: pointer;
+  color: white;
+  transition: all ease-in-out 300ms;
+}
+
+.image-preview-actions button:hover {
+  background-color: rgba(255, 0, 0, 0.8);
+}
+
+
+.ip-strength-slider{
+	position: absolute;
+
+}
+  .ip-strength-slider{
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+  
+        
+    }
 </style>

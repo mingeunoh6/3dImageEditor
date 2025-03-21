@@ -6,6 +6,7 @@ import CT from '$lib/newcomp/CT.svelte';
 import RT from '$lib/newcomp/RT.svelte';
 import PROMPT from '$lib/newcomp/PROMPT.svelte';
 import VIEWPORT from '$lib/newcomp/VIEWPORT.svelte';
+import EDITOR from '$lib/newcomp/EDITOR.svelte';
 import Icon from '@iconify/svelte';
 // Model loading states
 let newModel = $state(null);
@@ -25,6 +26,7 @@ let currentModelInfo = $state({
 
 // Reference to the viewport component
 let viewportRef;
+let currentBG = $state(null);
 
 // Handle model upload from PROMPT component
 function addModelToScene(file, metadata) {
@@ -103,15 +105,25 @@ function handleObjectDelete(objectId) {
 
   function changeBGfromURL(url){
     console.log('new hdr', url)
+    currentBG = url;
      if (viewportRef) {
     viewportRef.changeBGfromURL(url)
      }
   }
 
- 
+   function setVhVariable() {
+    let vh = window.innerHeight * 0.01;
+    document.documentElement.style.setProperty('--vh', `${vh}px`);
+  }
+
+
 
 
 onMount(() => {
+    // Run the function on initial load and resize
+  window.addEventListener('resize', setVhVariable);
+  window.addEventListener('orientationchange', setVhVariable);
+  setVhVariable();
   console.log('3D Model Viewer initialized');
 
   // Setup mock scene objects for testing (remove in production)
@@ -127,18 +139,34 @@ onMount(() => {
 </script>
 
 <main>
-  <LT 
+  <!-- <LT 
     {sceneObjects} 
     onObjectSelect={handleObjectSelect}
     onObjectVisibilityToggle={handleObjectVisibilityToggle}
     onObjectDelete={handleObjectDelete}
-  />
+  /> -->
   				
 
   <CT />
   <RT />
   <div class="main-container">
+          <div class="tool-wrapper">
+      <EDITOR 
+        add3dModel={(file, metadata) => addModelToScene(file, metadata)} 
+        pathTracingRender={(state)=>startPathTracing(state)} 
+        {viewportLoading}
+        {uploadError}
+        BGimport={(image)=>changeBG(image)}
+        BGfromURL={(url)=>changeBGfromURL(url)}
+        BGfromPrompt={currentBG}
+           {sceneObjects} 
+    onObjectSelect={handleObjectSelect}
+    onObjectVisibilityToggle={handleObjectVisibilityToggle}
+    onObjectDelete={handleObjectDelete}
+      />
+    </div>
     <div class="viewport-wrapper">
+ 
       <VIEWPORT 
         bind:this={viewportRef}
         {newModel} 
@@ -174,6 +202,9 @@ onMount(() => {
 </main>
 
 <style>
+:root {
+    --vh: 1vh;
+  }
 
   /* #1a0611 */
   /* #230817 */
@@ -184,7 +215,9 @@ onMount(() => {
     flex-direction: column;
     align-items: center;
     width: 100vw;
-    height: 100vh;
+     height: calc(var(--vh, 1vh) * 100);
+
+
     background: linear-gradient(to top, #170202, #140a0a);
     overflow: hidden;
   }
@@ -197,6 +230,15 @@ onMount(() => {
     height: 100%;
     position: relative;
   
+  }
+
+  .tool-wrapper{
+     box-sizing: border-box;
+    width: 100%;
+
+    position: relative;
+  padding: 10px;
+z-index: 990;
   }
 
   .viewport-wrapper {

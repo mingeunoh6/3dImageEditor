@@ -99,7 +99,7 @@
                                     </div>
                                     <div class="object-info">
                                         <span class="object-name">{object.name}</span>
-                                        <span class="object-type">{object.type}</span>
+                                        <!-- <span class="object-type">{object.type}</span> -->
                                     </div>
                                     <div class="object-actions">
                                         <button class="icon-button" title="Hide/Show">
