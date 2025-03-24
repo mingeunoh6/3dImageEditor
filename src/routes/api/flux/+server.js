@@ -1,6 +1,88 @@
 // api/flux/+server.js
 
 import { json, error } from '@sveltejs/kit';
+import { google } from 'googleapis';
+
+// Initialize Google Sheets API
+async function getGoogleSheetsClient() {
+	console.log('Google Sheets key file:', process.env.VITE_GOOGLE_APPLICATION_CREDENTIALS_JSON);
+	try {
+		// Read the key file
+
+		const keyFile = JSON.parse(process.env.VITE_GOOGLE_APPLICATION_CREDENTIALS_JSON);
+
+		// Create a JWT client with proper scopes
+		const auth = new google.auth.GoogleAuth({
+			credentials: keyFile,
+			scopes: [
+				'https://www.googleapis.com/auth/spreadsheets',
+				'https://www.googleapis.com/auth/drive',
+				'https://www.googleapis.com/auth/drive.file'
+			]
+		});
+
+		// Get the client
+		const authClient = await auth.getClient();
+
+		// Create and return the sheets client
+		return google.sheets({
+			version: 'v4',
+			auth: authClient
+		});
+	} catch (err) {
+		console.error('Failed to initialize Google Sheets client:', err);
+		throw err;
+	}
+}
+
+// Function to log Flux generation data to Google Sheets
+async function logToGoogleSheets(prompt, id, seed) {
+	try {
+		// Get the spreadsheet ID from environment variable
+		const spreadsheetId = process.env.VITE_GOOGLE_FLUX_LOG_SHEET_ID;
+
+		if (!spreadsheetId) {
+			console.error('Google Sheets ID not found in environment variables');
+			return;
+		}
+
+		// Get sheets client
+		const sheets = await getGoogleSheetsClient();
+
+		// Get spreadsheet info to determine the correct sheet name
+		const spreadsheetInfo = await sheets.spreadsheets.get({
+			spreadsheetId
+		});
+
+		// Get the first sheet name
+		const firstSheetName = spreadsheetInfo.data.sheets[0].properties.title;
+
+		// Format current date and time
+		const now = new Date();
+		const requestDate = `${now.getFullYear().toString().slice(2)}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getDate().toString().padStart(2, '0')}`;
+		const requestTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+
+		// Prepare the row data
+		const values = [[requestDate, requestTime, prompt, seed, id]];
+
+		// Append the row to the spreadsheet using the actual sheet name
+		await sheets.spreadsheets.values.append({
+			spreadsheetId,
+			range: `${firstSheetName}!A1:D1`, // Use the actual sheet name
+			valueInputOption: 'USER_ENTERED', // Changed from RAW to handle date formatting better
+			insertDataOption: 'INSERT_ROWS',
+			resource: {
+				values
+			}
+		});
+
+		console.log('Successfully logged to Google Sheets:', { prompt, requestDate, requestTime, id });
+	} catch (err) {
+		console.error('Failed to log to Google Sheets:', err);
+		console.error('Error details:', err.errors || err.message || 'Unknown error');
+		// Don't throw the error, just log it to avoid disrupting the main API flow
+	}
+}
 
 export async function POST({ request }) {
 	try {
@@ -65,6 +147,17 @@ export async function POST({ request }) {
 		// 성공 응답 처리
 		const jsonStartResponse = await startResponse.json();
 		console.log('FLUX API 성공 응답:', jsonStartResponse);
+
+		// Log to Google Sheets
+		if (jsonStartResponse.id) {
+			// Extract the prompt text from input
+			const promptText = input.prompt || JSON.stringify(input);
+
+			// Asynchronously log to Google Sheets without waiting for completion
+			logToGoogleSheets(promptText, jsonStartResponse.id, input.seed).catch((err) =>
+				console.error('Google Sheets logging error:', err)
+			);
+		}
 
 		// 클라이언트에 응답 반환
 		return json(jsonStartResponse);
