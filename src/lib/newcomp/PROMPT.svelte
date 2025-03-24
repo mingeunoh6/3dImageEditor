@@ -209,7 +209,7 @@ let apiRequestData;
 			console.log('이미지 생성 요청 성공, 작업 ID:', taskId);
 
 			// 이미지 생성 상태 모니터링 시작
-			fluxPolling(flux_polling_url);
+			fluxPolling(flux_polling_url, taskId);
 
 			// Add a timeout for generation (5 minutes max)
 			pollingTimeout = setTimeout(() => {
@@ -235,7 +235,7 @@ let apiRequestData;
 			}
 		}
 	}
-	function fluxPolling(pollingURL) {
+	function fluxPolling(pollingURL, result_id) {
 		console.log('pollingURL:', pollingURL);
 
 		if (!pollingURL) {
@@ -244,30 +244,44 @@ let apiRequestData;
 			return;
 		}
 
+		  // Extract the ID from the polling URL
+  const url = new URL(pollingURL);
+  const id = result_id
+
+   if (!id) {
+    generationError = 'Invalid polling URL format';
+    isGenerating = false;
+    return;
+  }
+
+   const proxyPollingUrl = `/api/flux?id=${id}`;
+
 		pollingInterval = setInterval(async () => {
 			try {
-				const response = await fetch(pollingURL);
-				if (!response.ok) {
-					throw new Error(`Polling failed with status: ${response.status}`);
-				}
+			      const response = await fetch(proxyPollingUrl);
+      if (!response.ok) {
+        throw new Error(`Polling failed with status: ${response.status}`);
+      }
 
-				const data = await response.json();
-				console.log('polling data:', data);
+      const data = await response.json();
+      console.log('polling data:', data);
 
-				if (data.status === 'Ready') {
-					isPending = false;
-					console.log('이미지 생성 완료:', data.result.sample);
-					// Get the original URL from the API response
-					const originalImageUrl = data.result.sample;
-					// Create proxied URL to avoid CORS issues
-					const proxiedImageUrl = `/api/flux?url=${encodeURIComponent(originalImageUrl)}`;
+      // Rest of your existing code remains the same
+      if (data.status === 'Ready') {
+        isPending = false;
+        console.log('이미지 생성 완료:', data.result.sample);
+        // Get the original URL from the API response
+        const originalImageUrl = data.result.sample;
+        // Create proxied URL to avoid CORS issues
+        const proxiedImageUrl = `/api/flux?url=${encodeURIComponent(originalImageUrl)}`;
 
-					// Set the generated image URL and call completeFluxTask
-					generatedImageUrl = proxiedImageUrl;
+        console.log('Proxied image URL:', proxiedImageUrl);
+        // Set the generated image URL and call completeFluxTask
+        generatedImageUrl = proxiedImageUrl;
 
-					completeFluxTask(proxiedImageUrl);
+        completeFluxTask(proxiedImageUrl);
 
-					clearPollingTimers();
+        clearPollingTimers();
 				} else if (data.status === 'Error') {
 					console.error('이미지 생성 실패:', data.error);
 					generationError = data.error;

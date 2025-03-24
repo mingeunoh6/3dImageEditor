@@ -42,7 +42,8 @@ export async function POST({ request }) {
 						error: {
 							msg:
 								errorJson.detail?.[0]?.msg ||
-								errorJson.message || errorJson.detail ||
+								errorJson.message ||
+								errorJson.detail ||
 								'Fail to request generating model'
 						}
 					},
@@ -82,35 +83,57 @@ export async function POST({ request }) {
 
 export async function GET({ url, fetch }) {
 	try {
-		// Get image URL from query parameter
+		// Check if this is an image proxy request
 		const imageUrl = url.searchParams.get('url');
 
-		if (!imageUrl) {
-			return new Response('Missing image URL parameter', { status: 400 });
-		}
+		if (imageUrl) {
+			// Use your existing image proxy code
+			const response = await fetch(imageUrl);
 
-		// Fetch the image from the external source
-		const response = await fetch(imageUrl);
+			if (!response.ok) {
+				return new Response(`Failed to fetch image: ${response.statusText}`, {
+					status: response.status
+				});
+			}
 
-		if (!response.ok) {
-			return new Response(`Failed to fetch image: ${response.statusText}`, {
-				status: response.status
+			const imageData = await response.arrayBuffer();
+			const contentType = response.headers.get('content-type') || 'image/png';
+
+			return new Response(imageData, {
+				headers: {
+					'Content-Type': contentType,
+					'Cache-Control': 'public, max-age=3600'
+				}
 			});
 		}
 
-		// Get the image data and content type
-		const imageData = await response.arrayBuffer();
-		const contentType = response.headers.get('content-type') || 'image/png';
+		// Check if this is a polling request
+		const id = url.searchParams.get('id');
 
-		// Return the image with appropriate headers
-		return new Response(imageData, {
-			headers: {
-				'Content-Type': contentType,
-				'Cache-Control': 'public, max-age=3600' // Cache for 1 hour
+		if (id) {
+			const fluxAPIKEY = process.env.VITE_FLUX_API_KEY;
+
+			// Make the request to the polling URL
+			const response = await fetch(`https://api.us1.bfl.ai/v1/get_result?id=${id}`, {
+				method: 'GET',
+				headers: {
+					'X-Key': fluxAPIKEY
+				}
+			});
+
+			if (!response.ok) {
+				return new Response(`Polling failed: ${response.statusText}`, {
+					status: response.status
+				});
 			}
-		});
+
+			const data = await response.json();
+			return json(data);
+		}
+
+		return new Response('Missing required parameters', { status: 400 });
 	} catch (err) {
-		console.error('Image proxy error:', err);
-		return new Response(`Failed to proxy image: ${err.message}`, { status: 500 });
+		console.error('API proxy error:', err);
+		return new Response(`Proxy error: ${err.message}`, { status: 500 });
 	}
 }
