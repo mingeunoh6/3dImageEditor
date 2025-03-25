@@ -9,13 +9,14 @@
     import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
     import { ObjectHighlighter, EdgeHighlighter } from '$lib/newcomp/elements/objectHighlighter.js';
     import { mainRenderer } from '$lib/newcomp/elements/main-canvas.js';
-
+import { toBase64, toBlobURL, getImageDimensions, revokeBlobURL, getDimensionsFromRatio } from '$lib/utils/imageUtils';
     // Props from parent component
   let { 
         newModel, 
         doneLoadingModel = () => {}, 
         onModelError = () => {},
-        onSceneObjectsChanged = () => {} 
+        onSceneObjectsChanged = () => {},
+        currentViewportBG, 
     } = $props();
 
     
@@ -29,6 +30,7 @@
     let edgeHighlighter;
     let aspectRatio = $state(1)
     let resizeObserver;
+
 
     // Model loading state
     let isLoading = $state(false);
@@ -129,58 +131,101 @@
         return 'object';
     }
 
-   export async function changeBG(file) {
+  function updateCurrentBGinfo(texture) {
+    // 부모 컴포넌트에 현재 배경 정보 업데이트
+    currentViewportBG(texture.image);
+    console.log('Current viewport background updated', texture.image);
+}
+  export async function changeBG(file) {
     if (!viewportRenderer) return;
 
-    if(file ===null){
-        viewportRenderer.resetHDRI()
-         return;
+    // 배경 제거 요청인 경우
+    if (file === null) {
+        viewportRenderer.resetHDRI();
+        // 부모 컴포넌트에 현재 배경 정보 업데이트
+        currentViewportBG(null);
+        return;
     }
-     try {
-        // Pass the file to the renderer - use the consolidated method
+    
+    try {
+        // 렌더러를 통해 배경 로드 - 통합 메서드 사용
         const texture = await viewportRenderer.loadBackground(file, false, {
             setAsBackground: true,
             setAsEnvironment: true
         });
         
-        // Update aspect ratio from the loaded texture
+        // 로드된 텍스처에서 종횡비 업데이트
         if (texture && texture.image) {
             aspectRatio = texture.image.width / texture.image.height;
             setViewport();
+            
+            // 현재 뷰포트 배경 정보 업데이트
+            updateCurrentBGinfo(texture);
         }
     } catch (error) {
         console.error('Error loading background:', error);
     }
 }
-
-
    export async function changeBGfromURL(url) {
     if (!viewportRenderer) return;
 
+    // URL이 없으면 기본 HDRI 재설정
     if (!url) {
-        // Reset to default HDRI
         viewportRenderer.resetHDRI();
-        aspectRatio = 1; // Reset aspect ratio
+        aspectRatio = 1; // 종횡비 재설정
         setViewport();
+        currentViewportBG(null);
         return;
     }
     
     try {
-        // Pass the URL to the renderer - use the consolidated method
+        // URL에서 배경 로드 - 통합 메서드 사용
         const texture = await viewportRenderer.loadBackground(url, true, {
             setAsBackground: true,
             setAsEnvironment: true
         });
         
-        // Update aspect ratio from the loaded texture
+        // 종횡비 업데이트
         if (texture && texture.image) {
             aspectRatio = texture.image.width / texture.image.height;
             setViewport();
+            
+            // 현재 뷰포트 배경 정보 업데이트
+            updateCurrentBGinfo(texture);
         }
     } catch (error) {
         console.error('Error loading background from URL:', error);
     }
 }
+
+
+export async function renderCurrentViewportAsImg(data) {
+    console.log('Getting current viewport as image', data);
+
+    let currentImgWidth;
+    let currentImgHeight;
+
+    // 배경 이미지가 없는 경우 비율 정보 사용
+    if (!data.currentBG) {
+        console.log('Using ratio for dimensions');
+        
+        // 비율에 따른 표준 크기 가져오기
+        const dimensions = getDimensionsFromRatio(data.currentRatio);
+        currentImgWidth = dimensions.width;
+        currentImgHeight = dimensions.height;
+    } else {
+        console.log('Using background image dimensions', data.currentBG);
+        currentImgWidth = data.currentBG.width;
+        currentImgHeight = data.currentBG.height;
+    }
+
+    // 스크린샷 생성
+    const renderImg = await viewportRenderer.takeScreenshot(currentImgWidth, currentImgHeight);
+    console.log('Screenshot generated');
+    
+    return renderImg;
+}
+
 
 export function resetBG(){
         if (!viewportRenderer) return;

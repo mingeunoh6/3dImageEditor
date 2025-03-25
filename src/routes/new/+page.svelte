@@ -10,6 +10,7 @@ import EDITOR from '$lib/newcomp/EDITOR.svelte';
 import Icon from '@iconify/svelte';
 // Model loading states
 let newModel = $state(null);
+let liveRenderImage = $state(null);
 let viewportLoading = $state(false);
 let uploadError = $state(null);
 
@@ -27,6 +28,7 @@ let currentModelInfo = $state({
 // Reference to the viewport component
 let viewportRef;
 let currentBG = $state(null);
+let currentViewportBG = $state(null);
 
 // Handle model upload from PROMPT component
 function addModelToScene(file, metadata) {
@@ -50,6 +52,31 @@ function addModelToScene(file, metadata) {
   newModel = file;
 }
 
+async function getCurrentViewportAsImg(data) {
+
+  let currentRatio = data.currentBGratio
+  let bginfo = {
+    currentBG: currentViewportBG,
+    currentRatio: currentRatio
+  }
+
+  return new Promise((resolve, reject) => {
+    
+    if (viewportRef) {
+      viewportRef.renderCurrentViewportAsImg(bginfo).then((img) => {
+        liveRenderImage = img;
+        resolve(img);
+      }).catch((error) => {
+        console.error('Failed to get current viewport as image:', error);
+        reject(error);
+      });
+    } else {
+      reject('Viewport component not available');
+    }
+  });
+
+}
+
 // Called by viewport when model loading fails
 function handleModelError(error) {
   console.error('Model loading failed:', error);
@@ -61,6 +88,12 @@ function handleModelError(error) {
 function updateSceneObjects(objectsList) {
   sceneObjects = objectsList;
 
+}
+
+
+function updateCurrentBG(data){
+  currentViewportBG = data;
+  console.log('currentBGsize', currentViewportBG.width, currentViewportBG.height)
 }
 
 // Handle object selection from LT component
@@ -101,14 +134,25 @@ function handleObjectDelete(objectId) {
      if (viewportRef) {
     viewportRef.changeBG(file, true)
      }
+
+     if(file === null){
+      currentViewportBG = null;
+     }
   }
 
   function changeBGfromURL(url){
     console.log('new hdr', url)
+
+     if(url === null){
+      currentViewportBG = null;
+      currentBG = null;
+     }
     currentBG = url;
      if (viewportRef) {
     viewportRef.changeBGfromURL(url)
      }
+
+
   }
 
    function setVhVariable() {
@@ -176,6 +220,7 @@ onMount(() => {
         }}
         onModelError={handleModelError}
         onSceneObjectsChanged={updateSceneObjects}
+        currentViewportBG={(data)=>updateCurrentBG(data)}
       />
     </div>
     <div class="prompt-wrapper">
@@ -184,8 +229,9 @@ onMount(() => {
         pathTracingRender={(state)=>startPathTracing(state)} 
         {viewportLoading}
         {uploadError}
-        BGimport={(image)=>changeBG(image)}
         BGfromURL={(url)=>changeBGfromURL(url)}
+        requestCurrentViewportImg={(data)=>getCurrentViewportAsImg(data)}
+        liveRenderImage={liveRenderImage}
       />
     </div>
   </div>

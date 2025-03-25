@@ -42,6 +42,11 @@ export class mainRenderer {
 			},
 			options
 		);
+    this._renderTarget = null;
+		this._screenshotCanvas = null;
+		this._screenshotContext = null;
+		this._pixelBuffer = null;
+		this._imageData = null;
 
 		// Internal properties
 		this.scene = null;
@@ -501,38 +506,38 @@ export class mainRenderer {
 				texture = await this.loadTextureFromFile(source);
 			}
 
-			// Set background if requested
+			// 배경으로 설정
 			if (options.setAsBackground) {
 				this.scene.background = texture;
 			}
 
-			// Set environment if requested
+			// 환경 맵으로 설정
 			if (options.setAsEnvironment) {
-				// Create environment map from texture
+				// 텍스처 복제 및 매핑 설정
 				const envTexture = texture.clone();
 				envTexture.mapping = THREE.EquirectangularReflectionMapping;
 
-				// Dispose of previous environment if it exists
+				// 이전 환경 맵 해제
 				if (this.envMap) {
 					this.envMap.dispose();
 				}
 
-				// Set new environment
+				// 새 환경 맵 설정
 				this.envMap = envTexture;
 				this.scene.environment = this.envMap;
 
-				// Generate blurred version for path tracing if needed
+				// 패스 트레이싱용 블러 버전 생성
 				if (this.blurredEnvMapGenerator) {
 					this.blurredEnvMap = this.blurredEnvMapGenerator.generate(this.envMap, 0.35);
 				}
 			}
 
-			// Update path tracer environment if active
+			// 패스 트레이서 환경 업데이트
 			if (this.pathTracer) {
 				this.pathTracer.updateEnvironment();
 			}
 
-			// Render to show the changes
+			// 변경 사항 렌더링
 			this.render();
 
 			return texture;
@@ -590,26 +595,25 @@ export class mainRenderer {
 			throw error;
 		}
 	}
-
 	loadTextureFromURL(url) {
 		return new Promise((resolve, reject) => {
-			// If the URL is already proxied or is a local URL/data URL, use it directly
+			// URL이 이미 프록시되었거나 로컬/데이터 URL인 경우 직접 사용
 			let textureUrl = url;
 
-			// Check if this is an external URL that might need proxying
+			// 외부 URL이 프록시가 필요한지 확인
 			if (
 				url.startsWith('http') &&
 				!url.startsWith(window.location.origin) &&
 				!url.startsWith('data:') &&
-				!url.includes('/api/image-proxy')
+				!url.includes('/api/flux')
 			) {
-				// Use our proxy for external URLs
+				// 외부 URL에 프록시 사용
 				textureUrl = `/api/flux?url=${encodeURIComponent(url)}`;
 			}
 
 			const loader = new THREE.TextureLoader();
 
-			// Add a crossOrigin setting to the loader to handle CORS properly
+			// CORS 처리를 위한 설정
 			loader.setCrossOrigin('anonymous');
 
 			loader.load(
@@ -619,7 +623,7 @@ export class mainRenderer {
 					resolve(texture);
 				},
 				(progressEvent) => {
-					// Optional progress callback
+					// 진행 상황 콜백 (선택 사항)
 					if (progressEvent.lengthComputable) {
 						const progress = Math.round((progressEvent.loaded / progressEvent.total) * 100);
 						console.log(`Loading texture: ${progress}%`);
@@ -628,7 +632,7 @@ export class mainRenderer {
 				(error) => {
 					console.error('Error loading texture from URL:', textureUrl);
 
-					// If we tried to load directly and got an error, try with the proxy as a fallback
+					// 직접 로드 시도 후 에러가 발생하면 프록시로 재시도
 					if (textureUrl === url && !url.includes('/api/flux')) {
 						console.log('Retrying with proxy...');
 						const proxyUrl = `/api/flux?url=${encodeURIComponent(url)}`;
@@ -652,7 +656,6 @@ export class mainRenderer {
 			);
 		});
 	}
-
 	loadTextureFromFile(file) {
 		return new Promise((resolve, reject) => {
 			const reader = new FileReader();
@@ -1089,6 +1092,16 @@ export class mainRenderer {
 			this.resizeObserver = null;
 		}
 
+		 if (this._renderTarget) {
+				this._renderTarget.dispose();
+				this._renderTarget = null;
+			}
+
+			this._screenshotCanvas = null;
+			this._screenshotContext = null;
+			this._pixelBuffer = null;
+			this._imageData = null;
+
 		// Dispose of Three.js resources
 		if (this.renderer) {
 			this.renderer.dispose();
@@ -1194,38 +1207,213 @@ export class mainRenderer {
 
 	/**
 	 * Take a screenshot of the current view
-	 * @param {number} width - Optional custom width
-	 * @param {number} height - Optional custom height
-	 * @returns {string} - Data URL of the screenshot
+	 * @param {number} width - 사용자 지정 너비 (옵션)
+	 * @param {number} height - 사용자 지정 높이 (옵션)
+	 * @returns {Promise<string>} 스크린샷 데이터 URL
 	 */
 	takeScreenshot(width = null, height = null) {
-		if (!this.renderer) return null;
+		return new Promise((resolve, reject) => {
+			try {
+				// 원하는 스크린샷 크기
+				const targetWidth = width || this.width;
+				const targetHeight = height || this.height;
 
-		// Use custom size or current size
-		const useWidth = width || this.width;
-		const useHeight = height || this.height;
+				console.log(`Taking screenshot (${targetWidth}x${targetHeight})...`);
 
-		// If we need to resize for the screenshot
-		if (width || height) {
-			this.camera.aspect = useWidth / useHeight;
-			this.camera.updateProjectionMatrix();
+				// 성능 측정 시작 (디버깅용)
+				const startTime = performance.now();
+
+				// 카메라 상태 저장
+				const originalAspect = this.camera.aspect;
+				const originalMatrix = this.camera.projectionMatrix.clone();
+
+				// 카메라 종횡비 조정
+				this.camera.aspect = targetWidth / targetHeight;
+				this.camera.updateProjectionMatrix();
+
+				// 렌더 타겟 초기화 또는 재사용
+				if (
+					!this._renderTarget ||
+					this._renderTarget.width !== targetWidth ||
+					this._renderTarget.height !== targetHeight
+				) {
+					// 기존 렌더 타겟이 있으면 정리
+					if (this._renderTarget) {
+						this._renderTarget.dispose();
+					}
+
+					// 새 렌더 타겟 생성
+					this._renderTarget = new THREE.WebGLRenderTarget(targetWidth, targetHeight, {
+						minFilter: THREE.LinearFilter,
+						magFilter: THREE.LinearFilter,
+						format: THREE.RGBAFormat,
+						colorSpace: THREE.SRGBColorSpace, // THREE.js r152+ 사용 시
+						type: THREE.UnsignedByteType,
+						depthBuffer: true,
+						stencilBuffer: false
+					});
+				}
+
+				// UI 요소 숨기기
+				const visibilityStates = this.saveVisibilityStates();
+				this.hideUIElements();
+
+				// 렌더러 상태 저장
+				const originalRenderTarget = this.renderer.getRenderTarget();
+				const originalToneMapping = this.renderer.toneMapping;
+				const originalToneMappingExposure = this.renderer.toneMappingExposure;
+				const originalOutputColorSpace = this.renderer.outputColorSpace;
+
+				// 동일한 색상 공간 설정 확인
+				this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+				// 렌더 타겟에 씬 렌더링
+				this.renderer.setRenderTarget(this._renderTarget);
+				this.renderer.clear();
+				this.renderer.render(this.scene, this.camera);
+
+				// 픽셀 데이터 버퍼 생성 (재사용 가능)
+				if (!this._pixelBuffer || this._pixelBuffer.length !== targetWidth * targetHeight * 4) {
+					this._pixelBuffer = new Uint8Array(targetWidth * targetHeight * 4);
+				}
+
+				// 픽셀 데이터 읽기
+				this.renderer.readRenderTargetPixels(
+					this._renderTarget,
+					0,
+					0,
+					targetWidth,
+					targetHeight,
+					this._pixelBuffer
+				);
+
+				// 스크린샷 캔버스 준비 (재사용)
+				if (!this._screenshotCanvas) {
+					this._screenshotCanvas = document.createElement('canvas');
+					this._screenshotContext = this._screenshotCanvas.getContext('2d');
+				}
+
+				// 캔버스 크기 설정
+				this._screenshotCanvas.width = targetWidth;
+				this._screenshotCanvas.height = targetHeight;
+
+				// ImageData 객체 생성 (재사용 가능)
+				if (
+					!this._imageData ||
+					this._imageData.width !== targetWidth ||
+					this._imageData.height !== targetHeight
+				) {
+					this._imageData = this._screenshotContext.createImageData(targetWidth, targetHeight);
+				}
+
+				// Y축 뒤집기 (WebGL과 Canvas의 좌표계 차이)
+				for (let y = 0; y < targetHeight; y++) {
+					for (let x = 0; x < targetWidth; x++) {
+						const srcPos = (x + (targetHeight - y - 1) * targetWidth) * 4;
+						const dstPos = (x + y * targetWidth) * 4;
+
+						this._imageData.data[dstPos] = this._pixelBuffer[srcPos]; // R
+						this._imageData.data[dstPos + 1] = this._pixelBuffer[srcPos + 1]; // G
+						this._imageData.data[dstPos + 2] = this._pixelBuffer[srcPos + 2]; // B
+						this._imageData.data[dstPos + 3] = this._pixelBuffer[srcPos + 3]; // A
+					}
+				}
+
+				// 이미지 데이터를 캔버스에 그리기
+				this._screenshotContext.putImageData(this._imageData, 0, 0);
+
+				// 원래 상태로 복원
+				this.renderer.setRenderTarget(originalRenderTarget);
+				this.renderer.toneMapping = originalToneMapping;
+				this.renderer.toneMappingExposure = originalToneMappingExposure;
+				this.renderer.outputColorSpace = originalOutputColorSpace;
+
+				// 카메라 상태 복원
+				this.camera.aspect = originalAspect;
+				this.camera.projectionMatrix.copy(originalMatrix);
+
+				// UI 요소 가시성 복원
+				this.restoreVisibilityStates(visibilityStates);
+
+				// 메인 씬 다시 렌더링
+				this.render();
+
+				// 성능 측정 종료 (디버깅용)
+				const endTime = performance.now();
+				console.log(`Screenshot taken in ${(endTime - startTime).toFixed(2)}ms`);
+
+				// 스크린샷 데이터 URL 반환
+				resolve(this._screenshotCanvas.toDataURL('image/png'));
+			} catch (error) {
+				console.error('Error taking screenshot:', error);
+
+				// 오류 발생 시 간단한 방법으로 폴백
+				try {
+					console.log('Falling back to simple screenshot method');
+					resolve(this._fallbackScreenshot(width, height));
+				} catch (fallbackError) {
+					console.error('Fallback screenshot also failed:', fallbackError);
+					reject(error); // 원래 오류 반환
+				}
+			}
+		});
+	}
+
+	saveVisibilityStates() {
+		const states = new Map();
+
+		// 변환 컨트롤 상태 저장
+		if (this.transformControl) {
+			states.set('transformControl', this.transformControl.visible);
+			this.transformControl.visible = false;
 		}
 
-		// Render the scene
-		this.renderer.render(this.scene, this.camera);
+		// 하이라이트 상태 저장
+		this.scene.traverse((obj) => {
+			// 하이라이트 객체 확인
+			if (obj.userData && obj.userData.isHighlight) {
+				states.set(obj.id, obj.visible);
+				obj.visible = false;
+			}
 
-		// Get the screenshot
-		const dataURL = this.renderer.domElement.toDataURL('image/png');
+			// 도우미 객체 확인
+			if (obj.isHelper || obj.type.includes('Helper')) {
+				states.set(obj.id, obj.visible);
+				obj.visible = false;
+			}
+		});
 
-		// Restore original size if needed
-		if (width || height) {
-			this.renderer.setSize(this.width, this.height);
-			this.camera.aspect = this.width / this.height;
-			this.camera.updateProjectionMatrix();
-			this.render();
+		return states;
+	}
+	restoreVisibilityStates(states) {
+		// 변환 컨트롤 가시성 복원
+		if (this.transformControl && states.has('transformControl')) {
+			this.transformControl.visible = states.get('transformControl');
 		}
 
-		return dataURL;
+		// 다른 객체의 가시성 복원
+		this.scene.traverse((obj) => {
+			if (states.has(obj.id)) {
+				obj.visible = states.get(obj.id);
+			}
+		});
+	}
+	hideUIElements() {
+		// 변환 컨트롤 숨기기
+		if (this.transformControl) {
+			this.transformControl.visible = false;
+		}
+
+		// 모든 하이라이트 및 도우미 숨기기
+		this.scene.traverse((obj) => {
+			if (
+				(obj.userData && obj.userData.isHighlight) ||
+				obj.isHelper ||
+				obj.type.includes('Helper')
+			) {
+				obj.visible = false;
+			}
+		});
 	}
 
 	setObjectPathTracingVisibility(object, isVisible) {
@@ -1334,6 +1522,61 @@ export class mainRenderer {
 	excludeGroundFromPathTracing() {
 		this.excludeObjectTypeFromPathTracing((object) => {
 			return object.userData.isGround === true || (object.name && object.name === 'Ground');
+		});
+	}
+
+	getCurrentSceneBackground() {
+		return this.scene.background;
+	}
+
+	prepareBasicRender() {
+		// Create path tracer scene if it doesn't exist
+		if (!this.basicRenderScene) {
+			this.basicRenderScene = new THREE.Scene();
+		} else {
+			while (this.basicRenderScene.children.length > 0) {
+				const child = this.basicRenderScene.children[0];
+				this.basicRenderScene.remove(child);
+			}
+		}
+
+		// Copy environment and background settings
+		this.basicRenderScene.background = this.scene.background;
+		this.basicRenderScene.environment = this.scene.environment;
+
+		// Add lights first
+		this.scene.traverse((object) => {
+			if (object.isLight) {
+				// Create a new light clone
+				const lightClone = object.clone();
+				this.basicRenderScene.add(lightClone);
+			}
+		});
+
+		// Add objects that should be visible in path tracing
+		this.scene.traverse((object) => {
+			// Skip lights as we've already handled them
+			if (object.isLight) return;
+
+			// Skip objects explicitly marked as not visible in path tracer
+			if (object.userData.visibleInPathTracer === false) return;
+
+			// Skip transform controls and helpers
+			if (
+				object.isTransformControls ||
+				object.isHelper ||
+				object.type.includes('Helper') ||
+				object.userData.isUI === true ||
+				object.userData.isHighlight === true
+			) {
+				return;
+			}
+
+			// Only add top-level objects that aren't already in a hierarchy
+			if (object.parent === this.scene) {
+				const clone = object.clone(true); // deep clone
+				this.basicRenderScene.add(clone);
+			}
 		});
 	}
 }

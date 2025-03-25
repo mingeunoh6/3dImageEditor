@@ -1,10 +1,17 @@
-<!-- PROMPT.svelte -->
+<!-- EDITOR.svelte -->
 
 <script>
 	import { onMount } from 'svelte';
 	import Icon from '@iconify/svelte';
 	import { fade, slide } from 'svelte/transition';
 	import Slider from '$lib/newcomp/elements/menu-slider.svelte';
+	import { 
+		toBase64, 
+		toBlobURL, 
+		getImageDimensions, 
+		revokeBlobURL, 
+		generateImageFilename 
+	} from '$lib/utils/imageUtils';
 
 	// Props from parent
 	let {
@@ -21,50 +28,55 @@
 		onObjectDelete = (id) => console.log(`Delete object: ${id}`)
 	} = $props();
 
+	// BGfromPrompt가 변경되면 현재 백그라운드 업데이트
 	$effect(() => {
 		updateBG(BGfromPrompt);
 	});
 
+	// 백그라운드 업데이트 함수
 	function updateBG(image) {
-		currentBG = image;
-        isBG = true;
+		if (image) {
+			currentBG = image;
+			isBG = true;
+		}
 	}
 
-	// Upload states
+	// 업로드 상태
 	let isUploading = $state(false);
 	let uploadProgress = $state(0);
 	let uploadStage = $state('idle'); // idle, reading, validating, processing
 	let fileValidationError = $state(null);
 
-	// Menu state
+	// 메뉴 상태
 	let activeMenu = $state(null);
 
-	//render option state
+	// 렌더 옵션 상태
 	let isRenderOpt = $state(false);
 
-	// Input constraints
+	// 입력 제약 조건
 	const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
 	const SUPPORTED_FORMATS = ['.glb', '.gltf'];
 	const TYPE_WHITELIST = ['model/gltf-binary', 'model/gltf+json'];
 
-	// Component state
+	// 컴포넌트 상태
 	let isBusy = $state(false);
 	let abortController = null;
 
-	//setting state
+	// 설정 상태
 	let isBG = $state(false);
 	let currentBG = $state('');
 	let bgRotation = $state(180);
+	let bgBrightness = $state(1);
+
 	$effect(() => {
 		console.log(bgRotation);
 	});
 
-	let bgBrightness = $state(1);
 	$effect(() => {
 		console.log(bgBrightness);
 	});
 
-	// Monitor loading state from parent to update UI
+	// 부모 컴포넌트의 로딩 상태 모니터링
 	$effect(() => {
 		if (viewportLoading) {
 			isBusy = true;
@@ -74,7 +86,7 @@
 			isBusy = false;
 			enableUI();
 
-			// Reset upload state if no errors
+			// 에러가 없으면 업로드 상태 초기화
 			if (!uploadError) {
 				resetUploadState();
 			} else {
@@ -83,22 +95,23 @@
 		}
 	});
 
+	// 메뉴 토글 함수
 	function menuToggle(e) {
-		// Only respond to clicks on menu buttons directly, not their children
+		// 메뉴 버튼에 직접 클릭한 경우에만 응답
 		if (e.currentTarget && e.currentTarget.id) {
 			const clickedMenuId = e.currentTarget.id;
 
 			if (activeMenu === clickedMenuId) {
-				// Same menu - toggle it off
+				// 같은 메뉴 - 토글 끔
 				activeMenu = null;
 			} else {
-				// Different menu - switch to it
+				// 다른 메뉴 - 전환
 				activeMenu = clickedMenuId;
 			}
 		}
 	}
 
-	// Reset all upload-related state
+	// 업로드 관련 상태 초기화
 	function resetUploadState() {
 		isUploading = false;
 		uploadProgress = 0;
@@ -111,19 +124,19 @@
 		}
 	}
 
-	// Validate the file before uploading
+	// 파일 유효성 검사
 	function validateFile(file) {
-		// Check if file exists
+		// 파일 존재 여부 확인
 		if (!file) {
 			return 'No file selected';
 		}
 
-		// Check file size
+		// 파일 크기 확인
 		if (file.size > MAX_FILE_SIZE) {
 			return `File too large. Maximum size is ${MAX_FILE_SIZE / (1024 * 1024)}MB`;
 		}
 
-		// Check file extension
+		// 파일 확장자 확인
 		const fileName = file.name.toLowerCase();
 		const hasValidExtension = SUPPORTED_FORMATS.some((ext) => fileName.endsWith(ext));
 
@@ -131,43 +144,43 @@
 			return `Unsupported file format. Please use: ${SUPPORTED_FORMATS.join(', ')}`;
 		}
 
-		// Additional MIME type check if available
+		// MIME 타입 확인
 		if (file.type && !TYPE_WHITELIST.includes(file.type) && file.type !== '') {
 			console.warn(`Unexpected file type: ${file.type}, proceeding anyway`);
-			// We don't reject here as MIME types can be unreliable
+			// MIME 타입은 신뢰할 수 없어 여기서 거부하지 않음
 		}
 
-		return null; // No error
+		return null; // 에러 없음
 	}
 
-	// Handle file selection
+	// 모델 추가 함수
 	function addModel(event) {
 		const file = event.target.files[0];
 
-		// Reset previous state
+		// 이전 상태 초기화
 		resetUploadState();
 
-		// Validate file
+		// 파일 유효성 검사
 		const validationError = validateFile(file);
 		if (validationError) {
 			fileValidationError = validationError;
-			event.target.value = ''; // Reset file input
+			event.target.value = ''; // 파일 입력 초기화
 			return;
 		}
 
 		if (file) {
-			// Set up abort controller for cancellation
+			// 취소를 위한 abort controller 설정
 			abortController = new AbortController();
 
-			// Update UI state
+			// UI 상태 업데이트
 			isUploading = true;
 			uploadStage = 'reading';
 			uploadProgress = 0;
 
-			// Create file reader to track progress
+			// 진행 상황 추적을 위한 FileReader 생성
 			const reader = new FileReader();
 
-			// Track upload progress
+			// 업로드 진행 상황 추적
 			reader.onprogress = (event) => {
 				if (event.lengthComputable) {
 					const percentLoaded = Math.round((event.loaded / file.size) * 100);
@@ -175,38 +188,38 @@
 				}
 			};
 
-			// Start loading
+			// 로딩 시작
 			reader.onloadstart = () => {
 				console.log('Starting file read');
 				uploadProgress = 0;
 			};
 
-			// Error handling
+			// 에러 처리
 			reader.onerror = (error) => {
 				console.error('File reading error:', error);
 				fileValidationError = 'Failed to read file: ' + (error.message || 'Unknown error');
 				isUploading = false;
-				event.target.value = ''; // Reset file input
+				event.target.value = ''; // 파일 입력 초기화
 			};
 
-			// Finish loading
+			// 로딩 완료
 			reader.onloadend = () => {
 				console.log('File read complete');
 				uploadProgress = 100;
 				uploadStage = 'validating';
 
-				// Small delay to show complete progress before proceeding
+				// 진행 완료 표시를 위한 작은 지연
 				setTimeout(() => {
-					// Reset file input
+					// 파일 입력 초기화
 					event.target.value = '';
 
-					// Check if aborted
+					// 취소된 경우 확인
 					if (abortController.signal.aborted) {
 						console.log('Upload was cancelled');
 						return;
 					}
 
-					// Pass to parent component
+					// 부모 컴포넌트에 전달
 					add3dModel(file, {
 						name: file.name,
 						size: file.size,
@@ -215,27 +228,24 @@
 				}, 300);
 			};
 
-			// Read the file (this triggers the progress events)
+			// 파일 읽기 시작 (진행 이벤트 트리거)
 			reader.readAsArrayBuffer(file);
 		}
 	}
 
-	// Handle object selection
+	// 객체 선택 핸들러
 	function selectObject(objectId) {
-		// Here you would dispatch an event or call a function to select this object in the scene
 		console.log(`Selected object: ${objectId}`);
 		onObjectSelect(objectId);
-		// For now we'll just log it, but this would connect to your viewport's selection mechanism
 	}
 
+	// 객체 삭제 핸들러
 	function deleteObject(objectId) {
-		// Here you would dispatch an event or call a function to delete this object from the scene
 		console.log(`Deleted object: ${objectId}`);
 		onObjectDelete(objectId);
-		// For now we'll just log it, but this would connect to your viewport's deletion mechanism
 	}
 
-	// Cancel the current upload
+	// 현재 업로드 취소
 	function cancelUpload() {
 		if (abortController) {
 			abortController.abort();
@@ -244,98 +254,109 @@
 		resetUploadState();
 	}
 
-	// Disable UI elements during processing
+	// 처리 중 UI 요소 비활성화
 	function disableUI() {
 		document.getElementById('add-item-btn')?.setAttribute('disabled', 'true');
 		document.getElementById('render-btn')?.setAttribute('disabled', 'true');
 	}
 
-	// Enable UI elements after processing
+	// 처리 후 UI 요소 활성화
 	function enableUI() {
 		document.getElementById('add-item-btn')?.removeAttribute('disabled');
 		document.getElementById('render-btn')?.removeAttribute('disabled');
 	}
 
-	function handleBGImport(event) {
+	// 배경 이미지 가져오기 
+	async function handleBGImport(event) {
 		const file = event.target.files[0];
 
-		if (file) {
-			console.log('Background image selected:', file);
+		if (!file) {
+			return;
+		}
 
-			// Check if file is an image
-			if (!file.type.startsWith('image/')) {
-				console.error('Selected file is not an image');
-				return;
-			}
+		// 이미지 파일인지 확인
+		if (!file.type.startsWith('image/')) {
+			console.error('Selected file is not an image');
+			fileValidationError = 'Selected file is not an image';
+			event.target.value = '';
+			return;
+		}
 
-			// Revoke previous object URL if it exists to prevent memory leaks
+		try {
+			// 이전 blob URL이 있으면 해제
 			if (currentBG && currentBG.startsWith('blob:')) {
-				URL.revokeObjectURL(currentBG);
+				revokeBlobURL(currentBG);
 			}
 
-			// Create a URL for the selected image file
-			const imageUrl = URL.createObjectURL(file);
+			// 새 이미지 URL 생성
+			currentBG = await toBlobURL(file);
 
-			// Update state
+			// 상태 업데이트
 			isBG = true;
-			currentBG = imageUrl;
 
-			// Update thumbnail immediately
-			// setTimeout(() => {
-			// 	changeBGThumbnail(currentBG);
-			// }, 0);
-
-			// Send to parent component for scene update
+			// 부모 컴포넌트에 씬 업데이트 요청
 			BGimport(file);
+			
+			console.log('Background image loaded:', currentBG);
+		} catch (error) {
+			console.error('Failed to process background image:', error);
+			fileValidationError = 'Failed to process image file';
+			event.target.value = '';
 		}
 	}
 
-	// function changeBGThumbnail(currentBG) {
-	//      isBG = true;
-	// 	const thumbnailImg = document.querySelector('.bg-preview-thumbnail img');
-
-	// 	if (thumbnailImg) {
-	// 		thumbnailImg.src = currentBG;
-	// 	} else {
-	// 		console.error('Thumbnail image element not found');
-	// 	}
-	// }
-	function downloadBG() {
+	// 배경 이미지 다운로드
+	async function downloadBG() {
 		if (currentBG === '' || !isBG) {
 			return;
 		}
 
-		//getcurrenttime
-		const now = new Date();
-		const timestamp = now.toISOString().replace(/[-:]/g, '').split('.')[0];
-
-		// Create a download link
-		const link = document.createElement('a');
-		link.href = currentBG;
-		link.download = 'otr-ai-gen-' + `${timestamp}.` + (currentBG.includes('.jpg') ? 'jpg' : 'png');
-		document.body.appendChild(link);
-		link.click();
-		document.body.removeChild(link);
+		try {
+			// 파일명 생성
+			const filename = generateImageFilename('otr-ai-bg');
+			
+			// 다운로드 링크 생성
+			const link = document.createElement('a');
+			link.href = currentBG;
+			link.download = filename;
+			document.body.appendChild(link);
+			link.click();
+			document.body.removeChild(link);
+		} catch (error) {
+			console.error('Failed to download background:', error);
+			fileValidationError = 'Failed to download background image';
+		}
 	}
+
+	// 배경 이미지 제거
 	function removeBG() {
-        console.log('removeBG', currentBG, isBG);
+		console.log('removeBG', currentBG, isBG);
 		if (currentBG === '' || !isBG) {
 			return;
 		}
-		console.log('removeBG');
+		
+		console.log('Removing background');
 
+		// 이전 blob URL이 있으면 해제
+		if (currentBG && currentBG.startsWith('blob:')) {
+			revokeBlobURL(currentBG);
+		}
+
+		// 상태 초기화
 		isBG = false;
 		currentBG = '';
 
-		// Let the parent component know the background is removed
+		// 부모 컴포넌트에 배경 제거 알림
 		BGimport(null);
 	}
 
+	// 렌더링 실행
 	function render() {
 		console.log('Rendering...');
-		pathTracingRender(true); // Path tracing mode
+		pathTracingRender(true); // 경로 추적 모드로 전환
 	}
 
+	// 렌더링 옵션 토글 핸들러
 	function onRenderOptionToggle(e) {
 		isRenderOpt = e.target.checked;
 
@@ -354,11 +375,12 @@
 		}
 	}
 
+	// 컴포넌트 소멸 시 메모리 정리
 	onMount(() => {
 		return () => {
-			// Clean up any blob URLs
+			// Blob URL 정리
 			if (currentBG && currentBG.startsWith('blob:')) {
-				URL.revokeObjectURL(currentBG);
+				revokeBlobURL(currentBG);
 			}
 		};
 	});
@@ -409,7 +431,7 @@
 					tabindex="0"
 					aria-haspopup="true"
 					aria-expanded={activeMenu === 'bg-set'}
-                        title="Set Background"
+                    title="Set Background"
 				>
 					{#if activeMenu === 'bg-set'}
 						<input
@@ -478,7 +500,7 @@
 					tabindex="0"
 					aria-haspopup="true"
 					aria-expanded={activeMenu === 'camera-set'}
-                      title="Set Camera"
+                    title="Set Camera"
 				>
 					{#if activeMenu === 'camera-set'}
 						<div class="add-item-list" transition:slide>
@@ -496,7 +518,7 @@
 					tabindex="0"
 					aria-haspopup="true"
 					aria-expanded={activeMenu === 'light-set'}
-                      title="Set Light"
+                    title="Set Light"
 				>
 					{#if activeMenu === 'light-set'}
 						<div class="add-item-list" transition:slide>
@@ -515,7 +537,7 @@
 					tabindex="0"
 					aria-haspopup="true"
 					aria-expanded={activeMenu === 'scene-list'}
-                      title="Scene Objects"
+                    title="Scene Objects"
 				>
 					<Icon class="tool-icon" icon="foundation:list" aria-hidden="true" />
 
@@ -547,13 +569,23 @@
 													
 												</div>
 												<div class="object-actions">
-													<button class="object-actions-button" title="Hide/Show">
-														<Icon icon="carbon:view" width="16" height="16" />
+													<button 
+                                                        class="object-actions-button" 
+                                                        title="Hide/Show" 
+                                                        onclick={(e) => {
+                                                            e.stopPropagation(); 
+                                                            onObjectVisibilityToggle(object.id);
+                                                        }}
+                                                    >
+														<Icon icon={object.visible ? "carbon:view" : "carbon:view-off"} width="16" height="16" />
 													</button>
 													<button
 														class="object-actions-button"
 														title="Delete"
-														onclick={() => deleteObject(object.id)}
+														onclick={(e) => {
+                                                            e.stopPropagation();
+                                                            deleteObject(object.id);
+                                                        }}
 													>
 														<Icon icon="carbon:trash-can" width="16" height="16" />
 													</button>
@@ -566,16 +598,17 @@
 						</div>
 					{/if}
 				</div>
-				<!-- <div 
+				<div 
 					id="render-set" 
 					class="toolbtn render" 
 					onclick={render}
 					role="button"
 					tabindex="0"
 					aria-label="Render scene"
+                    title="Render Scene"
 				>
 					<Icon class="tool-icon" icon="carbon:render" aria-hidden="true" />
-				</div> -->
+				</div>
 			</div>
 		</div>
 	</section>
@@ -920,13 +953,11 @@
 		margin-bottom: -10px;
 		overflow: hidden;
 		transition: all ease-in-out 0.5s;
-		min-width: 150px;
+		min-width: 250px;
 		background-color: var(--primary-color);
 		border-radius: 12px;
 		border: 1px solid var(--dim-color);
 		z-index: 990;
-         
-      
     }
 
     .scene-list-header{
@@ -938,59 +969,45 @@
         border-bottom: 1px solid var(--dim-color);
     }
 
-.scene-object-list{
-    font-size: 0.9rem;
-    list-style: none;
-    margin: 0;
-    padding: 0;
-       overflow-y: scroll;
+    .scene-object-list{
+        font-size: 0.9rem;
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        overflow-y: auto;
         max-height: 300px;
-          -ms-overflow-style: none;  /* IE and Edge */
-  scrollbar-width: none;  /* Firefox */
-}
+        -ms-overflow-style: none;  /* IE and Edge */
+        scrollbar-width: none;  /* Firefox */
+    }
 
-.scene-object-list::-webkit-scrollbar {
-   display: none;
-    
-   
-}
+    .scene-object-list::-webkit-scrollbar {
+        display: none;
+    }
 
+    .scene-object-list .object-item{
+        border-bottom: 1px solid var(--dim-color);
+    }
 
-.scene-object-list .object-item{
-    border-bottom: 1px solid var(--dim-color);
-}
+    .scene-object-list .object-item:last-child {
+        border-bottom: none;
+    }
 
-
-
-.scene-object-list .object-item:last-child {
-    border-bottom: none;
-}
-
-
-
-
-  .empty-list {
+    .empty-list {
         padding: 24px 16px;
         text-align: center;
-      
-         font-size: 0.9rem;
+        font-size: 0.9rem;
     }
 
-     .empty-list p{
-     color:var(--dim-color);
-         font-size: 0.9rem;
+    .empty-list p{
+        color:var(--dim-color);
+        font-size: 0.9rem;
     }
-
-   
-    
 
     .object-item {
-     
-       display: flex;
+        display: flex;
         align-items: center;
-height: 28px;
+        height: 40px;
         padding: 2px 8px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
         cursor: pointer;
         transition: background-color 0.2s ease;
     }
@@ -1015,42 +1032,41 @@ height: 28px;
         justify-content: flex-start;
         align-items: center;
         max-width: 200px;
-        
-        
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
     
     .object-name {
         display: flex;
         align-items: center;
-  
-      height: 100%;
+        height: 100%;
         color: var(--text-color-standard);
         font-size: 0.8rem;
-     
     }
     
-   
     .object-actions {
-    display: flex;
-flex-direction: row;
-    gap: 2px; 
-    margin-left:8px;
-}
+        display: flex;
+        flex-direction: row;
+        gap: 4px; 
+        margin-left: 8px;
+    }
 
-   .object-actions-button{
-    background: none;
-    color: var(--dim-color);
-    cursor: pointer;
-    padding: 4px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 8px;
- 
-}
+    .object-actions-button{
+        background: none;
+        border: none;
+        color: var(--dim-color);
+        cursor: pointer;
+        padding: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 4px;
+        transition: all 0.2s ease;
+    }
 
     .object-actions-button:hover{
-    color: var(--text-color-bright);
-  
-}
+        color: var(--text-color-bright);
+        background-color: rgba(255, 255, 255, 0.1);
+    }
 </style>

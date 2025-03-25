@@ -6,6 +6,8 @@
 	import { fade, slide } from 'svelte/transition';
 	import Slider from '$lib/newcomp/elements/menu-slider.svelte';
 	import ImgSlider from '$lib/newcomp/elements/menu-slider-bg.svelte';
+	import ToggleBtn from '$lib/newcomp/elements/menu-toggle-btn.svelte';
+	import { toBase64, toBlobURL, revokeBlobURL, getDimensionsFromRatio, generateImageFilename } from '$lib/utils/imageUtils';
 
 	// Props from parent
 	let {
@@ -13,31 +15,38 @@
 		pathTracingRender = (state) => console.log(`render: ${state}`),
 		viewportLoading,
 		uploadError,
-		BGimport,
-		BGfromURL
+		BGfromURL,
+		requestCurrentViewportImg,
+		liveRenderImage,
 	} = $props();
-let openImagePrompt = $state(false);
+	
+	// UI 상태
+	let openImagePrompt = $state(false);
 	let isGenerating = $state(false);
 	let isRandomSeed = $state(false);
-	let imagePrompt = $state(""); // Image prompt base64
 	let imagePromptStrength = $state(0.3);
-	let generationProgress = $state(0); // 이미지 생성 진행률
-	let generationError = $state(null); // 에러 메시지
-	let generatedImageUrl = $state(''); // 생성된 이미지 URL
-	let cachedImageBlob = $state(null); // Store the actual image blob
-	let cachedImageUrl = $state(''); // Store a local blob URL
-	let taskId = $state(''); // FLUX API 작업 ID
-	let flux_polling_url = $state(''); // FLUX API 작업 상태 확인 URL
+	let generationProgress = $state(0);
+	let generationError = $state(null);
+	let onPreview = $state(false);
+	
+	// 이미지 관련 상태
+	let imagePrompt = $state(""); // 이미지 프롬프트 (표시용 URL)
+	let generatedImageUrl = $state(''); // 생성된 이미지 URL (표시용)
+	let cachedImageBlob = $state(null); // 실제 이미지 blob 저장
+	let cachedImageUrl = $state(''); // 로컬 blob URL 저장
+	
+	// FLUX API 관련 상태
+	let taskId = $state('');
+	let flux_polling_url = $state('');
 	let pollingInterval = $state(null);
 	let pollingTimeout = $state(null);
 	let isPending = $state(false);
-	let onPreview = $state(false);
-
-	//Flux promt body
+	
+	// FLUX API 요청 데이터
 	let fluxPrompt = $state({
 		prompt: 'Beautiful living room interior design with modern furniture and decor',
-		image_prompt: '',
-		image_prompt_strength: 0.3,
+		image_prompt: '', // base64 문자열 (API 요청용)
+		image_prompt_strength: 0.2,
 		aspect_ratio: '1:1',
 		width: 1024,
 		height: 1024,
@@ -49,38 +58,41 @@ let openImagePrompt = $state(false);
 		webhook_secret: ''
 	});
 
-	// Upload states
+	// 업로드 상태
 	let isUploading = $state(false);
 	let uploadProgress = $state(0);
 	let uploadStage = $state('idle'); // idle, reading, validating, processing
 	let fileValidationError = $state(null);
 
-	// Menu state
+	// 메뉴 상태
 	let addMenuOpen = $state(false);
 	let bgSettingOpen = $state(false);
 	let activeMenu = $state(null);
-
-	//render option state
+	
+	// 렌더링 옵션
+	let liveGenState = $state(false);
 	let isRenderOpt = $state(false);
 
-	// Input constraints
+	// 입력 제약 조건
 	const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
 	const SUPPORTED_FORMATS = ['.glb', '.gltf'];
 	const TYPE_WHITELIST = ['model/gltf-binary', 'model/gltf+json'];
 
-	// Component state
+	// 컴포넌트 상태
 	let isBusy = $state(false);
 	let abortController = null;
-	//setting state
+	
+	// 설정 상태
 	let isBG = $state(false);
 	let currentBG = $state('');
 	let currentBGratio = $state('1:1');
 	let bgRotation = $state(180);
+	let bgBrightness = $state(1);
+
 	$effect(() => {
 		console.log(bgRotation);
 	});
 
-	let bgBrightness = $state(1);
 	$effect(() => {
 		console.log(bgBrightness);
 	});
@@ -91,7 +103,7 @@ let openImagePrompt = $state(false);
 		}
 	});
 
-	// Monitor loading state from parent to update UI
+	// 부모 컴포넌트의 로딩 상태 모니터링
 	$effect(() => {
 		if (viewportLoading) {
 			isBusy = true;
@@ -102,7 +114,7 @@ let openImagePrompt = $state(false);
 			isBusy = false;
 			enableUI();
 
-			// Reset upload state if no errors
+			// 에러가 없으면 업로드 상태 초기화
 			if (!uploadError) {
 				resetUploadState();
 			} else {
@@ -111,38 +123,71 @@ let openImagePrompt = $state(false);
 		}
 	});
 
+	// 랜덤 시드 토글 핸들러
 	function handleRandomSeedToggle(event) {
 		isRandomSeed = event.target.checked;
-
-		// if (isRandomSeed) {
-		// 	// Generate a random seed between 0 and 999999 when random mode is enabled
-		// 	fluxPrompt.seed = Math.floor(Math.random() * 1000000);
-		// }
 	}
 
+	// 랜덤 시드를 생성하는 로직
 	$effect(() => {
 		if (isRandomSeed && isGenerating) {
 			fluxPrompt.seed = Math.floor(Math.random() * 1000000);
 		}
 	});
 
+	// 라이브 렌더링 토글 핸들러
+	async function handleLiveRenderToggle(event) {
+		liveGenState = event.target.checked;
+		console.log('liveGenState:', liveGenState);
+	
+
+	}
+
+	// 프롬프트 입력 핸들러
 	function onPrompt(event) {
 		fluxPrompt.prompt = event.target.value;
 	}
 
-	async function runImageGen() {
-		if (isGenerating) return; // 이미 생성 중이라면 중복 호출 방지
+	// 현재 화면 이미지 참조 가져오기
+	async function GetCurrentScreenAsImageRef() {
+		//get the screen image of the current main-canvas
+		const currentBGdata = {
+			currentBG: currentBG,
+			currentBGratio: currentBGratio,
+		}
+		await requestCurrentViewportImg(currentBGdata);
 
+
+		// base64 데이터만 반환 (API용)
+		return liveRenderImage.split(',')[1];
+	}
+
+	// 이미지 생성 실행
+	async function runImageGen() {
+		if (isGenerating) return; // 중복 호출 방지
+
+		// 라이브 렌더링 상태에 따라 처리
+		if (liveGenState) {
+			try {
+				fluxPrompt.image_prompt = await GetCurrentScreenAsImageRef();
+					
+			} catch (error) {
+				console.error('Error getting screen reference:', error);
+				generationError = 'Failed to capture current view';
+				return;
+			}
+		}
+
+		// 랜덤 시드 생성
 		if (isRandomSeed) {
 			fluxPrompt.seed = Math.floor(Math.random() * 1000000);
 		}
 
 		// 상태 초기화
-		// 상태 초기화
 		activeMenu = null;
 		openImagePrompt = false;
 		isGenerating = true;
-		isPending = false; // Start with pending state
+		isPending = false;
 		generationProgress = 0;
 		generationError = null;
 		taskId = '';
@@ -151,39 +196,40 @@ let openImagePrompt = $state(false);
 		try {
 			// UI 비활성화
 			disableUI();
-let apiRequestData;
-			// FLUX API 요청을 위한 올바른 형식의 입력 데이터 준비
-			// 문서에 따라 FluxPro11Inputs 스키마와 일치하도록 구성
-			if(fluxPrompt.image_prompt === ''){
-					apiRequestData = {
-				prompt: fluxPrompt.prompt,
-				aspect_ratio: fluxPrompt.aspect_ratio,
-				width: fluxPrompt.width,
-				height: fluxPrompt.height,
-				prompt_upsampling: fluxPrompt.prompt_upsampling,
-				seed: fluxPrompt.seed,
-				safety_tolerance: fluxPrompt.safety_tolerance,
-				output_format: fluxPrompt.output_format
-			};
-			} else{
-	apiRequestData = {
-				prompt: fluxPrompt.prompt,
-				aspect_ratio: fluxPrompt.aspect_ratio,
-				image_prompt: fluxPrompt.image_prompt,
-				image_prompt_strength: fluxPrompt.image_prompt_strength,
-				width: fluxPrompt.width,
-				height: fluxPrompt.height,
-				prompt_upsampling: fluxPrompt.prompt_upsampling,
-				seed: fluxPrompt.seed,
-				safety_tolerance: fluxPrompt.safety_tolerance,
-				output_format: fluxPrompt.output_format
-			};
+			
+			// API 요청 데이터 준비
+			let apiRequestData;
+			
+			// image_prompt가 없거나 liveGenState가 false인 경우
+			if (fluxPrompt.image_prompt === '' || fluxPrompt.image_prompt === null || !liveGenState) {
+				apiRequestData = {
+					prompt: fluxPrompt.prompt,
+					aspect_ratio: fluxPrompt.aspect_ratio,
+					width: fluxPrompt.width,
+					height: fluxPrompt.height,
+					prompt_upsampling: fluxPrompt.prompt_upsampling,
+					seed: fluxPrompt.seed,
+					safety_tolerance: fluxPrompt.safety_tolerance,
+					output_format: fluxPrompt.output_format
+				};
+			} else {
+				apiRequestData = {
+					prompt: fluxPrompt.prompt,
+					aspect_ratio: fluxPrompt.aspect_ratio,
+					image_prompt: fluxPrompt.image_prompt,
+					image_prompt_strength: fluxPrompt.image_prompt_strength,
+					width: fluxPrompt.width,
+					height: fluxPrompt.height,
+					prompt_upsampling: fluxPrompt.prompt_upsampling,
+					seed: fluxPrompt.seed,
+					safety_tolerance: fluxPrompt.safety_tolerance,
+					output_format: fluxPrompt.output_format
+				};
 			}
-		
 
 			console.log('API 요청 데이터:', apiRequestData);
 
-			// 서버 엔드포인트로 요청 전송
+			// 서버에 요청 전송
 			const response = await fetch('api/flux', {
 				method: 'POST',
 				headers: {
@@ -194,7 +240,7 @@ let apiRequestData;
 
 			console.log('응답 상태:', response.status, response.statusText);
 
-			// 응답 데이터 가져오기
+			// 응답 데이터 처리
 			const data = await response.json();
 			console.log('응답 데이터:', data);
 
@@ -211,7 +257,7 @@ let apiRequestData;
 			// 이미지 생성 상태 모니터링 시작
 			fluxPolling(flux_polling_url, taskId);
 
-			// Add a timeout for generation (5 minutes max)
+			// 생성 타임아웃 설정 (5분)
 			pollingTimeout = setTimeout(() => {
 				if (isGenerating) {
 					clearInterval(pollingInterval);
@@ -220,14 +266,14 @@ let apiRequestData;
 					isPending = false;
 					enableUI();
 				}
-			}, 300000); // 5 minutes
+			}, 300000); // 5분
 		} catch (error) {
 			console.error('이미지 생성 실패:', error);
 			generationError = error.message;
 			isGenerating = false;
 			isPending = false;
 		} finally {
-			// 성공 여부와 상관없이 UI 활성화
+			// 에러가 발생한 경우 UI 활성화
 			if (generationError) {
 				enableUI();
 				isGenerating = false;
@@ -235,6 +281,8 @@ let apiRequestData;
 			}
 		}
 	}
+
+	// FLUX API 상태 모니터링
 	function fluxPolling(pollingURL, result_id) {
 		console.log('pollingURL:', pollingURL);
 
@@ -244,61 +292,66 @@ let apiRequestData;
 			return;
 		}
 
-		  // Extract the ID from the polling URL
-  const url = new URL(pollingURL);
-  const id = result_id
+		// URL에서 ID 추출
+		const url = new URL(pollingURL);
+		const id = result_id;
 
-   if (!id) {
-    generationError = 'Invalid polling URL format';
-    isGenerating = false;
-    return;
-  }
+		if (!id) {
+			generationError = 'Invalid polling URL format';
+			isGenerating = false;
+			return;
+		}
 
-   const proxyPollingUrl = `/api/flux?id=${id}`;
+		// 프록시 URL 생성
+		const proxyPollingUrl = `/api/flux?id=${id}`;
 
+		// 폴링 인터벌 설정
 		pollingInterval = setInterval(async () => {
 			try {
-			      const response = await fetch(proxyPollingUrl);
-      if (!response.ok) {
-        throw new Error(`Polling failed with status: ${response.status}`);
-      }
+				const response = await fetch(proxyPollingUrl);
+				if (!response.ok) {
+					throw new Error(`Polling failed with status: ${response.status}`);
+				}
 
-      const data = await response.json();
-      console.log('polling data:', data);
+				const data = await response.json();
+				console.log('polling data:', data);
 
-      // Rest of your existing code remains the same
-      if (data.status === 'Ready') {
-        isPending = false;
-        console.log('이미지 생성 완료:', data.result.sample);
-        // Get the original URL from the API response
-        const originalImageUrl = data.result.sample;
-        // Create proxied URL to avoid CORS issues
-        const proxiedImageUrl = `/api/flux?url=${encodeURIComponent(originalImageUrl)}`;
-
-        console.log('Proxied image URL:', proxiedImageUrl);
-        // Set the generated image URL and call completeFluxTask
-        generatedImageUrl = proxiedImageUrl;
-
-        completeFluxTask(proxiedImageUrl);
-
-        clearPollingTimers();
+				// 상태에 따른 처리
+				if (data.status === 'Ready') {
+					// 이미지 생성 완료
+					isPending = false;
+					console.log('이미지 생성 완료:', data.result.sample);
+					
+					// 원본 URL 가져오기
+					const originalImageUrl = data.result.sample;
+					
+					// CORS 이슈 방지를 위한 프록시 URL 생성
+					const proxiedImageUrl = `/api/flux?url=${encodeURIComponent(originalImageUrl)}`;
+					console.log('Proxied image URL:', proxiedImageUrl);
+					
+					// 이미지 처리 완료
+					completeFluxTask(proxiedImageUrl);
+					
+					// 타이머 정리
+					clearPollingTimers();
 				} else if (data.status === 'Error') {
+					// 이미지 생성 실패
 					console.error('이미지 생성 실패:', data.error);
 					generationError = data.error;
 					isGenerating = false;
 					isPending = false;
 					clearPollingTimers();
 				} else if (data.status === 'Pending') {
-					// Status 'Pending' means the image is being generated
+					// 이미지 생성 중
 					isPending = true;
 
-					// Check if there's progress information and convert from decimal to percentage
+					// 진행 상황 업데이트
 					if (data.progress !== undefined && data.progress !== null) {
-						// Convert from 0-1 range to 0-100 range
+						// 0-1 범위를 0-100 범위로 변환
 						generationProgress = Math.round(data.progress * 100);
 					} else {
-						// If no specific progress, use a default value to show activity
-						generationProgress = 5; // Small percentage to indicate it's just starting
+						// 구체적인 진행 상황이 없으면 기본값 사용
+						generationProgress = 5;
 					}
 					console.log('Image generation in progress:', generationProgress);
 				} else {
@@ -314,12 +367,13 @@ let apiRequestData;
 		}, 1000);
 	}
 
+	// FLUX 작업 완료 처리
 	async function completeFluxTask(imageURL) {
 		try {
-			// Show loading state
+			// 로딩 상태 표시
 			isGenerating = true;
 
-			// Fetch the image immediately
+			// 이미지 즉시 가져오기
 			console.log('Fetching image from:', imageURL);
 			const response = await fetch(imageURL);
 
@@ -327,26 +381,27 @@ let apiRequestData;
 				throw new Error(`Failed to fetch image: ${response.statusText}`);
 			}
 
-			// Get the image as a blob and cache it
+			// 이미지를 blob으로 가져와 캐시
 			cachedImageBlob = await response.blob();
 
-			// Create a local URL for the blob (for display purposes)
+			// 이전 URL이 있으면 해제
 			if (cachedImageUrl) {
-				// Revoke previous URL if it exists to prevent memory leaks
-				URL.revokeObjectURL(cachedImageUrl);
+				revokeBlobURL(cachedImageUrl);
 			}
+			
+			// blob에 대한 로컬 URL 생성
 			cachedImageUrl = URL.createObjectURL(cachedImageBlob);
 
-			// Update the generated image URL to use our cached URL
+			// 생성된 이미지 URL 업데이트
 			generatedImageUrl = cachedImageUrl;
 
-			console.log('Image successfully cached locally');
+			console.log('Image successfully cached locally', generatedImageUrl);
 
-			// Generation complete
+			// 생성 완료
 			isGenerating = false;
 			onPreview = true;
-
-			// Ensure UI is enabled
+		
+			// UI 활성화
 			enableUI();
 		} catch (error) {
 			console.error('Error caching image:', error);
@@ -356,6 +411,7 @@ let apiRequestData;
 		}
 	}
 
+	// 폴링 타이머 정리
 	function clearPollingTimers() {
 		if (pollingInterval) {
 			clearInterval(pollingInterval);
@@ -368,15 +424,16 @@ let apiRequestData;
 		}
 	}
 
-	// Clean up function for when component is destroyed
+	// 이미지 캐시 정리
 	function cleanupImageCache() {
 		if (cachedImageUrl) {
-			URL.revokeObjectURL(cachedImageUrl);
+			revokeBlobURL(cachedImageUrl);
 			cachedImageUrl = '';
 		}
 		cachedImageBlob = null;
 	}
 
+	// 이미지 생성 취소
 	function cancelGeneration() {
 		clearPollingTimers();
 		isGenerating = false;
@@ -385,28 +442,29 @@ let apiRequestData;
 		enableUI();
 	}
 
-	// Toggle the add menu
+	// 메뉴 토글
 	function toggleAddMenu() {
-		if (isBusy) return; // Prevent opening menu when busy
+		if (isBusy) return; // 사용 중에는 메뉴 열기 방지
 		addMenuOpen = !addMenuOpen;
 	}
 
+	// 메뉴 항목 토글
 	function menuToggle(e) {
-		// Only respond to clicks on menu buttons directly, not their children
+		// 메뉴 버튼에 직접 클릭한 경우에만 응답
 		if (e.currentTarget && e.currentTarget.id) {
 			const clickedMenuId = e.currentTarget.id;
 
 			if (activeMenu === clickedMenuId) {
-				// Same menu - toggle it off
+				// 같은 메뉴 - 토글 끔
 				activeMenu = null;
 			} else {
-				// Different menu - switch to it
+				// 다른 메뉴 - 전환
 				activeMenu = clickedMenuId;
 			}
 		}
 	}
 
-	// Reset all upload-related state
+	// 업로드 관련 상태 초기화
 	function resetUploadState() {
 		isUploading = false;
 		uploadProgress = 0;
@@ -419,19 +477,19 @@ let apiRequestData;
 		}
 	}
 
-	// Validate the file before uploading
+	// 파일 유효성 검사
 	function validateFile(file) {
-		// Check if file exists
+		// 파일 존재 여부 확인
 		if (!file) {
 			return 'No file selected';
 		}
 
-		// Check file size
+		// 파일 크기 확인
 		if (file.size > MAX_FILE_SIZE) {
 			return `File too large. Maximum size is ${MAX_FILE_SIZE / (1024 * 1024)}MB`;
 		}
 
-		// Check file extension
+		// 파일 확장자 확인
 		const fileName = file.name.toLowerCase();
 		const hasValidExtension = SUPPORTED_FORMATS.some((ext) => fileName.endsWith(ext));
 
@@ -439,43 +497,43 @@ let apiRequestData;
 			return `Unsupported file format. Please use: ${SUPPORTED_FORMATS.join(', ')}`;
 		}
 
-		// Additional MIME type check if available
+		// MIME 타입 확인
 		if (file.type && !TYPE_WHITELIST.includes(file.type) && file.type !== '') {
 			console.warn(`Unexpected file type: ${file.type}, proceeding anyway`);
-			// We don't reject here as MIME types can be unreliable
+			// MIME 타입은 신뢰할 수 없어 여기서 거부하지 않음
 		}
 
-		return null; // No error
+		return null; // 에러 없음
 	}
 
-	// Handle file selection
+	// 파일 선택 처리
 	function addModel(event) {
 		const file = event.target.files[0];
 
-		// Reset previous state
+		// 이전 상태 초기화
 		resetUploadState();
 
-		// Validate file
+		// 파일 유효성 검사
 		const validationError = validateFile(file);
 		if (validationError) {
 			fileValidationError = validationError;
-			event.target.value = ''; // Reset file input
+			event.target.value = ''; // 파일 입력 초기화
 			return;
 		}
 
 		if (file) {
-			// Set up abort controller for cancellation
+			// 취소를 위한 abort controller 설정
 			abortController = new AbortController();
 
-			// Update UI state
+			// UI 상태 업데이트
 			isUploading = true;
 			uploadStage = 'reading';
 			uploadProgress = 0;
 
-			// Create file reader to track progress
+			// 진행 상황 추적을 위한 FileReader 생성
 			const reader = new FileReader();
 
-			// Track upload progress
+			// 업로드 진행 상황 추적
 			reader.onprogress = (event) => {
 				if (event.lengthComputable) {
 					const percentLoaded = Math.round((event.loaded / file.size) * 100);
@@ -483,38 +541,38 @@ let apiRequestData;
 				}
 			};
 
-			// Start loading
+			// 로딩 시작
 			reader.onloadstart = () => {
 				console.log('Starting file read');
 				uploadProgress = 0;
 			};
 
-			// Error handling
+			// 에러 처리
 			reader.onerror = (error) => {
 				console.error('File reading error:', error);
 				fileValidationError = 'Failed to read file: ' + (error.message || 'Unknown error');
 				isUploading = false;
-				event.target.value = ''; // Reset file input
+				event.target.value = ''; // 파일 입력 초기화
 			};
 
-			// Finish loading
+			// 로딩 완료
 			reader.onloadend = () => {
 				console.log('File read complete');
 				uploadProgress = 100;
 				uploadStage = 'validating';
 
-				// Small delay to show complete progress before proceeding
+				// 진행 완료 표시를 위한 작은 지연
 				setTimeout(() => {
-					// Reset file input
+					// 파일 입력 초기화
 					event.target.value = '';
 
-					// Check if aborted
+					// 취소된 경우 확인
 					if (abortController.signal.aborted) {
 						console.log('Upload was cancelled');
 						return;
 					}
 
-					// Pass to parent component
+					// 부모 컴포넌트에 전달
 					add3dModel(file, {
 						name: file.name,
 						size: file.size,
@@ -523,12 +581,12 @@ let apiRequestData;
 				}, 300);
 			};
 
-			// Read the file (this triggers the progress events)
+			// 파일 읽기 시작 (진행 이벤트 트리거)
 			reader.readAsArrayBuffer(file);
 		}
 	}
 
-	// Cancel the current upload
+	// 현재 업로드 취소
 	function cancelUpload() {
 		if (abortController) {
 			abortController.abort();
@@ -537,7 +595,7 @@ let apiRequestData;
 		resetUploadState();
 	}
 
-	// Disable UI elements during processing
+	// 처리 중 UI 요소 비활성화
 	function disableUI() {
 		document.getElementById('add-item-btn')?.setAttribute('disabled', 'true');
 		document.getElementById('render-btn')?.setAttribute('disabled', 'true');
@@ -545,7 +603,7 @@ let apiRequestData;
 		document.getElementById('toggleButton')?.setAttribute('disabled', 'true');
 	}
 
-	// Enable UI elements after processing
+	// 처리 후 UI 요소 활성화
 	function enableUI() {
 		document.getElementById('add-item-btn')?.removeAttribute('disabled');
 		document.getElementById('render-btn')?.removeAttribute('disabled');
@@ -553,12 +611,13 @@ let apiRequestData;
 		document.getElementById('toggleButton')?.removeAttribute('disabled');
 	}
 
+	// 배경 비율 변경
 	function changeBGratio(e) {
 		let ratio = e.target.id;
 		switch (ratio) {
 			case 'FIT':
 				currentBGratio = 'FIT';
-				//current BG width, height
+				// 현재 BG 너비, 높이
 				if (currentBG) {
 					let img = new Image();
 					img.src = currentBG;
@@ -568,7 +627,7 @@ let apiRequestData;
 							currentBGratio = 'FIT 1:1';
 							fluxPrompt.aspect_ratio = '1:1';
 						} else if (ratio > 1) {
-							//세로
+							// 세로
 							currentBGratio = `FIT 1:${ratio.toFixed(2)}`;
 							fluxPrompt.aspect_ratio = `1:${ratio.toFixed(2)}`;
 						} else if (ratio < 1) {
@@ -645,91 +704,59 @@ let apiRequestData;
 		}
 	}
 
-	function handleBGImport(event) {
-		const file = event.target.files[0];
-
-		if (file) {
-			console.log('Background image selected:', file);
-
-			// Check if file is an image
-			if (!file.type.startsWith('image/')) {
-				console.error('Selected file is not an image');
-				return;
-			}
-
-			// Revoke previous object URL if it exists to prevent memory leaks
-			if (currentBG && currentBG.startsWith('blob:')) {
-				URL.revokeObjectURL(currentBG);
-			}
-
-			// Create a URL for the selected image file
-			const imageUrl = URL.createObjectURL(file);
-
-			// Update state
-			isBG = true;
-			currentBG = imageUrl;
-
-			// Update thumbnail immediately
-			setTimeout(() => {
-				changeBGThumbnail(currentBG);
-			}, 0);
-
-			// Send to parent component for scene update
-			BGimport(file);
-		}
-	}
-
+	// 배경 썸네일 변경
 	function changeBGThumbnail(currentBG) {
 		const thumbnailImg = document.querySelector('.bg-preview-thumbnail img');
 
 		if (thumbnailImg) {
 			thumbnailImg.src = currentBG;
 
-			// Optional: Free memory when the image is no longer needed
+			// 이미지가 더 이상 필요 없을 때 메모리 해제 (선택 사항)
 			thumbnailImg.onload = () => {};
 		} else {
 			console.error('Thumbnail image element not found');
 		}
 	}
 
+	// 32의 배수로 비율 변환
 	function convert32ratio(width, height) {
-		// Calculate original aspect ratio
+		// 원본 종횡비 계산
 		const aspectRatio = width / height;
 
-		// Calculate multiples of 32 that are closest to original dimensions
-		// Strategy 1: round width to multiple of 32, adjust height
+		// 원본 치수에 가장 가까운 32의 배수 계산
+		// 전략 1: 너비를 32의 배수로 반올림, 높이 조정
 		let newWidth1 = Math.round(width / 32) * 32;
 		let newHeight1 = Math.round(newWidth1 / aspectRatio / 32) * 32;
 
-		// Strategy 2: round height to multiple of 32, adjust width
+		// 전략 2: 높이를 32의 배수로 반올림, 너비 조정
 		let newHeight2 = Math.round(height / 32) * 32;
 		let newWidth2 = Math.round((newHeight2 * aspectRatio) / 32) * 32;
 
-		// Ensure at least one dimension is 768 or larger
+		// 적어도 하나의 차원이 768 이상이어야 함
 		const minSize = 768;
 
-		// Scale up dimensions if needed for Strategy 1
+		// 필요한 경우 전략 1의 치수 스케일업
 		if (newWidth1 < minSize && newHeight1 < minSize) {
 			const scale = Math.ceil(minSize / Math.max(newWidth1, newHeight1));
 			newWidth1 = Math.round((newWidth1 * scale) / 32) * 32;
 			newHeight1 = Math.round((newHeight1 * scale) / 32) * 32;
 		}
 
-		// Scale up dimensions if needed for Strategy 2
+		// 필요한 경우 전략 2의 치수 스케일업
 		if (newWidth2 < minSize && newHeight2 < minSize) {
 			const scale = Math.ceil(minSize / Math.max(newWidth2, newHeight2));
 			newWidth2 = Math.round((newWidth2 * scale) / 32) * 32;
 			newHeight2 = Math.round((newHeight2 * scale) / 32) * 32;
 		}
 
-		// Calculate how much each result deviates from the original aspect ratio
+		// 각 결과가 원래 종횡비에서 얼마나 벗어나는지 계산
 		const ratio1 = newWidth1 / newHeight1;
 		const ratio2 = newWidth2 / newHeight2;
 
 		const error1 = Math.abs(ratio1 - aspectRatio);
 		const error2 = Math.abs(ratio2 - aspectRatio);
 
-		// Choose the strategy that preserves the aspect ratio better
+		// 종횡비를 더 잘 보존하는 전략 선택
 		if (error1 <= error2) {
 			return {
 				width: newWidth1,
@@ -743,42 +770,13 @@ let apiRequestData;
 		}
 	}
 
-	function removeBG() {
-		if (currentBG === '' || !isBG) {
-			return;
-		}
-		console.log('removeBG');
-
-		isBG = false;
-		currentBG = '';
-
-		// Let the parent component know the background is removed
-		BGimport(null);
-	}
-
-	function downloadBG() {
-		if (currentBG === '' || !isBG) {
-			return;
-		}
-
-		//getcurrenttime
-		const now = new Date();
-		const timestamp = now.toISOString().replace(/[-:]/g, '').split('.')[0];
-
-		// Create a download link
-		const link = document.createElement('a');
-		link.href = currentBG;
-		link.download = 'otr-ai-gen-' + `${timestamp}.` + (currentBG.includes('.jpg') ? 'jpg' : 'png');
-		document.body.appendChild(link);
-		link.click();
-		document.body.removeChild(link);
-	}
-
+	// 렌더링 실행
 	function render() {
 		console.log('Rendering...');
 		pathTracingRender(true); // 경로 추적 모드로 전환
 	}
 
+	// 렌더링 옵션 토글 핸들러
 	function onRenderOptionToggle(e) {
 		isRenderOpt = e.target.checked;
 
@@ -797,69 +795,71 @@ let apiRequestData;
 		}
 	}
 
-function handleImagePrompt(event) {
-  const file = event.target.files[0];
-  
-  if (!file) {
-    return;
-  }
-  
-  // Check if file is an image
-  if (!file.type.startsWith('image/')) {
-    generationError = 'Selected file is not an image';
-    event.target.value = '';
-    return;
-  }
-  
-  // Check file size (max 5MB)
-  const maxSize = 5 * 1024 * 1024;
-  if (file.size > maxSize) {
-    generationError = `Image file is too large. Maximum size is 5MB.`;
-    event.target.value = '';
-    return;
-  }
-  
-  // Convert to base64
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    // For display purposes - use the full data URL
-    imagePrompt = e.target.result;
-    
-    // For API request - extract just the base64 part without the prefix
-    // The API might be expecting just the base64 string without the "data:image/jpeg;base64," prefix
-    const base64Content = e.target.result.split(',')[1];
-    
-    // Set it in the flux prompt data - using just the base64 content
-    fluxPrompt.image_prompt = base64Content;
-    
-    console.log('Image reference added');
-  };
-  
-  reader.onerror = () => {
-    generationError = 'Failed to read image file';
-    event.target.value = '';
-  };
-  
-  // Read the file as data URL (base64)
-  reader.readAsDataURL(file);
-  
-  // Reset file input
-  event.target.value = '';
-}
-function removeImagePrompt() {
-  imagePrompt = null;
-  fluxPrompt.image_prompt = ""; // Reset to default value
-  console.log('Image reference removed');
-}
+	// 이미지 프롬프트 핸들러 (파일 업로드)
+	async function handleImagePrompt(event) {
+		const file = event.target.files[0];
+		
+		if (!file) {
+			return;
+		}
+		
+		// 파일이 이미지인지 확인
+		if (!file.type.startsWith('image/')) {
+			generationError = 'Selected file is not an image';
+			event.target.value = '';
+			return;
+		}
+		
+		// 파일 크기 확인 (최대 5MB)
+		const maxSize = 5 * 1024 * 1024;
+		if (file.size > maxSize) {
+			generationError = `Image file is too large. Maximum size is 5MB.`;
+			event.target.value = '';
+			return;
+		}
+		
+		try {
+			// 표시용 URL 생성
+			imagePrompt = await toBlobURL(file);
+			
+			// API 요청용 base64 생성 - 접두사 없는 base64 문자열
+			const base64Content = await toBase64(file, true);
+			fluxPrompt.image_prompt = base64Content;
+			
+			console.log('Image reference added');
+		} catch (error) {
+			console.error('Failed to process image:', error);
+			generationError = 'Failed to process image file';
+		}
+		
+		// 파일 입력 초기화
+		event.target.value = '';
+	}
+	
+	// 이미지 프롬프트 제거
+	function removeImagePrompt() {
+		// 이전 Blob URL 해제
+		if (imagePrompt && imagePrompt.startsWith('blob:')) {
+			revokeBlobURL(imagePrompt);
+		}
+		
+		imagePrompt = null;
+		fluxPrompt.image_prompt = ""; // 기본값으로 재설정
+		console.log('Image reference removed');
+	}
 
 	onMount(() => {
 		return () => {
 			clearPollingTimers();
 			cleanupImageCache();
 
-			// Clean up any blob URLs
+			// Blob URL 정리
 			if (currentBG && currentBG.startsWith('blob:')) {
-				URL.revokeObjectURL(currentBG);
+				revokeBlobURL(currentBG);
+			}
+			
+			if (imagePrompt && imagePrompt.startsWith('blob:')) {
+				revokeBlobURL(imagePrompt);
 			}
 		};
 	});
@@ -949,8 +949,8 @@ function removeImagePrompt() {
 						</div>
 					{/if}
 				</div> -->
+			
 				<div id="seed" class="toolbtn seed-setting" onclick={menuToggle}>
-					
 					<Icon class="tool-icon-mid" icon="mingcute:random-line" />
 					<div class="seed-detail">
 						{#if isRandomSeed}
@@ -971,13 +971,13 @@ function removeImagePrompt() {
 										value={fluxPrompt.seed}
 										oninput={(e) => (fluxPrompt.seed = parseInt(e.target.value) || 0)}
 										disabled={isRandomSeed}
-										  onclick={(e) => e.stopPropagation()} 
+										onclick={(e) => e.stopPropagation()}
 									/>
 								</div>
 								<div class="seed-random-toggle" onclick={(e) => e.stopPropagation()}>
 									<label for="random-seed-toggle">Random seed</label>
-									<div class="toggle-container"  onclick={(e) => e.stopPropagation()}>
-										<label class="toggle"  onclick={(e) => e.stopPropagation()}>
+									<div class="toggle-container" onclick={(e) => e.stopPropagation()}>
+										<label class="toggle" onclick={(e) => e.stopPropagation()}>
 											<input
 												type="checkbox"
 												id="random-seed-toggle"
@@ -1153,56 +1153,92 @@ function removeImagePrompt() {
 
 			<div class="prompt-input-wrapper">
 				<div class="gen-opt-wrapper">
-  <button 
-    title="upload image reference" 
-    class={imagePrompt ? "IP" : "IP none"} 
-    disabled={isGenerating} 
-    onclick={() => openImagePrompt = !openImagePrompt}
-  >
-    <Icon icon="ri:image-ai-line" width="20" height="20" />
-  </button>
+					<button
+						title="upload image reference"
+						class={imagePrompt ? 'IP' : 'IP none'}
+						disabled={isGenerating}
+						onclick={() => (openImagePrompt = !openImagePrompt)}
+					>
+						<Icon icon="ri:image-ai-line" width="20" height="20" />
+					</button>
+
+					{#if openImagePrompt}
+						<div class="image-prompt" transition:slide>
+							<div class="image-prompt-content">
+													{#if liveGenState}
+					<div class="image-preview-container">
+					
+<div class="live-render-bg">
+  <!-- Scene elements for depth -->
+  <div class="expanding-ring"></div>
+  <div class="expanding-ring" style="animation-delay: 1s;"></div>
+  <div class="expanding-ring" style="animation-delay: 2s;"></div>
   
-  {#if openImagePrompt}
-    <div class="image-prompt" transition:slide>
-      <div class="image-prompt-content">
-        {#if imagePrompt}
-          <div class="image-preview-container">
-            <img src={imagePrompt} alt="Reference image" />
-           
-						<div class="ip-strength-slider">
-				<ImgSlider
-					value={fluxPrompt.image_prompt_strength}
-					min={0}
-					max={1}
-					scale={0.1}
-					name="Strength"
-					unit=""
-					onValueChange={(newValue) => (fluxPrompt.image_prompt_strength = newValue)}
-				/>
-			</div>
- <div class="image-preview-actions">
-              <button onclick={removeImagePrompt} title="Remove image">
-                <Icon icon="carbon:close" width="16" height="16" />
-              </button>
-            </div>
-          </div>
-        {:else}
-          <div class="upload-placeholder" onclick={() => document.getElementById('image-prompt-input').click()}>
-            <Icon icon="material-symbols:cloud-upload" width="24" height="24" />
-            <span>Upload Image Reference</span>
-          </div>
-        {/if}
-      </div>
-      <input 
-        type="file" 
-        id="image-prompt-input" 
-        accept=".png,.jpg,.jpeg,.webp" 
-        style="display: none;" 
-        onchange={handleImagePrompt} 
-      />
-    </div>
-  {/if}
+
 </div>
+							<div class="ip-strength-slider">
+											<ImgSlider
+												value={fluxPrompt.image_prompt_strength}
+												min={0}
+												max={1}
+												scale={0.1}
+												name="Strength"
+												unit=""
+												onValueChange={(newValue) => (fluxPrompt.image_prompt_strength = newValue)}
+											/>
+										</div>
+					</div>
+					{/if}
+								{#if !liveGenState}
+								{#if imagePrompt}
+									<div class="image-preview-container">
+										<img src={imagePrompt} alt="Reference image" />
+
+										<div class="ip-strength-slider">
+											<ImgSlider
+												value={fluxPrompt.image_prompt_strength}
+												min={0}
+												max={1}
+												scale={0.1}
+												name="Strength"
+												unit=""
+												onValueChange={(newValue) => (fluxPrompt.image_prompt_strength = newValue)}
+											/>
+										</div>
+										<div class="image-preview-actions">
+											<button onclick={removeImagePrompt} title="Remove image">
+												<Icon icon="carbon:close" width="16" height="16" />
+											</button>
+										</div>
+									</div>
+								{:else}
+									<div
+										class="upload-placeholder"
+										onclick={() => document.getElementById('image-prompt-input').click()}
+									>
+										<Icon icon="material-symbols:cloud-upload" width="24" height="24" />
+										<span>Upload Image Reference</span>
+									</div>
+								{/if}
+								{/if}
+										<div id="live-render" class="live-render">
+											<div class="live-render-desc">Use Live Reference <span title="Use current viewport as a reference image prompt for the A.I. image generation"><Icon  class="help-icon" icon="material-symbols:help-outline" width="20" height="20" /></span></div>
+
+											<ToggleBtn checked={liveGenState} onToggle={handleLiveRenderToggle} />
+				</div>
+
+								
+							</div>
+							<input
+								type="file"
+								id="image-prompt-input"
+								accept=".png,.jpg,.jpeg,.webp"
+								style="display: none;"
+								onchange={handleImagePrompt}
+							/>
+						</div>
+					{/if}
+				</div>
 				<input
 					type="text"
 					id="prompt-input"
@@ -1258,9 +1294,7 @@ function removeImagePrompt() {
 	</div>
 {/if}
 
-<!-- 생성된 이미지 미리보기 (옵션) -->
-<!-- Generated image preview - updated condition to show preview whenever 
-     there's a generated image and we're not currently generating -->
+<!-- 생성된 이미지 미리보기 -->
 {#if cachedImageUrl && !isGenerating && onPreview}
 	<div class="generated-image-preview-backdrop"></div>
 	<div class="generated-image-preview" transition:fade>
@@ -1269,24 +1303,24 @@ function removeImagePrompt() {
 			<button
 				class="main-action-btn"
 				onclick={() => {
-					// Set as background using the cached image
+					// 캐시된 이미지를 배경으로 설정
 					if (cachedImageBlob) {
-						// Create a new file from the cached blob
+						// 캐시된 blob에서 새 파일 생성
 						const file = new File([cachedImageBlob], 'generated-image.png', {
 							type: cachedImageBlob.type || 'image/png'
 						});
 
-						// Update local state
+						// 로컬 상태 업데이트
 						isBG = true;
 						currentBG = cachedImageUrl;
 
-						// Send to parent component for scene update
-						BGimport(file);
+						// 배경으로 설정
+						BGfromURL(currentBG)
 
-						// Close the preview
+						// 미리보기 닫기
 						onPreview = false;
 					} else {
-						// Fallback in case the blob isn't available (shouldn't happen)
+						// blob을 사용할 수 없는 경우 대체 (발생하지 않아야 함)
 						generationError = 'Image data not available. Please try again.';
 					}
 				}}
@@ -1298,18 +1332,16 @@ function removeImagePrompt() {
 				class="preview-action-btn"
 				onclick={() => {
 					if (cachedImageBlob) {
-						// Create and trigger download directly from the cached blob
-						const now = new Date();
-						const timestamp = now.toISOString().replace(/[-:]/g, '').split('.')[0];
+						// 캐시된 blob에서 직접 다운로드 트리거
+						const filename = generateImageFilename('otr-ai-gen');
 						const link = document.createElement('a');
 						link.href = cachedImageUrl;
-						link.download =
-							'otr-ai-gen-' + `${timestamp}.` + (cachedImageUrl.includes('.jpg') ? 'jpg' : 'png');
+						link.download = filename;
 						document.body.appendChild(link);
 						link.click();
 						document.body.removeChild(link);
 					} else {
-						// Fallback in case the blob isn't available (shouldn't happen)
+						// blob을 사용할 수 없는 경우 대체 (발생하지 않아야 함)
 						generationError = 'Image data not available. Please try again.';
 					}
 				}}
@@ -1320,8 +1352,7 @@ function removeImagePrompt() {
 			<button
 				class="preview-action-btn"
 				onclick={() => {
-					// Just close the preview - keep the cached image in memory
-					// in case the user wants to reopen it
+					// 미리보기 닫기 - 캐시된 이미지는 메모리에 유지
 					onPreview = false;
 				}}
 			>
@@ -1412,7 +1443,7 @@ function removeImagePrompt() {
 		display: flex;
 		justify-self: center;
 		align-items: center;
-	
+
 		height: 100%;
 		aspect-ratio: 1 / 1;
 		border-right: 1px solid var(--dim-color);
@@ -1449,7 +1480,7 @@ function removeImagePrompt() {
 		background: none;
 		outline: none;
 		height: 100%;
-	padding: 0 10px;
+		padding: 0 10px;
 		color: var(--dim-color);
 		transition: all ease-in-out 300ms;
 		cursor: pointer; /* 버튼처럼 커서 추가 */
@@ -1986,274 +2017,462 @@ function removeImagePrompt() {
 			opacity: 0.6;
 		}
 	}
-.seed-setting .seed-detail{
-	display: flex;
-	justify-content: center;
-	align-items: center;
-font-size: 0.9rem;
-}
- .seed-setting-wrapper {
-	box-sizing: border-box;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    width: 100%;
-  }
-  
-  .seed-title {
-	
-    font-size: 0.9rem;
-    padding: 10px 0px;
-    cursor: default;
-    width: 100%;
-    text-align: center;
-    border-bottom: 1px solid var(--dim-color);
-  }
-  
-  .seed-input-container {
-    width: 100%;
-    cursor:default;
-    box-sizing: border-box;
-  }
-  
-  #seed-input {
-  box-sizing: border-box;
-  width: 100%;
-  background: none;
-  border: none;
- 
-  padding: 8px;
-  color: var(--text-color-bright);
-  text-align: center;
-  font-size: 0.9rem;
-  /* Remove spinner buttons from number input */
-  -moz-appearance: textfield; /* Firefox */
-}
+	.seed-setting .seed-detail {
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		font-size: 0.9rem;
+	}
+	.seed-setting-wrapper {
+		box-sizing: border-box;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		align-items: center;
+		width: 100%;
+	}
 
-/* Chrome, Safari, Edge, Opera */
-#seed-input::-webkit-outer-spin-button,
-#seed-input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-  
-  #seed-input:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-  
-  .seed-random-toggle {
-	 box-sizing: border-box;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    width: 100%;
+	.seed-title {
+		font-size: 0.9rem;
+		padding: 10px 0px;
+		cursor: default;
+		width: 100%;
+		text-align: center;
+		border-bottom: 1px solid var(--dim-color);
+	}
 
-    border-top: 1px solid var(--dim-color);
-	cursor: default;
-  }
+	.seed-input-container {
+		width: 100%;
+		cursor: default;
+		box-sizing: border-box;
+	}
 
+	#seed-input {
+		box-sizing: border-box;
+		width: 100%;
+		background: none;
+		border: none;
 
-  
-  .seed-random-toggle label {
-	text-align: left;
-	
-    font-size: 0.9rem;
-    color: var(--text-color-standard);
-	cursor: pointer;
-margin-left: 10px;
-	flex-grow: 1;
-	transition: all ease-in-out 300ms;
-  }
-  .seed-random-toggle label:hover {
-	color: var(--text-color-bright);
-  }
-  
-  .toggle-container {
-	padding: 10px;
-    display: flex;
-    align-items: center;
+		padding: 8px;
+		color: var(--text-color-bright);
+		text-align: center;
+		font-size: 0.9rem;
+		/* Remove spinner buttons from number input */
+		-moz-appearance: textfield; /* Firefox */
+	}
 
-  }
-  
-  .toggle {
-    position: relative;
-    display: inline-block;
-    width: 40px;
-    height: 22px;
-  }
-  
-  .toggle input {
-    opacity: 0;
-    width: 0;
-    height: 0;
-  }
-  
-  .slider {
+	/* Chrome, Safari, Edge, Opera */
+	#seed-input::-webkit-outer-spin-button,
+	#seed-input::-webkit-inner-spin-button {
+		-webkit-appearance: none;
+		margin: 0;
+	}
+
+	#seed-input:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.seed-random-toggle {
+		box-sizing: border-box;
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		width: 100%;
+
+		border-top: 1px solid var(--dim-color);
+		cursor: default;
+	}
+
+	.seed-random-toggle label {
+		text-align: left;
+
+		font-size: 0.9rem;
+		color: var(--text-color-standard);
+		cursor: pointer;
+		margin-left: 10px;
+		flex-grow: 1;
+		transition: all ease-in-out 300ms;
+	}
+	.seed-random-toggle label:hover {
+		color: var(--text-color-bright);
+	}
+
+	.toggle-container {
+		padding: 10px;
+		display: flex;
+		align-items: center;
+	}
+
+	.toggle {
+		position: relative;
+		display: inline-block;
+		width: 40px;
+		height: 22px;
+	}
+
+	.toggle input {
+		opacity: 0;
+		width: 0;
+		height: 0;
+	}
+
+	.slider {
+		position: absolute;
+		cursor: pointer;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background-color: var(--dim-color);
+		transition: 0.4s;
+		border-radius: 34px;
+	}
+
+	.slider:before {
+		position: absolute;
+		content: '';
+		height: 16px;
+		width: 16px;
+		left: 3px;
+		bottom: 3px;
+		background-color: white;
+		transition: 0.4s;
+		border-radius: 50%;
+	}
+
+	input:checked + .slider {
+		background-color: var(--highlight-color);
+	}
+
+	input:checked + .slider:before {
+		transform: translateX(18px);
+	}
+
+	.IP {
+		box-sizing: border-box;
+		border: none;
+		border-radius: 8px;
+		padding: 4px;
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		background-color: var(--highlight-color);
+		color: var(--text-color-standard);
+		transition: all ease-in-out 300ms;
+		margin-right: 8px;
+	}
+
+	.IP:hover:not(:disabled) {
+		background-color: var(--hover-color);
+		color: var(--text-color-bright);
+		cursor: pointer;
+	}
+
+	.IP:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.IP.none {
+		background-color: transparent;
+		border: 1px solid var(--dim-color);
+		color: var(--dim-color);
+	}
+
+	.image-prompt {
+		position: absolute;
+		left: 0;
+		bottom: 100%;
+		margin-bottom: 8px;
+		background-color: var(--primary-color);
+		border-radius: 8px;
+		border: 1px solid var(--dim-color);
+		overflow: hidden;
+		width: 180px;
+		z-index: 10;
+	}
+
+	.image-prompt-content {
+		box-sizing: border-box;
+		width: 100%;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		align-items: center;
+		gap: 8px;
+	}
+
+	.upload-placeholder {
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		align-items: center;
+		width: 150px;
+		height: 150px;
+		padding: 16px;
+
+		border-radius: 8px;
+		cursor: pointer;
+		color: var(--dim-color);
+		transition: all ease-in-out 300ms;
+	}
+
+	.upload-placeholder:hover {
+		border-color: var(--highlight-color);
+		background-color: rgba(255, 255, 255, 0.05);
+		color: var(--text-color-bright);
+	}
+
+	.upload-placeholder span {
+		text-align: center;
+		margin-top: 8px;
+		font-size: 0.9rem;
+	}
+
+	.image-preview-container {
+		position: relative;
+		width: 150px;
+		height: 150px;
+		margin: 15px;
+		border-radius: 8px;
+		overflow: hidden;
+		border: 1px solid var(--dim-color);
+	}
+
+	.image-preview-container img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+
+	.image-preview-actions {
+		position: absolute;
+		top: 0;
+		right: 0;
+		display: flex;
+		justify-content: center;
+		align-items: center;
+	}
+
+	.image-preview-actions button {
+		background-color: rgba(0, 0, 0, 0.5);
+		border: none;
+		border-radius: 0 0 0 8px;
+		padding: 6px;
+		cursor: pointer;
+		color: white;
+		transition: all ease-in-out 300ms;
+	}
+
+	.image-preview-actions button:hover {
+		background-color: rgba(255, 0, 0, 0.8);
+	}
+
+	.ip-strength-slider {
+		position: absolute;
+	}
+	.ip-strength-slider {
+		position: absolute;
+		top: 0;
+		left: 0;
+		width: 100%;
+		height: 100%;
+	}
+
+	.live-render{
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		align-items: center;
+		margin-top: 10px;
+			margin-bottom: 10px;
+
+	}
+
+	.live-render-desc{
+		display: flex;
+		flex-direction: row;
+		justify-content: center;
+		align-items: center;
+		gap:4px;
+
+	}
+
+	div :global(.help-icon){
+		width: 20px;
+		height: 20px;
+		cursor: pointer;
+	}
+
+ .live-render-bg {
     position: absolute;
-    cursor: pointer;
     top: 0;
     left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: var(--dim-color);
-    transition: 0.4s;
-    border-radius: 34px;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+    overflow: hidden;
+    border-radius: 8px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
   }
-  
-  .slider:before {
-    position: absolute;
+
+  /* Main gradient animation */
+  .live-render-bg::before {
     content: "";
-    height: 16px;
-    width: 16px;
-    left: 3px;
-    bottom: 3px;
-    background-color: white;
-    transition: 0.4s;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+      135deg,
+      var(--secondary-color) 0%,
+      #2a1418 25%,
+      var(--highlight-color) 50%,
+      #3a1f29 75%,
+      var(--secondary-color) 100%
+    );
+    background-size: 400% 400%;
+    animation: smoothGradient 12s ease infinite;
+    z-index: 1;
+  }
+
+  /* Overlay with depth */
+  .live-render-bg::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(
+      circle at center,
+      rgba(77, 56, 66, 0.2) 0%,
+      rgba(23, 2, 2, 0.6) 70%
+    );
+    z-index: 2;
+  }
+
+  /* Live indicator container */
+  .live-indicator-container {
+    position: relative;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-color-bright);
+    background-color: rgba(20, 10, 10, 0.5);
+    backdrop-filter: blur(2px);
+    padding: 4px 12px;
+    border-radius: 4px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(77, 56, 66, 0.3);
+  }
+
+  /* Status indicator */
+  .live-indicator-container .status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8rem;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+  }
+
+  .live-indicator-container .pulse-dot {
+    width: 8px;
+    height: 8px;
+    background: linear-gradient(135deg, #ff5e5e, #d63c3c);
     border-radius: 50%;
-  }
-  
-  input:checked + .slider {
-    background-color: var(--highlight-color);
-  }
-  
-  input:checked + .slider:before {
-    transform: translateX(18px);
+    box-shadow: 0 0 5px rgba(255, 94, 94, 0.5);
+    animation: pulseDot 1.5s ease-in-out infinite;
   }
 
- .IP {
-  box-sizing: border-box;
-  border: none;
-  border-radius: 8px;
-  padding: 4px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  background-color: var(--highlight-color);
-  color: var(--text-color-standard);
-  transition: all ease-in-out 300ms;
-  margin-right: 8px;
-}
+  /* Scene elements for depth */
+  .scene-element {
+    position: absolute;
+    background-color: rgba(255, 255, 255, 0.03);
+    border-radius: 2px;
+    z-index: 3;
+    transform-origin: center;
+  }
 
-.IP:hover:not(:disabled) {
-  background-color: var(--hover-color);
-  color: var(--text-color-bright);
-  cursor: pointer;
-}
+  .scene-element:nth-child(1) {
+    width: 40px;
+    height: 40px;
+    top: 20px;
+    left: 30px;
+    animation: float 8s ease-in-out infinite;
+  }
 
-.IP:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+  .scene-element:nth-child(2) {
+    width: 30px;
+    height: 30px;
+    bottom: 30px;
+    right: 40px;
+    animation: float 6s ease-in-out infinite 1s;
+  }
 
-.IP.none {
-  background-color: transparent;
-  border: 1px solid var(--dim-color);
-  color: var(--dim-color);
-}
+  .scene-element:nth-child(3) {
+    width: 25px;
+    height: 25px;
+    bottom: 20px;
+    left: 35px;
+    animation: float 7s ease-in-out infinite 2s;
+  }
 
-.image-prompt {
-  position: absolute;
-  left: 0;
-  bottom: 100%;
-  margin-bottom: 8px;
-  background-color: var(--primary-color);
-  border-radius: 8px;
-  border: 1px solid var(--dim-color);
-  overflow: hidden;
-  width: 180px;
-  z-index: 10;
-}
+  .scene-element:nth-child(4) {
+    width: 20px;
+    height: 20px;
+    top: 30px;
+    right: 50px;
+    animation: float 5s ease-in-out infinite 0.5s;
+  }
 
-.image-prompt-content {
-  box-sizing: border-box;
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-}
+  /* Expanding ring */
+  .expanding-ring {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 10px;
+    height: 10px;
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+    z-index: 3;
+    animation: expandRing 4s ease-out infinite;
+  }
 
-.upload-placeholder {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  width: 150px;
-  height: 150px;
-  padding: 16px;
-  
-  
-  border-radius: 8px;
-  cursor: pointer;
-  color: var(--dim-color);
-  transition: all ease-in-out 300ms;
-}
+  /* Make sure strength slider stays on top */
+  .ip-strength-slider {
+    z-index: 10;
+  }
 
-.upload-placeholder:hover {
-  border-color: var(--highlight-color);
-  background-color: rgba(255, 255, 255, 0.05);
-  color: var(--text-color-bright);
-}
+  /* Animation keyframes */
+  @keyframes smoothGradient {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
 
-.upload-placeholder span {
-	text-align: center;
-  margin-top: 8px;
-  font-size: 0.9rem;
-}
+  @keyframes pulseDot {
+    0% { transform: scale(0.8); opacity: 0.7; }
+    50% { transform: scale(1.1); opacity: 1; box-shadow: 0 0 10px rgba(255, 94, 94, 0.7); }
+    100% { transform: scale(0.8); opacity: 0.7; }
+  }
 
-.image-preview-container {
-  position: relative;
-  width: 150px;
-  height: 150px;
-  margin: 15px;
-  border-radius: 8px;
-  overflow: hidden;
-  border: 1px solid var(--dim-color);
-}
+  @keyframes float {
+    0% { transform: translateY(0) rotate(0deg); opacity: 0.3; }
+    50% { transform: translateY(-10px) rotate(5deg); opacity: 0.5; }
+    100% { transform: translateY(0) rotate(0deg); opacity: 0.3; }
+  }
 
-.image-preview-container img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.image-preview-actions {
-  position: absolute;
-  top: 0;
-  right: 0;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-.image-preview-actions button {
-  background-color: rgba(0, 0, 0, 0.5);
-  border: none;
-  border-radius: 0 0 0 8px;
-  padding: 6px;
-  cursor: pointer;
-  color: white;
-  transition: all ease-in-out 300ms;
-}
-
-.image-preview-actions button:hover {
-  background-color: rgba(255, 0, 0, 0.8);
-}
-
-
-.ip-strength-slider{
-	position: absolute;
-
-}
-  .ip-strength-slider{
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-  
-        
-    }
+  @keyframes expandRing {
+    0% { width: 10px; height: 10px; opacity: 0.7; }
+    100% { width: 150px; height: 150px; opacity: 0; }
+  }
 </style>

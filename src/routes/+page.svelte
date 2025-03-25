@@ -6,6 +6,10 @@
 	let language = 'en';
 	let glbFile = null;
 	let bgFile = null;
+
+
+
+
 	function handleGLBImport(event) {
 		glbFile = event.detail.file;
 	}
