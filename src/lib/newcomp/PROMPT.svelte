@@ -373,7 +373,7 @@ async function runImageGen() {
 					const imageFile = new File([blob], 'image-prompt.jpg', { type: 'image/jpeg' });
 					
 					// First compression attempt (moderate)
-					let compressedBase64 = await compressAndConvertToBase64(imageFile, 800, 800, 0.7);
+					let compressedBase64 = await compressAndConvertToBase64(imageFile, 1024, 1024, 0.8);
 					let compressedSize = getBase64FileSize(compressedBase64);
 					console.log(`Compressed image size (first pass): ${formatFileSize(compressedSize)}`);
 					
