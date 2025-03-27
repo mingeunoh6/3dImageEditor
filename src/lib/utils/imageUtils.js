@@ -161,3 +161,81 @@ export function generateImageFilename(prefix = 'image', extension = 'png') {
 	const timestamp = now.toISOString().replace(/[-:]/g, '').split('.')[0];
 	return `${prefix}-${timestamp}.${extension}`;
 }
+
+// Calculate the file size from a base64 string
+export function getBase64FileSize(base64String) {
+  // Base64 size calculation: every 4 base64 characters represent 3 bytes
+  // Add 33% to get the approximate byte size
+  return Math.round((base64String.length * 3) / 4);
+}
+
+// Format file size to human-readable format
+export function formatFileSize(bytes) {
+  if (bytes < 1024) return bytes + ' bytes';
+  else if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
+  else return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+}
+
+export async function compressAndConvertToBase64(
+	file,
+	maxWidth = 1024,
+	maxHeight = 1024,
+	quality = 0.7
+) {
+	return new Promise((resolve, reject) => {
+		// Create a FileReader to read the file
+		const reader = new FileReader();
+
+		reader.onload = (event) => {
+			// Create an image element to load the file data
+			const img = new Image();
+
+			img.onload = () => {
+				// Calculate new dimensions while maintaining aspect ratio
+				let width = img.width;
+				let height = img.height;
+
+				if (width > maxWidth) {
+					height = (height * maxWidth) / width;
+					width = maxWidth;
+				}
+
+				if (height > maxHeight) {
+					width = (width * maxHeight) / height;
+					height = maxHeight;
+				}
+
+				// Create a canvas and resize the image
+				const canvas = document.createElement('canvas');
+				canvas.width = width;
+				canvas.height = height;
+
+				// Draw the image on the canvas
+				const ctx = canvas.getContext('2d');
+				ctx.drawImage(img, 0, 0, width, height);
+
+				// Convert the canvas to a base64 string
+				const base64String = canvas.toDataURL('image/jpeg', quality).split(',')[1];
+
+				// Clean up
+				canvas.remove();
+
+				resolve(base64String);
+			};
+
+			img.onerror = () => {
+				reject(new Error('Failed to load image'));
+			};
+
+			// Set the source of the image to the file data
+			img.src = event.target.result;
+		};
+
+		reader.onerror = () => {
+			reject(new Error('Failed to read file'));
+		};
+
+		// Read the file as a data URL
+		reader.readAsDataURL(file);
+	});
+}

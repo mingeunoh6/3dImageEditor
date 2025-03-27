@@ -8,7 +8,7 @@
 	import ImgSlider from '$lib/newcomp/elements/menu-slider-bg.svelte';
 	import ToggleBtn from '$lib/newcomp/elements/menu-toggle-btn.svelte';
 	import Dropdown from '$lib/newcomp/elements/menu-dropdown.svelte'
-	import { toBase64, toBlobURL, revokeBlobURL, getDimensionsFromRatio, generateImageFilename } from '$lib/utils/imageUtils';
+	import { toBase64, toBlobURL, revokeBlobURL,compressAndConvertToBase64,formatFileSize,getBase64FileSize, getDimensionsFromRatio, generateImageFilename } from '$lib/utils/imageUtils';
 
 	// Props from parent
 	let {
@@ -176,129 +176,294 @@ function openCastingPanel(){
 	}
 
 	// 이미지 생성 실행
-	async function runImageGen() {
-		if (isGenerating) return; // 중복 호출 방지
+	// async function runImageGen() {
+	// 	if (isGenerating) return; // 중복 호출 방지
 
-		// 라이브 렌더링 상태에 따라 처리
-		if (liveGenState) {
-			try {
-				fluxPrompt.image_prompt = await GetCurrentScreenAsImageRef();
+	// 	// 라이브 렌더링 상태에 따라 처리
+	// 	if (liveGenState) {
+	// 		try {
+	// 			fluxPrompt.image_prompt = await GetCurrentScreenAsImageRef();
 					
-			} catch (error) {
-				console.error('Error getting screen reference:', error);
-				generationError = 'Failed to capture current view';
-				return;
-			}
-		}
+	// 		} catch (error) {
+	// 			console.error('Error getting screen reference:', error);
+	// 			generationError = 'Failed to capture current view';
+	// 			return;
+	// 		}
+	// 	}
 
-		// 랜덤 시드 생성
-		if (isRandomSeed) {
-			fluxPrompt.seed = Math.floor(Math.random() * 1000000);
-		}
+	// 	// 랜덤 시드 생성
+	// 	if (isRandomSeed) {
+	// 		fluxPrompt.seed = Math.floor(Math.random() * 1000000);
+	// 	}
 
-		// 상태 초기화
-		activeMenu = null;
-		openImagePrompt = false;
-		isGenerating = true;
-		isPending = false;
-		generationProgress = 0;
-		generationError = null;
-		taskId = '';
-		clearPollingTimers();
+	// 	// 상태 초기화
+	// 	activeMenu = null;
+	// 	openImagePrompt = false;
+	// 	isGenerating = true;
+	// 	isPending = false;
+	// 	generationProgress = 0;
+	// 	generationError = null;
+	// 	taskId = '';
+	// 	clearPollingTimers();
 
-		try {
-			// UI 비활성화
-			disableUI();
+	// 	try {
+	// 		// UI 비활성화
+	// 		disableUI();
 			
-			// API 요청 데이터 준비
-			let apiRequestData;
+	// 		// API 요청 데이터 준비
+	// 		let apiRequestData;
 			
-			// image_prompt가 없거나 liveGenState가 false인 경우
+	// 		// image_prompt가 없거나 liveGenState가 false인 경우
 
 
 		
 
 
-			if (fluxPrompt.image_prompt === '' || fluxPrompt.image_prompt === null ) {
-				apiRequestData = {
-					prompt: fluxPrompt.prompt,
-					aspect_ratio: fluxPrompt.aspect_ratio,
-					width: fluxPrompt.width,
-					height: fluxPrompt.height,
-					prompt_upsampling: fluxPrompt.prompt_upsampling,
-					seed: fluxPrompt.seed,
-					safety_tolerance: fluxPrompt.safety_tolerance,
-					output_format: fluxPrompt.output_format
-				};
-			} else {
-				apiRequestData = {
-					prompt: fluxPrompt.prompt,
-					aspect_ratio: fluxPrompt.aspect_ratio,
-					image_prompt: fluxPrompt.image_prompt,
-					image_prompt_strength: fluxPrompt.image_prompt_strength,
-					width: fluxPrompt.width,
-					height: fluxPrompt.height,
-					prompt_upsampling: fluxPrompt.prompt_upsampling,
-					seed: fluxPrompt.seed,
-					safety_tolerance: fluxPrompt.safety_tolerance,
-					output_format: fluxPrompt.output_format
-				};
-			}
+	// 		if (fluxPrompt.image_prompt === '' || fluxPrompt.image_prompt === null ) {
+	// 			apiRequestData = {
+	// 				prompt: fluxPrompt.prompt,
+	// 				aspect_ratio: fluxPrompt.aspect_ratio,
+	// 				width: fluxPrompt.width,
+	// 				height: fluxPrompt.height,
+	// 				prompt_upsampling: fluxPrompt.prompt_upsampling,
+	// 				seed: fluxPrompt.seed,
+	// 				safety_tolerance: fluxPrompt.safety_tolerance,
+	// 				output_format: fluxPrompt.output_format
+	// 			};
+	// 		} else {
+	// 			apiRequestData = {
+	// 				prompt: fluxPrompt.prompt,
+	// 				aspect_ratio: fluxPrompt.aspect_ratio,
+	// 				image_prompt: fluxPrompt.image_prompt,
+	// 				image_prompt_strength: fluxPrompt.image_prompt_strength,
+	// 				width: fluxPrompt.width,
+	// 				height: fluxPrompt.height,
+	// 				prompt_upsampling: fluxPrompt.prompt_upsampling,
+	// 				seed: fluxPrompt.seed,
+	// 				safety_tolerance: fluxPrompt.safety_tolerance,
+	// 				output_format: fluxPrompt.output_format
+	// 			};
+	// 		}
 
-			console.log('API 요청 데이터:', apiRequestData);
+	// 		console.log('API 요청 데이터:', apiRequestData);
 
-			// 서버에 요청 전송
-			const response = await fetch('api/flux', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json'
-				},
-				body: JSON.stringify({ input: apiRequestData })
-			});
+	// 		// 서버에 요청 전송
+	// 		const response = await fetch('api/flux', {
+	// 			method: 'POST',
+	// 			headers: {
+	// 				'Content-Type': 'application/json'
+	// 			},
+	// 			body: JSON.stringify({ input: apiRequestData })
+	// 		});
 
-			console.log('응답 상태:', response.status, response.statusText);
+	// 		console.log('응답 상태:', response.status, response.statusText);
 
-			// 응답 데이터 처리
-			const data = await response.json();
-			console.log('응답 데이터:', data);
+	// 		// 응답 데이터 처리
+	// 		const data = await response.json();
+	// 		console.log('응답 데이터:', data);
 
-			// 에러 처리
-			if (!response.ok || data.error) {
-				throw new Error(data.error?.msg || 'Image generation request failed');
-			}
+	// 		// 에러 처리
+	// 		if (!response.ok || data.error) {
+	// 			throw new Error(data.error?.msg || 'Image generation request failed');
+	// 		}
 
-			// 작업 ID 저장
-			taskId = data.id;
-			flux_polling_url = data.polling_url;
-			console.log('이미지 생성 요청 성공, 작업 ID:', taskId);
+	// 		// 작업 ID 저장
+	// 		taskId = data.id;
+	// 		flux_polling_url = data.polling_url;
+	// 		console.log('이미지 생성 요청 성공, 작업 ID:', taskId);
 
-			// 이미지 생성 상태 모니터링 시작
-			fluxPolling(flux_polling_url, taskId);
+	// 		// 이미지 생성 상태 모니터링 시작
+	// 		fluxPolling(flux_polling_url, taskId);
 
-			// 생성 타임아웃 설정 (5분)
-			pollingTimeout = setTimeout(() => {
-				if (isGenerating) {
-					clearInterval(pollingInterval);
-					generationError = 'Generation timeout - please try again';
-					isGenerating = false;
-					isPending = false;
-					enableUI();
-				}
-			}, 300000); // 5분
+	// 		// 생성 타임아웃 설정 (5분)
+	// 		pollingTimeout = setTimeout(() => {
+	// 			if (isGenerating) {
+	// 				clearInterval(pollingInterval);
+	// 				generationError = 'Generation timeout - please try again';
+	// 				isGenerating = false;
+	// 				isPending = false;
+	// 				enableUI();
+	// 			}
+	// 		}, 300000); // 5분
+	// 	} catch (error) {
+	// 		console.error('이미지 생성 실패:', error);
+	// 		generationError = error.message;
+	// 		isGenerating = false;
+	// 		isPending = false;
+	// 	} finally {
+	// 		// 에러가 발생한 경우 UI 활성화
+	// 		if (generationError) {
+	// 			enableUI();
+	// 			isGenerating = false;
+	// 			isPending = false;
+	// 		}
+	// 	}
+	// }
+
+	// Updated runImageGen function with image compression right before API call
+async function runImageGen() {
+	if (isGenerating) return; // 중복 호출 방지
+
+	// 라이브 렌더링 상태에 따라 처리
+	if (liveGenState) {
+		try {
+			fluxPrompt.image_prompt = await GetCurrentScreenAsImageRef();
+				
 		} catch (error) {
-			console.error('이미지 생성 실패:', error);
-			generationError = error.message;
-			isGenerating = false;
-			isPending = false;
-		} finally {
-			// 에러가 발생한 경우 UI 활성화
-			if (generationError) {
-				enableUI();
-				isGenerating = false;
-				isPending = false;
-			}
+			console.error('Error getting screen reference:', error);
+			generationError = 'Failed to capture current view';
+			return;
 		}
 	}
+
+	// 랜덤 시드 생성
+	if (isRandomSeed) {
+		fluxPrompt.seed = Math.floor(Math.random() * 1000000);
+	}
+
+	// 상태 초기화
+	activeMenu = null;
+	openImagePrompt = false;
+	isGenerating = true;
+	isPending = false;
+	generationProgress = 0;
+	generationError = null;
+	taskId = '';
+	clearPollingTimers();
+
+	try {
+		// UI 비활성화
+		disableUI();
+		
+		// API 요청 데이터 준비
+		let apiRequestData = {
+			prompt: fluxPrompt.prompt,
+			aspect_ratio: fluxPrompt.aspect_ratio,
+			width: fluxPrompt.width,
+			height: fluxPrompt.height,
+			prompt_upsampling: fluxPrompt.prompt_upsampling,
+			seed: fluxPrompt.seed,
+			safety_tolerance: fluxPrompt.safety_tolerance,
+			output_format: fluxPrompt.output_format
+		};
+		
+		// Check if we have an image prompt to include
+		if (fluxPrompt.image_prompt && fluxPrompt.image_prompt !== '') {
+			console.log('Image prompt detected, checking size...');
+			
+			// Calculate the size of the base64 string
+			const estimatedSize = getBase64FileSize(fluxPrompt.image_prompt);
+			console.log(`Estimated image size: ${formatFileSize(estimatedSize)}`);
+			
+			// If image is larger than 4MB, compress it
+			if (estimatedSize > 4 * 1024 * 1024) {
+				console.log('Image prompt is too large, compressing...');
+				
+				try {
+					// Create a Blob from the base64 string
+					const byteString = atob(fluxPrompt.image_prompt);
+					const ab = new ArrayBuffer(byteString.length);
+					const ia = new Uint8Array(ab);
+					
+					for (let i = 0; i < byteString.length; i++) {
+						ia[i] = byteString.charCodeAt(i);
+					}
+					
+					const blob = new Blob([ab], { type: 'image/jpeg' });
+					const imageFile = new File([blob], 'image-prompt.jpg', { type: 'image/jpeg' });
+					
+					// First compression attempt (moderate)
+					let compressedBase64 = await compressAndConvertToBase64(imageFile, 800, 800, 0.7);
+					let compressedSize = getBase64FileSize(compressedBase64);
+					console.log(`Compressed image size (first pass): ${formatFileSize(compressedSize)}`);
+					
+					// If still too large, compress more aggressively
+					if (compressedSize > 4 * 1024 * 1024) {
+						console.log('Image still too large, compressing more aggressively...');
+						compressedBase64 = await compressAndConvertToBase64(imageFile, 600, 600, 0.5);
+						compressedSize = getBase64FileSize(compressedBase64);
+						console.log(`Compressed image size (second pass): ${formatFileSize(compressedSize)}`);
+						
+						// If still too large after second compression, try one last time
+						if (compressedSize > 4 * 1024 * 1024) {
+							console.log('Final compression attempt...');
+							compressedBase64 = await compressAndConvertToBase64(imageFile, 400, 400, 0.4);
+							compressedSize = getBase64FileSize(compressedBase64);
+							console.log(`Compressed image size (final pass): ${formatFileSize(compressedSize)}`);
+						}
+					}
+					
+					// Update the image prompt with the compressed version
+					apiRequestData.image_prompt = compressedBase64;
+				} catch (error) {
+					console.error('Error compressing image:', error);
+					// If compression fails, just use the original and hope for the best
+					apiRequestData.image_prompt = fluxPrompt.image_prompt;
+				}
+			} else {
+				// Image is small enough, use as is
+				apiRequestData.image_prompt = fluxPrompt.image_prompt;
+			}
+			
+			// Include the strength parameter
+			apiRequestData.image_prompt_strength = fluxPrompt.image_prompt_strength;
+		}
+
+		console.log('API 요청 데이터:', apiRequestData);
+
+		// 서버에 요청 전송
+		const response = await fetch('api/flux', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify({ input: apiRequestData })
+		});
+
+		console.log('응답 상태:', response.status, response.statusText);
+
+		// 응답 데이터 처리
+		const data = await response.json();
+		console.log('응답 데이터:', data);
+
+		// 에러 처리
+		if (!response.ok || data.error) {
+			throw new Error(data.error?.msg || 'Image generation request failed');
+		}
+
+		// 작업 ID 저장
+		taskId = data.id;
+		flux_polling_url = data.polling_url;
+		console.log('이미지 생성 요청 성공, 작업 ID:', taskId);
+
+		// 이미지 생성 상태 모니터링 시작
+		fluxPolling(flux_polling_url, taskId);
+
+		// 생성 타임아웃 설정 (5분)
+		pollingTimeout = setTimeout(() => {
+			if (isGenerating) {
+				clearInterval(pollingInterval);
+				generationError = 'Generation timeout - please try again';
+				isGenerating = false;
+				isPending = false;
+				enableUI();
+			}
+		}, 300000); // 5분
+	} catch (error) {
+		console.error('이미지 생성 실패:', error);
+		generationError = error.message;
+		isGenerating = false;
+		isPending = false;
+		enableUI();
+	} finally {
+		// 에러가 발생한 경우 UI 활성화
+		if (generationError) {
+			enableUI();
+			isGenerating = false;
+			isPending = false;
+		}
+	}
+}
 
 	// FLUX API 상태 모니터링
 	function fluxPolling(pollingURL, result_id) {
