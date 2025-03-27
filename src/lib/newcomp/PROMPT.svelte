@@ -139,7 +139,9 @@
 	async function handleLiveRenderToggle(event) {
 		liveGenState = event.target.checked;
 		console.log('liveGenState:', liveGenState);
-	
+	if(!liveGenState){
+		removeImagePrompt()
+	}
 
 	}
 
@@ -201,7 +203,12 @@
 			let apiRequestData;
 			
 			// image_prompt가 없거나 liveGenState가 false인 경우
-			if (fluxPrompt.image_prompt === '' || fluxPrompt.image_prompt === null || !liveGenState) {
+
+
+		
+
+
+			if (fluxPrompt.image_prompt === '' || fluxPrompt.image_prompt === null ) {
 				apiRequestData = {
 					prompt: fluxPrompt.prompt,
 					aspect_ratio: fluxPrompt.aspect_ratio,
@@ -831,6 +838,7 @@
 			console.error('Failed to process image:', error);
 			generationError = 'Failed to process image file';
 		}
+
 		
 		// 파일 입력 초기화
 		event.target.value = '';
@@ -1189,6 +1197,13 @@
 										</div>
 					</div>
 					{/if}
+						<input
+								type="file"
+								id="image-prompt-input"
+								accept=".png,.jpg,.jpeg,.webp"
+								style="display: none;"
+								onchange={handleImagePrompt}
+							/>
 								{#if !liveGenState}
 								{#if imagePrompt}
 									<div class="image-preview-container">
@@ -1229,13 +1244,7 @@
 
 								
 							</div>
-							<input
-								type="file"
-								id="image-prompt-input"
-								accept=".png,.jpg,.jpeg,.webp"
-								style="display: none;"
-								onchange={handleImagePrompt}
-							/>
+						
 						</div>
 					{/if}
 				</div>
@@ -2253,6 +2262,7 @@
 		display: flex;
 		justify-content: center;
 		align-items: center;
+		z-index: 998;
 	}
 
 	.image-preview-actions button {

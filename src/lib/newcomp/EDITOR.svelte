@@ -598,7 +598,7 @@
 						</div>
 					{/if}
 				</div>
-				<div 
+				<!-- <div 
 					id="render-set" 
 					class="toolbtn render" 
 					onclick={render}
@@ -608,7 +608,7 @@
                     title="Render Scene"
 				>
 					<Icon class="tool-icon" icon="carbon:render" aria-hidden="true" />
-				</div>
+				</div> -->
 			</div>
 		</div>
 	</section>
