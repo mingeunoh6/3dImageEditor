@@ -7,6 +7,7 @@
 	import Slider from '$lib/newcomp/elements/menu-slider.svelte';
 	import ImgSlider from '$lib/newcomp/elements/menu-slider-bg.svelte';
 	import ToggleBtn from '$lib/newcomp/elements/menu-toggle-btn.svelte';
+	import Dropdown from '$lib/newcomp/elements/menu-dropdown.svelte'
 	import { toBase64, toBlobURL, revokeBlobURL, getDimensionsFromRatio, generateImageFilename } from '$lib/utils/imageUtils';
 
 	// Props from parent
@@ -18,6 +19,7 @@
 		BGfromURL,
 		requestCurrentViewportImg,
 		liveRenderImage,
+		handleCasting
 	} = $props();
 	
 	// UI 상태
@@ -73,6 +75,9 @@
 	let liveGenState = $state(false);
 	let isRenderOpt = $state(false);
 
+	//Caster 옵션
+	let currentCasting =$state('')
+
 	// 입력 제약 조건
 	const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
 	const SUPPORTED_FORMATS = ['.glb', '.gltf'];
@@ -122,6 +127,12 @@
 			}
 		}
 	});
+
+	//LoRA 학습(Casting) 패널 활성화
+function openCastingPanel(){
+	console.log('casting')
+	handleCasting()
+}
 
 	// 랜덤 시드 토글 핸들러
 	function handleRandomSeedToggle(event) {
@@ -1081,6 +1092,34 @@
 									</div>
 								</div>
 							</div>
+						</div>
+					{/if}
+				</div>
+				<div id="casting-model" class="toolbtn casting-model" onclick={menuToggle}>
+						<Icon class="tool-icon-mid" icon="mage:scan-user-fill" />
+							{#if activeMenu === 'casting-model'}
+						<div class="casting-panel" transition:slide>
+						<div class="title">
+							Casting model
+						</div>
+
+						<div class="casting-selection">
+<Dropdown
+  label=""
+  placeholder="Select a model"
+  options={[
+    { label: "omg", value: "omg" },
+    { label: "omg2", value: "omg2" },
+    { label: "omg3", value: "omg3" }
+  ]}
+  selected={currentCasting}
+  onChange={(option) => currentCasting = option.value}
+  labelPosition="left"
+/>					</div>
+<div class="casting-btn-wrapper">
+	<button onclick={openCastingPanel}>Casting new model</button>
+</div>
+
 						</div>
 					{/if}
 				</div>
@@ -2484,5 +2523,61 @@
   @keyframes expandRing {
     0% { width: 10px; height: 10px; opacity: 0.7; }
     100% { width: 150px; height: 150px; opacity: 0; }
+  }
+
+.casting-panel{
+		
+		box-sizing: border-box;
+		position: absolute;
+		bottom: 100%;
+		display: flex;
+		flex-direction: column;
+		
+		margin-bottom: -10px;
+		transition: all ease-in-out 0.2s;
+		min-width: 150px;
+		background-color: var(--primary-color);
+		border-radius: 12px;
+		border: 1px solid var(--dim-color);
+	
+}
+
+  .title{
+	font-size: 0.9rem;
+		padding: 10px 0px;
+		cursor: default;
+		width: 100%;
+		text-align: center;
+		border-bottom: 1px solid var(--dim-color);
+  }
+  .casting-selection{
+	position:relative;
+	width: 300px;
+	   border-top: 1px solid var(--dim-color);
+	   	   border-bottom: 1px solid var(--dim-color);
+	width: 100%;
+  }
+
+  .casting-btn-wrapper{
+	width: 100%;
+	
+  }
+  .casting-btn-wrapper button{
+	box-sizing: border-box;
+	border-top: 1px solid var(--dim-color);
+	width: 100%;
+	height: 42px;
+	border-radius: 0 0 12px 12px;
+	color: var(--text-color-standard);
+	transition: all ease-in-out 300ms;
+	
+	
+  }
+
+   .casting-btn-wrapper button:hover{
+	background-color: var(--highlight-color);
+	color: var(--text-color-bright);
+	
+	
   }
 </style>

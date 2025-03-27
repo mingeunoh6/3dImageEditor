@@ -7,12 +7,17 @@ import RT from '$lib/newcomp/RT.svelte';
 import PROMPT from '$lib/newcomp/PROMPT.svelte';
 import VIEWPORT from '$lib/newcomp/VIEWPORT.svelte';
 import EDITOR from '$lib/newcomp/EDITOR.svelte';
+import CASTER from '$lib/newcomp/CASTER.svelte'
+
 import Icon from '@iconify/svelte';
 // Model loading states
 let newModel = $state(null);
 let liveRenderImage = $state(null);
 let viewportLoading = $state(false);
 let uploadError = $state(null);
+
+//casting states
+let onCasting = $state(false);
 
 // Scene objects tracking
 let sceneObjects = $state([]);
@@ -160,7 +165,15 @@ function handleObjectDelete(objectId) {
     document.documentElement.style.setProperty('--vh', `${vh}px`);
   }
 
+function handleCasting(){
+  console.log('open caster')
+  onCasting = true;
+}
 
+function offCasting(){
+  console.log('close caster')
+  onCasting = false;
+}
 
 
 onMount(() => {
@@ -232,10 +245,17 @@ onMount(() => {
         BGfromURL={(url)=>changeBGfromURL(url)}
         requestCurrentViewportImg={(data)=>getCurrentViewportAsImg(data)}
         liveRenderImage={liveRenderImage}
+        handleCasting={()=>handleCasting()}
       />
     </div>
   </div>
 
+
+  {#if onCasting}
+
+<CASTER offPanel={()=>offCasting()} />
+
+  {/if}
 
 	
 
