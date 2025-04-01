@@ -5,12 +5,12 @@
 	import Icon from '@iconify/svelte';
 	import { fade, slide } from 'svelte/transition';
 	import Slider from '$lib/newcomp/elements/menu-slider.svelte';
-	import { 
-		toBase64, 
-		toBlobURL, 
-		getImageDimensions, 
-		revokeBlobURL, 
-		generateImageFilename 
+	import {
+		toBase64,
+		toBlobURL,
+		getImageDimensions,
+		revokeBlobURL,
+		generateImageFilename
 	} from '$lib/utils/imageUtils';
 
 	// Props from parent
@@ -25,7 +25,10 @@
 		sceneObjects = [],
 		onObjectSelect = (id) => console.log(`Object selected: ${id}`),
 		onObjectVisibilityToggle = (id) => console.log(`Toggle visibility: ${id}`),
-		onObjectDelete = (id) => console.log(`Delete object: ${id}`)
+		onObjectDelete = (id) => console.log(`Delete object: ${id}`),
+		onChangeFOV,
+		onChangeLight,
+		onChangeEnvSetting
 	} = $props();
 
 	// BGfromPrompt가 변경되면 현재 백그라운드 업데이트
@@ -68,6 +71,15 @@
 	let bgRotation = $state(180);
 	let bgBrightness = $state(1);
 
+	let fov = $state(60);
+	let keylightBrightness = $state(1);
+	let keylightColor = $state('#ffffff');
+	let rimlightBrightness = $state(0.5);
+	let rimlightColor = $state('#ffffff');
+	let filllightBrightness = $state(0.5);
+	let filllightColor = $state('#ffffff');
+	let lightRotation = $state(0)
+
 	$effect(() => {
 		console.log(bgRotation);
 	});
@@ -109,6 +121,78 @@
 				activeMenu = clickedMenuId;
 			}
 		}
+	}
+
+	//카메라
+	function handleCameraFov(value) {
+		fov = value;
+
+		onChangeFOV(fov);
+	}
+
+	//조명
+
+	function handleLightRotation(value){
+		lightRotation = value
+		onChangeLight('rot',lightRotation)
+
+	}
+
+
+	function handleKeyLightIntensity(value) {
+		console.log(value);
+		keylightBrightness = value
+		onChangeLight('keyIntensity',keylightBrightness)
+
+	}
+	function handleRimLightIntensity(value) {
+		console.log(value);
+		rimlightBrightness = value
+		onChangeLight('RimIntensity',rimlightBrightness)
+
+	}
+	function handleFillLightIntensity(value) {
+		console.log(value);
+		filllightBrightness = value
+			onChangeLight('FillIntensity',filllightBrightness)
+	}
+
+	function handleColorChange(e) {
+
+		const { id, value } = e.target;
+		let lightId;
+console.log(value)
+		if (id === 'keylight-color' || id === 'keylight-color-input') {
+			keylightColor = value
+			lightId = 'keylight';
+			onChangeLight('keyColor',keylightColor)
+		} else if (id === 'filllight-color' || id === 'filllight-color-input') {
+			filllightColor =value
+			lightId = 'filllight';
+				onChangeLight('fillColor',filllightColor)
+		} else if (id === 'rimlight-color' || id === 'rimlight-color-input') {
+			rimlightColor = value
+			lightId = 'rimlight';
+				onChangeLight('rimColor',rimlightColor)
+		} 
+	}
+
+
+
+
+	function handleHDRIrotation(rot){
+		
+		bgRotation = rot
+	
+		onChangeEnvSetting('rotation',bgRotation)
+
+
+	}
+
+	function handleHDRIintensity(intensity){
+		bgBrightness = intensity
+onChangeEnvSetting('intensity',bgBrightness)
+
 	}
 
 	// 업로드 관련 상태 초기화
@@ -266,7 +350,7 @@
 		document.getElementById('render-btn')?.removeAttribute('disabled');
 	}
 
-	// 배경 이미지 가져오기 
+	// 배경 이미지 가져오기
 	async function handleBGImport(event) {
 		const file = event.target.files[0];
 
@@ -296,7 +380,7 @@
 
 			// 부모 컴포넌트에 씬 업데이트 요청
 			BGimport(file);
-			
+
 			console.log('Background image loaded:', currentBG);
 		} catch (error) {
 			console.error('Failed to process background image:', error);
@@ -314,7 +398,7 @@
 		try {
 			// 파일명 생성
 			const filename = generateImageFilename('otr-ai-bg');
-			
+
 			// 다운로드 링크 생성
 			const link = document.createElement('a');
 			link.href = currentBG;
@@ -334,7 +418,7 @@
 		if (currentBG === '' || !isBG) {
 			return;
 		}
-		
+
 		console.log('Removing background');
 
 		// 이전 blob URL이 있으면 해제
@@ -402,11 +486,11 @@
 					class="toolbtn upload-btn"
 					onclick={menuToggle}
 					role="button"
-                    type="button"
+					type="button"
 					tabindex="0"
 					aria-haspopup="true"
 					aria-expanded={activeMenu === '3d-add-set'}
-                    title="Add 3D Model"
+					title="Add 3D Model"
 				>
 					<Icon class="tool-icon" icon="mage:box-3d-plus" aria-hidden="true" />
 
@@ -431,7 +515,7 @@
 					tabindex="0"
 					aria-haspopup="true"
 					aria-expanded={activeMenu === 'bg-set'}
-                    title="Set Background"
+					title="Set Background"
 				>
 					{#if activeMenu === 'bg-set'}
 						<input
@@ -456,7 +540,7 @@
 											scale={1}
 											name="BG Rotation"
 											unit="°"
-											onValueChange={(newValue) => (bgRotation = newValue)}
+											onValueChange={(newValue) => handleHDRIrotation(newValue)}
 										/>
 									</div>
 									<div class="slider-setting-group" transition:fade>
@@ -467,7 +551,7 @@
 											scale={0.1}
 											name="BG Brightness"
 											unit=""
-											onValueChange={(newValue) => (bgBrightness = newValue)}
+											onValueChange={(newValue) => handleHDRIintensity(newValue)}
 										/>
 									</div>
 									<button
@@ -500,12 +584,22 @@
 					tabindex="0"
 					aria-haspopup="true"
 					aria-expanded={activeMenu === 'camera-set'}
-                    title="Set Camera"
+					title="Set Camera"
 				>
 					{#if activeMenu === 'camera-set'}
 						<div class="add-item-list" transition:slide>
 							<button id="perspective-btn"> Perspective </button>
-							<button id="orthographic-btn"> Orthographic </button>
+							<div class="slider-setting-group" transition:fade>
+								<Slider
+									value={fov}
+									min={10}
+									max={120}
+									scale={1}
+									name="FOV"
+									unit="°"
+									onValueChange={(newValue) => handleCameraFov(newValue)}
+								/>
+							</div>
 						</div>
 					{/if}
 					<Icon class="tool-icon" icon="clarity:video-camera-line" aria-hidden="true" />
@@ -518,13 +612,90 @@
 					tabindex="0"
 					aria-haspopup="true"
 					aria-expanded={activeMenu === 'light-set'}
-                    title="Set Light"
+					title="Set Light"
 				>
 					{#if activeMenu === 'light-set'}
 						<div class="add-item-list" transition:slide>
-							<button id="keylight-btn"> Key Light </button>
-							<button id="filllight-btn"> Fill Light </button>
-							<button id="rimlight-btn"> Rim Light </button>
+								<div class="slider-setting-group light-slider" transition:fade>
+								<Slider
+									value={lightRotation}
+									min={0}
+									max={360}
+									scale={0.1}
+									name="Lights rotation"
+									unit="°"
+									onValueChange={(newValue) => handleLightRotation(newValue)}
+								/>
+							
+							</div>
+							<div class="slider-setting-group light-slider" transition:fade>
+								<Slider
+									value={keylightBrightness}
+									min={0}
+									max={5}
+									scale={0.1}
+									name="Key light"
+									unit=""
+									onValueChange={(newValue) => handleKeyLightIntensity(newValue)}
+								/>
+								<div class="slider-sub-option">
+									<input
+										class="colorPicker"
+										type="color"
+										id="keylight-color"
+										name="keylight-color"
+										value={keylightColor}
+										oninput={(e) =>{ handleColorChange(e)}}
+										onclick={(e)=>e.stopPropagation()}
+									/>
+								</div>
+							</div>
+							
+								<div class="slider-setting-group light-slider" transition:fade>
+								<Slider
+									value={filllightBrightness}
+									min={0}
+									max={5}
+									scale={0.1}
+									name="Fill light"
+									unit=""
+									onValueChange={(newValue) => handleFillLightIntensity(newValue)}
+								/>
+								<div class="slider-sub-option">
+									<input
+										class="colorPicker"
+										type="color"
+										id="filllight-color"
+										name="filllight-color"
+										value={filllightColor}
+										oninput={(e) =>{ handleColorChange(e)}}
+										onclick={(e)=>e.stopPropagation()}
+									/>
+								</div>
+							</div>
+							
+								<div class="slider-setting-group light-slider" transition:fade>
+								<Slider
+									value={rimlightBrightness}
+									min={0}
+									max={5}
+									scale={0.1}
+									name="Rim light"
+									unit=""
+									onValueChange={(newValue) => handleRimLightIntensity(newValue)}
+								/>
+								<div class="slider-sub-option">
+									<input
+										class="colorPicker"
+										type="color"
+										id="rimlight-color"
+										name="rimlight-color"
+										value={rimlightColor}
+										oninput={(e) =>{ handleColorChange(e)}}
+										onclick={(e)=>e.stopPropagation()}
+									/>
+								</div>
+							</div>
 						</div>
 					{/if}
 					<Icon class="tool-icon" icon="pajamas:bulb" aria-hidden="true" />
@@ -537,15 +708,13 @@
 					tabindex="0"
 					aria-haspopup="true"
 					aria-expanded={activeMenu === 'scene-list'}
-                    title="Scene Objects"
+					title="Scene Objects"
 				>
 					<Icon class="tool-icon" icon="foundation:list" aria-hidden="true" />
 
 					{#if activeMenu === 'scene-list'}
 						<div class="scene-list-panel" transition:slide>
-							<div class="scene-list-header">
-								Scene Objects
-							</div>
+							<div class="scene-list-header">Scene Objects</div>
 							<div class="scene-list-content">
 								{#if sceneObjects.length === 0}
 									<div class="empty-list">
@@ -566,26 +735,30 @@
 												</div>
 												<div class="object-info">
 													<span class="object-name">{object.name}</span>
-													
 												</div>
 												<div class="object-actions">
-													<button 
-                                                        class="object-actions-button" 
-                                                        title="Hide/Show" 
-                                                        onclick={(e) => {
-                                                            e.stopPropagation(); 
-                                                            onObjectVisibilityToggle(object.id);
-                                                        }}
-                                                    >
-														<Icon icon={object.visible ? "carbon:view" : "carbon:view-off"} width="16" height="16" />
+													<button
+														class="object-actions-button"
+														title="Hide/Show"
+														onclick={(e) => {
+															e.stopPropagation();
+															e.stopPropagation()
+															onObjectVisibilityToggle(object.id);
+														}}
+													>
+														<Icon
+															icon={object.visible ? 'carbon:view' : 'carbon:view-off'}
+															width="16"
+															height="16"
+														/>
 													</button>
 													<button
 														class="object-actions-button"
 														title="Delete"
 														onclick={(e) => {
-                                                            e.stopPropagation();
-                                                            deleteObject(object.id);
-                                                        }}
+															e.stopPropagation();
+															deleteObject(object.id);
+														}}
 													>
 														<Icon icon="carbon:trash-can" width="16" height="16" />
 													</button>
@@ -789,9 +962,19 @@
 	}
 
 	.slider-setting-group {
+		display: flex;
+		justify-content: center;
+		align-self: center;
 		position: relative;
 		width: 100%;
 		height: 42px;
+	}
+
+	.slider-sub-option {
+		display: flex;
+		justify-content: center;
+		align-self: center;
+		border-left: 1px solid var(--dim-color);
 	}
 
 	.upload-container {
@@ -942,12 +1125,12 @@
 		color: white;
 	}
 
-    .scene-list-panel{
-       box-sizing: border-box;
+	.scene-list-panel {
+		box-sizing: border-box;
 		position: absolute;
 		top: 100%;
 		right: 0;
-		
+
 		display: flex;
 		flex-direction: column;
 		margin-bottom: -10px;
@@ -958,115 +1141,163 @@
 		border-radius: 12px;
 		border: 1px solid var(--dim-color);
 		z-index: 990;
-    }
+	}
 
-    .scene-list-header{
-        font-size: 0.9rem;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        padding: 12px 16px;
-        border-bottom: 1px solid var(--dim-color);
-    }
+	.scene-list-header {
+		font-size: 0.9rem;
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		padding: 12px 16px;
+		border-bottom: 1px solid var(--dim-color);
+	}
 
-    .scene-object-list{
-        font-size: 0.9rem;
-        list-style: none;
-        margin: 0;
-        padding: 0;
-        overflow-y: auto;
-        max-height: 300px;
-        -ms-overflow-style: none;  /* IE and Edge */
-        scrollbar-width: none;  /* Firefox */
-    }
+	.scene-object-list {
+		font-size: 0.9rem;
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		overflow-y: auto;
+		max-height: 300px;
+		-ms-overflow-style: none; /* IE and Edge */
+		scrollbar-width: none; /* Firefox */
+	}
 
-    .scene-object-list::-webkit-scrollbar {
-        display: none;
-    }
+	.scene-object-list::-webkit-scrollbar {
+		display: none;
+	}
 
-    .scene-object-list .object-item{
-        border-bottom: 1px solid var(--dim-color);
-    }
+	.scene-object-list .object-item {
+		border-bottom: 1px solid var(--dim-color);
+	}
 
-    .scene-object-list .object-item:last-child {
-        border-bottom: none;
-    }
+	.scene-object-list .object-item:last-child {
+		border-bottom: none;
+	}
 
-    .empty-list {
-        padding: 24px 16px;
-        text-align: center;
-        font-size: 0.9rem;
-    }
+	.empty-list {
+		padding: 24px 16px;
+		text-align: center;
+		font-size: 0.9rem;
+	}
 
-    .empty-list p{
-        color:var(--dim-color);
-        font-size: 0.9rem;
-    }
+	.empty-list p {
+		color: var(--dim-color);
+		font-size: 0.9rem;
+	}
 
-    .object-item {
-        display: flex;
-        align-items: center;
-        height: 40px;
-        padding: 2px 8px;
-        cursor: pointer;
-        transition: background-color 0.2s ease;
-    }
-    
-    .object-item:hover {
-        background-color: rgba(255, 255, 255, 0.05);
-    }
-    
-    .object-icon {
-        margin-right: 10px;
-        margin-left: 8px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: var(--dim-color);
-    }
-    
-    .object-info {
-        flex: 1;
-        display: flex;
-        flex-direction: row;
-        justify-content: flex-start;
-        align-items: center;
-        max-width: 200px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-    
-    .object-name {
-        display: flex;
-        align-items: center;
-        height: 100%;
-        color: var(--text-color-standard);
-        font-size: 0.8rem;
-    }
-    
-    .object-actions {
-        display: flex;
-        flex-direction: row;
-        gap: 4px; 
-        margin-left: 8px;
-    }
+	.object-item {
+		display: flex;
+		align-items: center;
+		height: 40px;
+		padding: 2px 8px;
+		cursor: pointer;
+		transition: background-color 0.2s ease;
+	}
 
-    .object-actions-button{
-        background: none;
-        border: none;
-        color: var(--dim-color);
-        cursor: pointer;
-        padding: 4px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 4px;
-        transition: all 0.2s ease;
-    }
+	.object-item:hover {
+		background-color: rgba(255, 255, 255, 0.05);
+	}
 
-    .object-actions-button:hover{
-        color: var(--text-color-bright);
-        background-color: rgba(255, 255, 255, 0.1);
-    }
+	.object-icon {
+		margin-right: 10px;
+		margin-left: 8px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: var(--dim-color);
+	}
+
+	.object-info {
+		flex: 1;
+		display: flex;
+		flex-direction: row;
+		justify-content: flex-start;
+		align-items: center;
+		max-width: 200px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.object-name {
+		display: flex;
+		align-items: center;
+		height: 100%;
+		color: var(--text-color-standard);
+		font-size: 0.8rem;
+	}
+
+	.object-actions {
+		display: flex;
+		flex-direction: row;
+		gap: 4px;
+		margin-left: 8px;
+	}
+
+	.object-actions-button {
+		background: none;
+		border: none;
+		color: var(--dim-color);
+		cursor: pointer;
+		padding: 4px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: 4px;
+		transition: all 0.2s ease;
+	}
+
+	.object-actions-button:hover {
+		color: var(--text-color-bright);
+		background-color: rgba(255, 255, 255, 0.1);
+	}
+
+	.light-slider{
+		width: 200px;
+		border-bottom: 1px solid var(--dim-color);
+	}
+
+	.colorPicker {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  background: none;
+
+border-radius: 50px;
+  cursor: pointer;
+  padding: 0;
+  margin: 10px;
+}
+
+/* Hide the default color swatch in WebKit/Blink browsers */
+.colorPicker::-webkit-color-swatch-wrapper {
+  padding: 0;
+border: none;
+  overflow: hidden;
+}
+
+.colorPicker::-webkit-color-swatch {
+  border: none;
+ padding: 0;
+}
+
+
+/* Hide the default color swatch in Firefox */
+.colorPicker::-moz-color-swatch-wrapper {
+  padding: 0;
+}
+
+.colorPicker::-moz-color-swatch {
+  border: none;
+
+}
+
+.colorPicker:focus {
+  outline: none;
+   padding: 0;
+ 
+}
 </style>

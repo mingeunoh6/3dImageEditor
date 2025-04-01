@@ -36,6 +36,7 @@
 	let generatedImageUrl = $state(''); // 생성된 이미지 URL (표시용)
 	let cachedImageBlob = $state(null); // 실제 이미지 blob 저장
 	let cachedImageUrl = $state(''); // 로컬 blob URL 저장
+	let currentRefMode = $state('style-ref') 
 	
 	// FLUX API 관련 상태
 	let taskId = $state('');
@@ -132,6 +133,13 @@
 function openCastingPanel(){
 	console.log('casting')
 	handleCasting()
+}
+
+//imageprompt 모드 스위쳐
+function switchImagePromptMode(event){
+	currentRefMode = event.target.id
+
+	console.log(currentRefMode)
 }
 
 	// 랜덤 시드 토글 핸들러
@@ -336,6 +344,10 @@ async function runImageGen() {
 		disableUI();
 		
 		// API 요청 데이터 준비
+
+		let genMode = ''
+
+
 		let apiRequestData = {
 			prompt: fluxPrompt.prompt,
 			aspect_ratio: fluxPrompt.aspect_ratio,
@@ -394,7 +406,19 @@ async function runImageGen() {
 					}
 					
 					// Update the image prompt with the compressed version
-					apiRequestData.image_prompt = compressedBase64;
+					if (currentRefMode === 'style-ref'){
+						apiRequestData.image_prompt = compressedBase64;
+							apiRequestData.image_prompt_strength = fluxPrompt.image_prompt_strength;
+						genMode = 'style-ref'
+					} else if(currentRefMode === 'depth-ref'){
+						apiRequestData.control_image = compressedBase64
+							genMode = 'depth-ref'
+					} else if(currentRefMode === 'canny-ref'){
+						apiRequestData.control_image = compressedBase64
+							genMode = 'canny-ref'
+
+					}
+					
 				} catch (error) {
 					console.error('Error compressing image:', error);
 					// If compression fails, just use the original and hope for the best
@@ -402,11 +426,25 @@ async function runImageGen() {
 				}
 			} else {
 				// Image is small enough, use as is
-				apiRequestData.image_prompt = fluxPrompt.image_prompt;
+
+
+					if (currentRefMode === 'style-ref'){
+						apiRequestData.image_prompt =  fluxPrompt.image_prompt;
+							apiRequestData.image_prompt_strength = fluxPrompt.image_prompt_strength;
+						genMode = 'style-ref'
+						
+					} else if(currentRefMode === 'depth-ref'){
+						apiRequestData.control_image =  fluxPrompt.image_prompt;
+							genMode = 'depth-ref'
+					} else if(currentRefMode === 'canny-ref'){
+						apiRequestData.control_image =  fluxPrompt.image_prompt;
+							genMode = 'canny-ref'
+
+					}
 			}
 			
 			// Include the strength parameter
-			apiRequestData.image_prompt_strength = fluxPrompt.image_prompt_strength;
+		
 		}
 
 		console.log('API 요청 데이터:', apiRequestData);
@@ -417,7 +455,7 @@ async function runImageGen() {
 			headers: {
 				'Content-Type': 'application/json'
 			},
-			body: JSON.stringify({ input: apiRequestData })
+			body: JSON.stringify({ input: apiRequestData ,mode: genMode})
 		});
 
 		console.log('응답 상태:', response.status, response.statusText);
@@ -1108,7 +1146,9 @@ async function runImageGen() {
 	</section> -->
 
 	<section class="main-ui-wrapper">
-		<div class="logo-wrapper">OMG AI</div>
+		<div class="logo-wrapper">
+			<img src="otr_ai_logo.svg" alt="">
+		</div>
 		<div class="function-wrapper">
 			<div class="tool-menus">
 				<!-- <input
@@ -1377,6 +1417,11 @@ async function runImageGen() {
 					{#if openImagePrompt}
 						<div class="image-prompt" transition:slide>
 							<div class="image-prompt-content">
+								<div class="image-ref-mode-switch">
+										<button id="style-ref" class={currentRefMode === 'style-ref'?'selected-img-ref-btn':'img-ref-btn'} onclick={switchImagePromptMode}>Basic</button>
+										<button id="depth-ref" class={currentRefMode === 'depth-ref'?'selected-img-ref-btn':'img-ref-btn'}  onclick={switchImagePromptMode}>Depth</button>
+										<button id="canny-ref" class={currentRefMode === 'canny-ref'?'selected-img-ref-btn':'img-ref-btn'}  onclick={switchImagePromptMode}>Line</button>
+								</div>
 													{#if liveGenState}
 					<div class="image-preview-container">
 					
@@ -1651,12 +1696,12 @@ async function runImageGen() {
 
 	.logo-wrapper {
 		text-align: center;
-		padding: 8px;
+		padding: 12px;
 		box-sizing: border-box;
 		display: flex;
 		justify-self: center;
 		align-items: center;
-
+		
 		height: 100%;
 		aspect-ratio: 1 / 1;
 		border-right: 1px solid var(--dim-color);
@@ -2745,4 +2790,40 @@ async function runImageGen() {
 	
 	
   }
+
+
+  .image-ref-mode-switch{
+	width: 100%;
+	height: 42px;
+
+	display: flex;
+	flex-direction: row;
+	justify-content: space-between;
+	align-self: center;
+  }
+  .image-ref-mode-switch button{
+
+flex-grow: 1;
+text-align: center;
+cursor: pointer;
+border-right: 1px solid var(--dim-color);
+border-bottom: 1px solid var(--dim-color)
+  }
+
+    .image-ref-mode-switch button:last-child{
+
+
+border-right: none;
+  }
+
+
+    .image-ref-mode-switch button:hover{
+background-color: var(--highlight-color);
+  }
+
+  .selected-img-ref-btn{
+	background-color:  var(--highlight-color);
+  }
+
+
 </style>

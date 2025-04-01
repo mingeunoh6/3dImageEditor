@@ -42,7 +42,7 @@ class CustomDirectionalLight {
 	}
 
 	changeColor(color) {
-		console.log(color);
+		console.log('color', color);
 		let hexColor = new THREE.Color(color);
 		this.light.color = hexColor;
 	}

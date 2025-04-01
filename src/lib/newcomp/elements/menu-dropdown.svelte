@@ -9,7 +9,8 @@
         onChange = undefined,
         width = "250px",
         maxHeight = "200px",
-        labelPosition = "top" // 'top' or 'left'
+        labelPosition = "top", // 'top' or 'left'
+        dropDirection = "top"
     } = $props();
 
     // Local state for the dropdown with Svelte 5 reactivity
@@ -133,7 +134,7 @@
             <div class="selected-value">
                 {getDisplayValue()}
             </div>
-            <div class="dropdown-arrow">
+            <div  class={dropDirection==="top"?"dropdown-arrow":"dropdown-arrow-top"}>
                 <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M1 1L5 5L9 1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
@@ -141,7 +142,7 @@
         </div>
         
         {#if isOpen}
-            <div class="dropdown-menu" style:--max-height={maxHeight}>
+            <div class={dropDirection==="top"?"dropdown-menu":"dropdown-menu-top"} style:--max-height={maxHeight}>
                 {#each options as option, index}
                     <div 
                         class="dropdown-item" 
@@ -246,12 +247,26 @@
         margin-left: 10px;
         display: flex;
         align-items: center;
+
         color: var(--text-color-dim, #909090);
         transition: transform 0.2s ease;
     }
     
     .dropdown.active .dropdown-arrow {
         transform: rotate(180deg);
+    }
+
+        .dropdown-arrow-top {
+        margin-left: 10px;
+        display: flex;
+   
+        align-items: center;
+        color: var(--text-color-dim, #909090);
+        transition: transform 0.2s ease;
+    }
+    
+    .dropdown-arrow-top.active .dropdown-arrow-top {
+        transform: rotate(-180deg);
     }
     
     .dropdown-menu {
@@ -264,6 +279,22 @@
         background-color: var(--bg-color-light, #2a3035);
       
         border-radius: 6px 6px 0 0 ;
+   box-sizing: border-box;
+        z-index: 999;
+        margin-top: 0;
+     
+    }
+
+      .dropdown-menu-top {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        width: var(--dropdown-width, 250px);
+        max-height: 200px;
+        overflow-y: auto;
+        background-color: var(--bg-color-light, #2a3035);
+      
+        border-radius:0 0  6px 6px ;
    box-sizing: border-box;
         z-index: 999;
         margin-top: 0;
@@ -305,6 +336,17 @@
         color: var(--text-color-dim, #909090);
         font-style: italic;
     }
+
+    .dropdown-menu-top .dropdown-item:first-child{
+         border-top-right-radius: 0px;
+        border-top-left-radius:  0px;
+    }
+
+      .dropdown-menu-top .dropdown-item:last-child{
+         border-bottom-right-radius: 6px;
+        border-bottom-left-radius:  6px;
+    }
+    
     
     /* Scrollbar styling */
     .dropdown-menu::-webkit-scrollbar {

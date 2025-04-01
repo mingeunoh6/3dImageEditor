@@ -42,7 +42,7 @@ export class mainRenderer {
 			},
 			options
 		);
-    this._renderTarget = null;
+		this._renderTarget = null;
 		this._screenshotCanvas = null;
 		this._screenshotContext = null;
 		this._pixelBuffer = null;
@@ -462,6 +462,7 @@ export class mainRenderer {
 					this.blurredEnvMap = this.blurredEnvMapGenerator?.generate(this.envMap, 0.35);
 					// this.scene.background = this.envMap;
 					this.scene.environment = this.envMap;
+					this.scene.environmentIntensity = 1;
 
 					// pathTracer 환경 맵 업데이트
 					this.pathTracer.updateEnvironment();
@@ -747,6 +748,25 @@ export class mainRenderer {
 		const ambientLight = new THREE.AmbientLight(0xffffff, 0.2);
 		this.scene.add(ambientLight);
 
+		//studiolight group
+		this.studioLightGroup = new THREE.Group();
+		this.studioLightGroup.name = 'studioLightGroup';
+
+		this.keyLight = new THREE.DirectionalLight(0xffffff, 1);
+		this.keyLight.position.set(-8, 10, 8);
+		this.keyLight.name = 'Key-light';
+		this.studioLightGroup.add(this.keyLight);
+
+		this.fillLight = new THREE.DirectionalLight(0xffffff, 0.6);
+		this.fillLight.position.set(5, 10, 14);
+		this.fillLight.name = 'Fill-light';
+		this.studioLightGroup.add(this.fillLight);
+
+		this.RimLight = new THREE.DirectionalLight(0xffffff, 0.5);
+		this.RimLight.position.set(-0.5, 10, -14);
+		this.RimLight.name = 'Rim-light';
+		this.studioLightGroup.add(this.RimLight);
+
 		// Main directional light with shadows
 		const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
 		directionalLight.position.set(5, 10, 7.5);
@@ -766,12 +786,7 @@ export class mainRenderer {
 			directionalLight.shadow.bias = -0.0001;
 		}
 
-		this.scene.add(directionalLight);
-
-		// Additional fill light
-		const fillLight = new THREE.DirectionalLight(0xffffff, 0.5);
-		fillLight.position.set(-5, 2, -7.5);
-		this.scene.add(fillLight);
+		this.scene.add(this.studioLightGroup);
 
 		this.pathTracer.updateLights();
 	}
@@ -1092,15 +1107,15 @@ export class mainRenderer {
 			this.resizeObserver = null;
 		}
 
-		 if (this._renderTarget) {
-				this._renderTarget.dispose();
-				this._renderTarget = null;
-			}
+		if (this._renderTarget) {
+			this._renderTarget.dispose();
+			this._renderTarget = null;
+		}
 
-			this._screenshotCanvas = null;
-			this._screenshotContext = null;
-			this._pixelBuffer = null;
-			this._imageData = null;
+		this._screenshotCanvas = null;
+		this._screenshotContext = null;
+		this._pixelBuffer = null;
+		this._imageData = null;
 
 		// Dispose of Three.js resources
 		if (this.renderer) {
@@ -1578,5 +1593,92 @@ export class mainRenderer {
 				this.basicRenderScene.add(clone);
 			}
 		});
+	}
+
+	changeFOV(fov) {
+		if (!this.camera) return;
+
+		// Ensure FOV is within reasonable limits (10-120 degrees)
+		const newFOV = Math.max(10, Math.min(120, fov));
+
+		// Store original FOV for logging
+		const originalFOV = this.camera.fov;
+
+		// Update camera FOV
+		this.camera.fov = newFOV;
+		this.camera.updateProjectionMatrix();
+
+		console.log(`Camera FOV changed from ${originalFOV}° to ${newFOV}°`);
+
+		// Update path tracer if enabled
+		if (this.pathTracingEnabled && this.pathTracer) {
+			this.pathTracer.updateCamera();
+
+			// Reset the sample count to restart path tracing with new projection
+			if (this.pathTracer.samples > 0) {
+				console.log('Restarting path tracer with new camera settings');
+			}
+		}
+
+		// Force a render to see the changes immediately
+		this.render();
+
+		// Return a promise in case we need to wait for path tracer updates
+		return Promise.resolve();
+	}
+
+	changeLightRot(rot) {
+		if (this.studioLightGroup) {
+			this.studioLightGroup.rotation.y = rot;
+		}
+	}
+
+	changeLightIntensity(type, intensity) {
+		if (this.keyLight && this.RimLight && this.fillLight) {
+			switch (type) {
+				case 'keyIntensity':
+					this.keyLight.intensity = intensity;
+					break;
+				case 'RimIntensity':
+					this.RimLight.intensity = intensity;
+					break;
+				case 'FillIntensity':
+					this.fillLight.intensity = intensity;
+					break;
+			}
+		}
+	}
+
+	changeLightColor(type, lightColor) {
+		if (this.keyLight && this.RimLight && this.fillLight) {
+			console.log('lightColor', lightColor);
+			let hexColor = new THREE.Color(lightColor);
+			switch (type) {
+				case 'keyColor':
+					this.keyLight.color = hexColor;
+					break;
+				case 'fillColor':
+					this.fillLight.color = hexColor;
+					break;
+				case 'rimColor':
+					this.RimLight.color = hexColor;
+					break;
+			}
+		}
+	}
+
+	changeEnvMapSetting(type, value) {
+		if (!this.scene || !this.scene.environment) {
+			return;
+		}
+		switch (type) {
+			case 'intensity':
+				this.scene.environmentIntensity = value;
+				console.log('intensity', value);
+				break;
+			case 'rotation':
+				this.scene.environmentRotation.y = (value * Math.PI) / 180;
+				break;
+		}
 	}
 }

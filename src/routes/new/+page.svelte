@@ -175,6 +175,64 @@ function offCasting(){
   onCasting = false;
 }
 
+function handleFOV(fov){
+  if(viewportRef){
+viewportRef.changeFOV(fov)
+  }
+
+}
+
+function handleLight(type, value){
+if(viewportRef){
+switch(type){
+  case 'rot':
+    console.log('lightRot', value)
+    viewportRef.changeLightRot(value)
+    break
+  case 'keyIntensity':
+     console.log('keyIntensity', value)
+     viewportRef.changeLightIntensity(type, value) 
+    break;
+   case 'RimIntensity':
+       console.log('RimIntensity', value)
+        viewportRef.changeLightIntensity(type, value) 
+    break;
+ case 'FillIntensity':
+   console.log('FillIntensity', value)
+    viewportRef.changeLightIntensity(type, value) 
+    break;
+     case 'keyColor':
+       console.log('keyColor', value)
+         viewportRef.changeLightColor(type, value) 
+    break;
+     case 'fillColor':
+       console.log('fillColor', value)
+        viewportRef.changeLightColor(type, value) 
+    break;
+     case 'rimColor':
+       console.log('rimColor', value)
+        viewportRef.changeLightColor(type, value) 
+    break;
+
+}
+ }
+}
+
+function handleEnvSetting(type, value){
+if(viewportRef){
+switch(type){
+  case 'rotation':
+    console.log('rotation', value)
+    viewportRef.changeLightRot(value)
+    break
+  case 'intensity':
+     console.log('intensity', value)
+     viewportRef.changeEnvMapSetting(type, value) 
+    break;
+}
+}
+}
+
 
 onMount(() => {
     // Run the function on initial load and resize
@@ -220,6 +278,9 @@ onMount(() => {
     onObjectSelect={handleObjectSelect}
     onObjectVisibilityToggle={handleObjectVisibilityToggle}
     onObjectDelete={handleObjectDelete}
+    onChangeFOV={handleFOV}
+    onChangeLight={handleLight}
+    onChangeEnvSetting = {handleEnvSetting}
       />
     </div>
     <div class="viewport-wrapper">

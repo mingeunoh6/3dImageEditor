@@ -190,8 +190,8 @@
 		}
 		switch (type) {
 			case 'intensity':
-				envMapIntensity = value;
-				scene.environmentIntensity = envMapIntensity;
+				// envMapIntensity = value;
+				scene.environmentIntensity = value;
 				break;
 			case 'rotation':
 				envMapRotation = value;
@@ -259,6 +259,7 @@
 			console.error('No lights in the scene');
 			return;
 		}
+		console.log('ss',lightColor)
 		switch (lightId) {
 			case 0:
 				let newColor = new THREE.Color(lightColor);

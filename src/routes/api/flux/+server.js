@@ -86,17 +86,26 @@ async function logToGoogleSheets(prompt, id, seed) {
 
 export async function POST({ request }) {
 	try {
-		const { input } = await request.json();
+		const { input, mode } = await request.json();
 		const fluxAPIKEY = process.env.VITE_FLUX_API_KEY;
 
-		console.log('받은 입력:', input);
+		console.log('받은 입력:', input, mode);
 
 		if (!fluxAPIKEY) {
 			return json({ error: { msg: 'NO FLUX API KEY!' } }, { status: 500 });
 		}
-
+		let modelUrl;
 		// 사용할 모델 및 API 엔드포인트
-		const modelUrl = 'https://api.us1.bfl.ai/v1/flux-pro-1.1-ultra';
+		if (mode === 'style-ref') {
+			modelUrl = 'https://api.us1.bfl.ai/v1/flux-pro-1.1-ultra';
+		} else if (mode === 'depth-ref') {
+			modelUrl = 'https://api.us1.bfl.ai/v1/flux-pro-1.0-depth';
+		} else if (mode === 'canny-ref') {
+			modelUrl = 'https://api.us1.bfl.ai/v1/flux-pro-1.0-canny';
+		} else {
+			modelUrl = 'https://api.us1.bfl.ai/v1/flux-pro-1.1-ultra';
+		}
+		
 
 		// FLUX API에 요청 보내기
 		const startResponse = await fetch(modelUrl, {

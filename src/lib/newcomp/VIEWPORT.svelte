@@ -87,6 +87,29 @@ import { toBase64, toBlobURL, getImageDimensions, revokeBlobURL, getDimensionsFr
         console.error('Error enabling path tracing:', error);
     });
 }
+
+export function changeFOV(fov){
+        if (!viewportRenderer) return;
+    viewportRenderer.changeFOV(fov)
+}
+
+export function changeLightRot(rot){
+          if (!viewportRenderer) return;
+    viewportRenderer.changeLightRot(rot)
+}
+export function changeLightIntensity(type, intensity){
+          if (!viewportRenderer) return;
+    viewportRenderer.changeLightIntensity(type, intensity)
+}
+export function changeLightColor(type, lightColor){
+          if (!viewportRenderer) return;
+    viewportRenderer.changeLightColor(type, lightColor)
+}
+
+export function changeEnvMapSetting(type, value){
+          if (!viewportRenderer) return;
+    viewportRenderer.changeEnvMapSetting(type, value)
+}
    
 
     function updateSceneObjectsList() {
@@ -248,10 +271,10 @@ export function resetBG(){
         // Update selected object
         selectedObject = targetObject;
         
-        // Highlight the object
-        viewportRenderer.highlightObject(targetObject.object, {
-            color: 0x00ff00
-        });
+        // // Highlight the object
+        // viewportRenderer.highlightObject(targetObject.object, {
+        //     color: 0x00ff00
+        // });
         
         // Activate transform controls
         viewportRenderer.transformControlActivate(targetObject.object);
@@ -641,9 +664,9 @@ export function resetBG(){
                 };
 
                 // Highlight the object
-                viewportRenderer.highlightObject(topGroup, {
-                    color: 0x00ff00
-                });
+                // viewportRenderer.highlightObject(topGroup, {
+                //     color: 0x00ff00
+                // });
 
                 viewportRenderer.transformControlActivate(topGroup)
             } else {
