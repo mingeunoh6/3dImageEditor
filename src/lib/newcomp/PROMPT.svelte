@@ -7,8 +7,17 @@
 	import Slider from '$lib/newcomp/elements/menu-slider.svelte';
 	import ImgSlider from '$lib/newcomp/elements/menu-slider-bg.svelte';
 	import ToggleBtn from '$lib/newcomp/elements/menu-toggle-btn.svelte';
-	import Dropdown from '$lib/newcomp/elements/menu-dropdown.svelte'
-	import { toBase64, toBlobURL, revokeBlobURL,compressAndConvertToBase64,formatFileSize,getBase64FileSize, getDimensionsFromRatio, generateImageFilename } from '$lib/utils/imageUtils';
+	import Dropdown from '$lib/newcomp/elements/menu-dropdown.svelte';
+	import {
+		toBase64,
+		toBlobURL,
+		revokeBlobURL,
+		compressAndConvertToBase64,
+		formatFileSize,
+		getBase64FileSize,
+		getDimensionsFromRatio,
+		generateImageFilename
+	} from '$lib/utils/imageUtils';
 
 	// Props from parent
 	let {
@@ -21,7 +30,7 @@
 		liveRenderImage,
 		handleCasting
 	} = $props();
-	
+
 	// UI 상태
 	let openImagePrompt = $state(false);
 	let isGenerating = $state(false);
@@ -30,21 +39,24 @@
 	let generationProgress = $state(0);
 	let generationError = $state(null);
 	let onPreview = $state(false);
-	
+
 	// 이미지 관련 상태
-	let imagePrompt = $state(""); // 이미지 프롬프트 (표시용 URL)
+	let imagePrompt = $state(''); // 이미지 프롬프트 (표시용 URL)
 	let generatedImageUrl = $state(''); // 생성된 이미지 URL (표시용)
 	let cachedImageBlob = $state(null); // 실제 이미지 blob 저장
 	let cachedImageUrl = $state(''); // 로컬 blob URL 저장
-	let currentRefMode = $state('style-ref') 
-	
+	let currentRefMode = $state('style-ref');
+
 	// FLUX API 관련 상태
 	let taskId = $state('');
 	let flux_polling_url = $state('');
 	let pollingInterval = $state(null);
 	let pollingTimeout = $state(null);
 	let isPending = $state(false);
-	
+
+	let finetune_id = $state('');
+	let finetune_strength = $state(1.1);
+
 	// FLUX API 요청 데이터
 	let fluxPrompt = $state({
 		prompt: 'Beautiful living room interior design with modern furniture and decor',
@@ -71,13 +83,14 @@
 	let addMenuOpen = $state(false);
 	let bgSettingOpen = $state(false);
 	let activeMenu = $state(null);
-	
+
 	// 렌더링 옵션
 	let liveGenState = $state(false);
 	let isRenderOpt = $state(false);
 
 	//Caster 옵션
-	let currentCasting =$state('')
+	let currentCasting = $state('');
+	let castingList = [];
 
 	// 입력 제약 조건
 	const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
@@ -87,7 +100,7 @@
 	// 컴포넌트 상태
 	let isBusy = $state(false);
 	let abortController = null;
-	
+
 	// 설정 상태
 	let isBG = $state(false);
 	let currentBG = $state('');
@@ -130,17 +143,35 @@
 	});
 
 	//LoRA 학습(Casting) 패널 활성화
-function openCastingPanel(){
-	console.log('casting')
-	handleCasting()
-}
+	function openCastingPanel() {
+		console.log('casting');
+		handleCasting();
+	}
 
-//imageprompt 모드 스위쳐
-function switchImagePromptMode(event){
-	currentRefMode = event.target.id
+	//LoLA 데이터 가져오기
+	async function getLoLAlist() {
+		try {
+			const response = await fetch('api/getTrain', {
+				method: 'GET',
+				headers: {
+					'Content-Type': 'application/json'
+				}
+			});
 
-	console.log(currentRefMode)
-}
+			const data = await response.json();
+			castingList = data.data;
+			console.log('loralist', castingList);
+		} catch (error) {
+			console.error(error);
+		}
+	}
+
+	//imageprompt 모드 스위쳐
+	function switchImagePromptMode(event) {
+		currentRefMode = event.target.id;
+
+		console.log(currentRefMode);
+	}
 
 	// 랜덤 시드 토글 핸들러
 	function handleRandomSeedToggle(event) {
@@ -158,10 +189,9 @@ function switchImagePromptMode(event){
 	async function handleLiveRenderToggle(event) {
 		liveGenState = event.target.checked;
 		console.log('liveGenState:', liveGenState);
-	if(!liveGenState){
-		removeImagePrompt()
-	}
-
+		if (!liveGenState) {
+			removeImagePrompt();
+		}
 	}
 
 	// 프롬프트 입력 핸들러
@@ -174,10 +204,9 @@ function switchImagePromptMode(event){
 		//get the screen image of the current main-canvas
 		const currentBGdata = {
 			currentBG: currentBG,
-			currentBGratio: currentBGratio,
-		}
+			currentBGratio: currentBGratio
+		};
 		await requestCurrentViewportImg(currentBGdata);
-
 
 		// base64 데이터만 반환 (API용)
 		return liveRenderImage.split(',')[1];
@@ -191,7 +220,7 @@ function switchImagePromptMode(event){
 	// 	if (liveGenState) {
 	// 		try {
 	// 			fluxPrompt.image_prompt = await GetCurrentScreenAsImageRef();
-					
+
 	// 		} catch (error) {
 	// 			console.error('Error getting screen reference:', error);
 	// 			generationError = 'Failed to capture current view';
@@ -217,15 +246,11 @@ function switchImagePromptMode(event){
 	// 	try {
 	// 		// UI 비활성화
 	// 		disableUI();
-			
+
 	// 		// API 요청 데이터 준비
 	// 		let apiRequestData;
-			
+
 	// 		// image_prompt가 없거나 liveGenState가 false인 경우
-
-
-		
-
 
 	// 		if (fluxPrompt.image_prompt === '' || fluxPrompt.image_prompt === null ) {
 	// 			apiRequestData = {
@@ -309,199 +334,203 @@ function switchImagePromptMode(event){
 	// }
 
 	// Updated runImageGen function with image compression right before API call
-async function runImageGen() {
-	if (isGenerating) return; // 중복 호출 방지
+	async function runImageGen() {
+		if (isGenerating) return; // 중복 호출 방지
 
-	// 라이브 렌더링 상태에 따라 처리
-	if (liveGenState) {
-		try {
-			fluxPrompt.image_prompt = await GetCurrentScreenAsImageRef();
-				
-		} catch (error) {
-			console.error('Error getting screen reference:', error);
-			generationError = 'Failed to capture current view';
-			return;
-		}
-	}
-
-	// 랜덤 시드 생성
-	if (isRandomSeed) {
-		fluxPrompt.seed = Math.floor(Math.random() * 1000000);
-	}
-
-	// 상태 초기화
-	activeMenu = null;
-	openImagePrompt = false;
-	isGenerating = true;
-	isPending = false;
-	generationProgress = 0;
-	generationError = null;
-	taskId = '';
-	clearPollingTimers();
-
-	try {
-		// UI 비활성화
-		disableUI();
-		
-		// API 요청 데이터 준비
-
-		let genMode = ''
-
-
-		let apiRequestData = {
-			prompt: fluxPrompt.prompt,
-			aspect_ratio: fluxPrompt.aspect_ratio,
-			width: fluxPrompt.width,
-			height: fluxPrompt.height,
-			prompt_upsampling: fluxPrompt.prompt_upsampling,
-			seed: fluxPrompt.seed,
-			safety_tolerance: fluxPrompt.safety_tolerance,
-			output_format: fluxPrompt.output_format
-		};
-		
-		// Check if we have an image prompt to include
-		if (fluxPrompt.image_prompt && fluxPrompt.image_prompt !== '') {
-			console.log('Image prompt detected, checking size...');
-			
-			// Calculate the size of the base64 string
-			const estimatedSize = getBase64FileSize(fluxPrompt.image_prompt);
-			console.log(`Estimated image size: ${formatFileSize(estimatedSize)}`);
-			
-			// If image is larger than 4MB, compress it
-			if (estimatedSize > 4 * 1024 * 1024) {
-				console.log('Image prompt is too large, compressing...');
-				
-				try {
-					// Create a Blob from the base64 string
-					const byteString = atob(fluxPrompt.image_prompt);
-					const ab = new ArrayBuffer(byteString.length);
-					const ia = new Uint8Array(ab);
-					
-					for (let i = 0; i < byteString.length; i++) {
-						ia[i] = byteString.charCodeAt(i);
-					}
-					
-					const blob = new Blob([ab], { type: 'image/jpeg' });
-					const imageFile = new File([blob], 'image-prompt.jpg', { type: 'image/jpeg' });
-					
-					// First compression attempt (moderate)
-					let compressedBase64 = await compressAndConvertToBase64(imageFile, 1024, 1024, 0.8);
-					let compressedSize = getBase64FileSize(compressedBase64);
-					console.log(`Compressed image size (first pass): ${formatFileSize(compressedSize)}`);
-					
-					// If still too large, compress more aggressively
-					if (compressedSize > 4 * 1024 * 1024) {
-						console.log('Image still too large, compressing more aggressively...');
-						compressedBase64 = await compressAndConvertToBase64(imageFile, 600, 600, 0.5);
-						compressedSize = getBase64FileSize(compressedBase64);
-						console.log(`Compressed image size (second pass): ${formatFileSize(compressedSize)}`);
-						
-						// If still too large after second compression, try one last time
-						if (compressedSize > 4 * 1024 * 1024) {
-							console.log('Final compression attempt...');
-							compressedBase64 = await compressAndConvertToBase64(imageFile, 400, 400, 0.4);
-							compressedSize = getBase64FileSize(compressedBase64);
-							console.log(`Compressed image size (final pass): ${formatFileSize(compressedSize)}`);
-						}
-					}
-					
-					// Update the image prompt with the compressed version
-					if (currentRefMode === 'style-ref'){
-						apiRequestData.image_prompt = compressedBase64;
-							apiRequestData.image_prompt_strength = fluxPrompt.image_prompt_strength;
-						genMode = 'style-ref'
-					} else if(currentRefMode === 'depth-ref'){
-						apiRequestData.control_image = compressedBase64
-							genMode = 'depth-ref'
-					} else if(currentRefMode === 'canny-ref'){
-						apiRequestData.control_image = compressedBase64
-							genMode = 'canny-ref'
-
-					}
-					
-				} catch (error) {
-					console.error('Error compressing image:', error);
-					// If compression fails, just use the original and hope for the best
-					apiRequestData.image_prompt = fluxPrompt.image_prompt;
-				}
-			} else {
-				// Image is small enough, use as is
-
-
-					if (currentRefMode === 'style-ref'){
-						apiRequestData.image_prompt =  fluxPrompt.image_prompt;
-							apiRequestData.image_prompt_strength = fluxPrompt.image_prompt_strength;
-						genMode = 'style-ref'
-						
-					} else if(currentRefMode === 'depth-ref'){
-						apiRequestData.control_image =  fluxPrompt.image_prompt;
-							genMode = 'depth-ref'
-					} else if(currentRefMode === 'canny-ref'){
-						apiRequestData.control_image =  fluxPrompt.image_prompt;
-							genMode = 'canny-ref'
-
-					}
+		// 라이브 렌더링 상태에 따라 처리
+		if (liveGenState) {
+			try {
+				fluxPrompt.image_prompt = await GetCurrentScreenAsImageRef();
+			} catch (error) {
+				console.error('Error getting screen reference:', error);
+				generationError = 'Failed to capture current view';
+				return;
 			}
-			
-			// Include the strength parameter
-		
 		}
 
-		console.log('API 요청 데이터:', apiRequestData);
-
-		// 서버에 요청 전송
-		const response = await fetch('api/flux', {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json'
-			},
-			body: JSON.stringify({ input: apiRequestData ,mode: genMode})
-		});
-
-		console.log('응답 상태:', response.status, response.statusText);
-
-		// 응답 데이터 처리
-		const data = await response.json();
-		console.log('응답 데이터:', data);
-
-		// 에러 처리
-		if (!response.ok || data.error) {
-			throw new Error(data.error?.msg || 'Image generation request failed');
+		// 랜덤 시드 생성
+		if (isRandomSeed) {
+			fluxPrompt.seed = Math.floor(Math.random() * 1000000);
 		}
 
-		// 작업 ID 저장
-		taskId = data.id;
-		flux_polling_url = data.polling_url;
-		console.log('이미지 생성 요청 성공, 작업 ID:', taskId);
-
-		// 이미지 생성 상태 모니터링 시작
-		fluxPolling(flux_polling_url, taskId);
-
-		// 생성 타임아웃 설정 (5분)
-		pollingTimeout = setTimeout(() => {
-			if (isGenerating) {
-				clearInterval(pollingInterval);
-				generationError = 'Generation timeout - please try again';
-				isGenerating = false;
-				isPending = false;
-				enableUI();
-			}
-		}, 300000); // 5분
-	} catch (error) {
-		console.error('이미지 생성 실패:', error);
-		generationError = error.message;
-		isGenerating = false;
+		// 상태 초기화
+		activeMenu = null;
+		openImagePrompt = false;
+		isGenerating = true;
 		isPending = false;
-		enableUI();
-	} finally {
-		// 에러가 발생한 경우 UI 활성화
-		if (generationError) {
-			enableUI();
+		generationProgress = 0;
+		generationError = null;
+		taskId = '';
+		clearPollingTimers();
+
+		try {
+			// UI 비활성화
+			disableUI();
+
+			// API 요청 데이터 준비
+
+			let genMode = '';
+			let isFinetune = false;
+
+			let apiRequestData = {
+				prompt: fluxPrompt.prompt,
+				aspect_ratio: fluxPrompt.aspect_ratio,
+				width: fluxPrompt.width,
+				height: fluxPrompt.height,
+				prompt_upsampling: fluxPrompt.prompt_upsampling,
+				seed: fluxPrompt.seed,
+				safety_tolerance: fluxPrompt.safety_tolerance,
+				output_format: fluxPrompt.output_format
+			};
+
+			//check if we have finetune model
+
+			if (currentCasting && currentCasting !== '') {
+				console.log('gen with finetune');
+				isFinetune = true;
+				apiRequestData.finetune_id = currentCasting;
+				apiRequestData.finetune_strength = finetune_strength;
+			}
+
+			// Check if we have an image prompt to include
+			if (fluxPrompt.image_prompt && fluxPrompt.image_prompt !== '') {
+				console.log('Image prompt detected, checking size...');
+
+				// Calculate the size of the base64 string
+				const estimatedSize = getBase64FileSize(fluxPrompt.image_prompt);
+				console.log(`Estimated image size: ${formatFileSize(estimatedSize)}`);
+
+				// If image is larger than 4MB, compress it
+				if (estimatedSize > 4 * 1024 * 1024) {
+					console.log('Image prompt is too large, compressing...');
+
+					try {
+						// Create a Blob from the base64 string
+						const byteString = atob(fluxPrompt.image_prompt);
+						const ab = new ArrayBuffer(byteString.length);
+						const ia = new Uint8Array(ab);
+
+						for (let i = 0; i < byteString.length; i++) {
+							ia[i] = byteString.charCodeAt(i);
+						}
+
+						const blob = new Blob([ab], { type: 'image/jpeg' });
+						const imageFile = new File([blob], 'image-prompt.jpg', { type: 'image/jpeg' });
+
+						// First compression attempt (moderate)
+						let compressedBase64 = await compressAndConvertToBase64(imageFile, 1024, 1024, 0.8);
+						let compressedSize = getBase64FileSize(compressedBase64);
+						console.log(`Compressed image size (first pass): ${formatFileSize(compressedSize)}`);
+
+						// If still too large, compress more aggressively
+						if (compressedSize > 4 * 1024 * 1024) {
+							console.log('Image still too large, compressing more aggressively...');
+							compressedBase64 = await compressAndConvertToBase64(imageFile, 600, 600, 0.5);
+							compressedSize = getBase64FileSize(compressedBase64);
+							console.log(`Compressed image size (second pass): ${formatFileSize(compressedSize)}`);
+
+							// If still too large after second compression, try one last time
+							if (compressedSize > 4 * 1024 * 1024) {
+								console.log('Final compression attempt...');
+								compressedBase64 = await compressAndConvertToBase64(imageFile, 400, 400, 0.4);
+								compressedSize = getBase64FileSize(compressedBase64);
+								console.log(
+									`Compressed image size (final pass): ${formatFileSize(compressedSize)}`
+								);
+							}
+						}
+
+						// Update the image prompt with the compressed version
+						if (currentRefMode === 'style-ref') {
+							apiRequestData.image_prompt = compressedBase64;
+							apiRequestData.image_prompt_strength = fluxPrompt.image_prompt_strength;
+							genMode = 'style-ref';
+						} else if (currentRefMode === 'depth-ref') {
+							apiRequestData.control_image = compressedBase64;
+							genMode = 'depth-ref';
+						} else if (currentRefMode === 'canny-ref') {
+							apiRequestData.control_image = compressedBase64;
+							genMode = 'canny-ref';
+						}
+					} catch (error) {
+						console.error('Error compressing image:', error);
+						// If compression fails, just use the original and hope for the best
+						apiRequestData.image_prompt = fluxPrompt.image_prompt;
+					}
+				} else {
+					// Image is small enough, use as is
+
+					if (currentRefMode === 'style-ref') {
+						apiRequestData.image_prompt = fluxPrompt.image_prompt;
+						apiRequestData.image_prompt_strength = fluxPrompt.image_prompt_strength;
+						genMode = 'style-ref';
+					} else if (currentRefMode === 'depth-ref') {
+						apiRequestData.control_image = fluxPrompt.image_prompt;
+						genMode = 'depth-ref';
+					} else if (currentRefMode === 'canny-ref') {
+						apiRequestData.control_image = fluxPrompt.image_prompt;
+						genMode = 'canny-ref';
+					}
+				}
+
+				// Include the strength parameter
+			}
+
+			console.log('API 요청 데이터:', apiRequestData);
+
+			// 서버에 요청 전송
+			const response = await fetch('api/flux', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({ input: apiRequestData, mode: genMode, isFinetune })
+			});
+
+			console.log('응답 상태:', response.status, response.statusText);
+
+			// 응답 데이터 처리
+			const data = await response.json();
+			console.log('응답 데이터:', data);
+
+			// 에러 처리
+			if (!response.ok || data.error) {
+				throw new Error(data.error?.msg || 'Image generation request failed');
+			}
+
+			// 작업 ID 저장
+			taskId = data.id;
+			flux_polling_url = data.polling_url;
+			console.log('이미지 생성 요청 성공, 작업 ID:', taskId);
+
+			// 이미지 생성 상태 모니터링 시작
+			fluxPolling(flux_polling_url, taskId);
+
+			// 생성 타임아웃 설정 (5분)
+			pollingTimeout = setTimeout(() => {
+				if (isGenerating) {
+					clearInterval(pollingInterval);
+					generationError = 'Generation timeout - please try again';
+					isGenerating = false;
+					isPending = false;
+					enableUI();
+				}
+			}, 300000); // 5분
+		} catch (error) {
+			console.error('이미지 생성 실패:', error);
+			generationError = error.message;
 			isGenerating = false;
 			isPending = false;
+			enableUI();
+		} finally {
+			// 에러가 발생한 경우 UI 활성화
+			if (generationError) {
+				enableUI();
+				isGenerating = false;
+				isPending = false;
+			}
 		}
 	}
-}
 
 	// FLUX API 상태 모니터링
 	function fluxPolling(pollingURL, result_id) {
@@ -542,17 +571,17 @@ async function runImageGen() {
 					// 이미지 생성 완료
 					isPending = false;
 					console.log('이미지 생성 완료:', data.result.sample);
-					
+
 					// 원본 URL 가져오기
 					const originalImageUrl = data.result.sample;
-					
+
 					// CORS 이슈 방지를 위한 프록시 URL 생성
 					const proxiedImageUrl = `/api/flux?url=${encodeURIComponent(originalImageUrl)}`;
 					console.log('Proxied image URL:', proxiedImageUrl);
-					
+
 					// 이미지 처리 완료
 					completeFluxTask(proxiedImageUrl);
-					
+
 					// 타이머 정리
 					clearPollingTimers();
 				} else if (data.status === 'Error') {
@@ -609,7 +638,7 @@ async function runImageGen() {
 			if (cachedImageUrl) {
 				revokeBlobURL(cachedImageUrl);
 			}
-			
+
 			// blob에 대한 로컬 URL 생성
 			cachedImageUrl = URL.createObjectURL(cachedImageBlob);
 
@@ -621,7 +650,7 @@ async function runImageGen() {
 			// 생성 완료
 			isGenerating = false;
 			onPreview = true;
-		
+
 			// UI 활성화
 			enableUI();
 		} catch (error) {
@@ -1019,18 +1048,18 @@ async function runImageGen() {
 	// 이미지 프롬프트 핸들러 (파일 업로드)
 	async function handleImagePrompt(event) {
 		const file = event.target.files[0];
-		
+
 		if (!file) {
 			return;
 		}
-		
+
 		// 파일이 이미지인지 확인
 		if (!file.type.startsWith('image/')) {
 			generationError = 'Selected file is not an image';
 			event.target.value = '';
 			return;
 		}
-		
+
 		// 파일 크기 확인 (최대 5MB)
 		const maxSize = 5 * 1024 * 1024;
 		if (file.size > maxSize) {
@@ -1038,39 +1067,41 @@ async function runImageGen() {
 			event.target.value = '';
 			return;
 		}
-		
+
 		try {
 			// 표시용 URL 생성
 			imagePrompt = await toBlobURL(file);
-			
+
 			// API 요청용 base64 생성 - 접두사 없는 base64 문자열
 			const base64Content = await toBase64(file, true);
 			fluxPrompt.image_prompt = base64Content;
-			
+
 			console.log('Image reference added');
 		} catch (error) {
 			console.error('Failed to process image:', error);
 			generationError = 'Failed to process image file';
 		}
 
-		
 		// 파일 입력 초기화
 		event.target.value = '';
 	}
-	
+
 	// 이미지 프롬프트 제거
 	function removeImagePrompt() {
 		// 이전 Blob URL 해제
 		if (imagePrompt && imagePrompt.startsWith('blob:')) {
 			revokeBlobURL(imagePrompt);
 		}
-		
+
 		imagePrompt = null;
-		fluxPrompt.image_prompt = ""; // 기본값으로 재설정
+		fluxPrompt.image_prompt = ''; // 기본값으로 재설정
 		console.log('Image reference removed');
 	}
 
-	onMount(() => {
+	onMount(async () => {
+		//loRA 데이터 불러오기
+		await getLoLAlist();
+
 		return () => {
 			clearPollingTimers();
 			cleanupImageCache();
@@ -1079,7 +1110,7 @@ async function runImageGen() {
 			if (currentBG && currentBG.startsWith('blob:')) {
 				revokeBlobURL(currentBG);
 			}
-			
+
 			if (imagePrompt && imagePrompt.startsWith('blob:')) {
 				revokeBlobURL(imagePrompt);
 			}
@@ -1147,7 +1178,7 @@ async function runImageGen() {
 
 	<section class="main-ui-wrapper">
 		<div class="logo-wrapper">
-			<img src="otr_ai_logo.svg" alt="">
+			<img src="otr_ai_logo.svg" alt="" />
 		</div>
 		<div class="function-wrapper">
 			<div class="tool-menus">
@@ -1173,7 +1204,7 @@ async function runImageGen() {
 						</div>
 					{/if}
 				</div> -->
-			
+
 				<div id="seed" class="toolbtn seed-setting" onclick={menuToggle}>
 					<Icon class="tool-icon-mid" icon="mingcute:random-line" />
 					<div class="seed-detail">
@@ -1300,34 +1331,52 @@ async function runImageGen() {
 						</div>
 					{/if}
 				</div>
-				<div id="casting-model" class="toolbtn casting-model" onclick={menuToggle}>
-						<Icon class="tool-icon-mid" icon="mage:scan-user-fill" />
-							{#if activeMenu === 'casting-model'}
+				<!-- <div id="casting-model" class="toolbtn casting-model" onclick={menuToggle}>
+					<Icon
+						class="tool-icon-mid"
+						icon="mage:scan-user-fill"
+						style={currentCasting ? 'color: var(--text-color-bright)' : ''}
+					/>
+					{#if activeMenu === 'casting-model'}
 						<div class="casting-panel" transition:slide>
-						<div class="title">
-							Casting model
-						</div>
+							<div class="title">Casting model</div>
 
-						<div class="casting-selection">
-<Dropdown
-  label=""
-  placeholder="Select a model"
-  options={[
-    { label: "omg", value: "omg" },
-    { label: "omg2", value: "omg2" },
-    { label: "omg3", value: "omg3" }
-  ]}
-  selected={currentCasting}
-  onChange={(option) => currentCasting = option.value}
-  labelPosition="left"
-/>					</div>
-<div class="casting-btn-wrapper">
-	<button onclick={openCastingPanel}>Casting new model</button>
-</div>
+							<div class="casting-selection">
+								<Dropdown
+									label=""
+									placeholder="Select a model"
+									options={castingList.map((item) => ({
+										label: `- ${item.name} (${item.triggerWord})`,
+										value: item.id
+									}))}
+									selected={currentCasting}
+									onChange={(option) => (currentCasting = option.value)}
+									labelPosition="left"
+								/>
+							</div>
 
+							{#if currentCasting}
+								<div class="slider-setting-group" transition:fade>
+									<Slider
+										value={finetune_strength}
+										min={0}
+										max={2}
+										scale={0.1}
+										name="Strength"
+										unit=""
+										onValueChange={(newValue) => (finetune_strength = newValue)}
+									/>
+								</div>
+								<div class="casting-btn-wrapper">
+									<button onclick={() => (currentCasting = '')}>Cancel Casting</button>
+								</div>
+							{/if}
+							<div class="casting-btn-wrapper">
+								<button onclick={openCastingPanel}>Casting new model</button>
+							</div>
 						</div>
 					{/if}
-				</div>
+				</div> -->
 
 				<!-- <div id="bg-set" class="toolbtn BG" onclick={menuToggle}>
 					{#if activeMenu === 'bg-set'}
@@ -1418,46 +1467,30 @@ async function runImageGen() {
 						<div class="image-prompt" transition:slide>
 							<div class="image-prompt-content">
 								<div class="image-ref-mode-switch">
-										<button id="style-ref" class={currentRefMode === 'style-ref'?'selected-img-ref-btn':'img-ref-btn'} onclick={switchImagePromptMode}>Basic</button>
-										<button id="depth-ref" class={currentRefMode === 'depth-ref'?'selected-img-ref-btn':'img-ref-btn'}  onclick={switchImagePromptMode}>Depth</button>
-										<button id="canny-ref" class={currentRefMode === 'canny-ref'?'selected-img-ref-btn':'img-ref-btn'}  onclick={switchImagePromptMode}>Line</button>
+									<button
+										id="style-ref"
+										class={currentRefMode === 'style-ref' ? 'selected-img-ref-btn' : 'img-ref-btn'}
+										onclick={switchImagePromptMode}>Basic</button
+									>
+									<button
+										id="depth-ref"
+										class={currentRefMode === 'depth-ref' ? 'selected-img-ref-btn' : 'img-ref-btn'}
+										onclick={switchImagePromptMode}>Depth</button
+									>
+									<button
+										id="canny-ref"
+										class={currentRefMode === 'canny-ref' ? 'selected-img-ref-btn' : 'img-ref-btn'}
+										onclick={switchImagePromptMode}>Line</button
+									>
 								</div>
-													{#if liveGenState}
-					<div class="image-preview-container">
-					
-<div class="live-render-bg">
-  <!-- Scene elements for depth -->
-  <div class="expanding-ring"></div>
-  <div class="expanding-ring" style="animation-delay: 1s;"></div>
-  <div class="expanding-ring" style="animation-delay: 2s;"></div>
-  
-
-</div>
-							<div class="ip-strength-slider">
-											<ImgSlider
-												value={fluxPrompt.image_prompt_strength}
-												min={0}
-												max={1}
-												scale={0.1}
-												name="Strength"
-												unit=""
-												onValueChange={(newValue) => (fluxPrompt.image_prompt_strength = newValue)}
-											/>
-										</div>
-					</div>
-					{/if}
-						<input
-								type="file"
-								id="image-prompt-input"
-								accept=".png,.jpg,.jpeg,.webp"
-								style="display: none;"
-								onchange={handleImagePrompt}
-							/>
-								{#if !liveGenState}
-								{#if imagePrompt}
+								{#if liveGenState}
 									<div class="image-preview-container">
-										<img src={imagePrompt} alt="Reference image" />
-
+										<div class="live-render-bg">
+											<!-- Scene elements for depth -->
+											<div class="expanding-ring"></div>
+											<div class="expanding-ring" style="animation-delay: 1s;"></div>
+											<div class="expanding-ring" style="animation-delay: 2s;"></div>
+										</div>
 										<div class="ip-strength-slider">
 											<ImgSlider
 												value={fluxPrompt.image_prompt_strength}
@@ -1469,31 +1502,64 @@ async function runImageGen() {
 												onValueChange={(newValue) => (fluxPrompt.image_prompt_strength = newValue)}
 											/>
 										</div>
-										<div class="image-preview-actions">
-											<button onclick={removeImagePrompt} title="Remove image">
-												<Icon icon="carbon:close" width="16" height="16" />
-											</button>
+									</div>
+								{/if}
+								<input
+									type="file"
+									id="image-prompt-input"
+									accept=".png,.jpg,.jpeg,.webp"
+									style="display: none;"
+									onchange={handleImagePrompt}
+								/>
+								{#if !liveGenState}
+									{#if imagePrompt}
+										<div class="image-preview-container">
+											<img src={imagePrompt} alt="Reference image" />
+
+											<div class="ip-strength-slider">
+												<ImgSlider
+													value={fluxPrompt.image_prompt_strength}
+													min={0}
+													max={1}
+													scale={0.1}
+													name="Strength"
+													unit=""
+													onValueChange={(newValue) =>
+														(fluxPrompt.image_prompt_strength = newValue)}
+												/>
+											</div>
+											<div class="image-preview-actions">
+												<button onclick={removeImagePrompt} title="Remove image">
+													<Icon icon="carbon:close" width="16" height="16" />
+												</button>
+											</div>
 										</div>
-									</div>
-								{:else}
-									<div
-										class="upload-placeholder"
-										onclick={() => document.getElementById('image-prompt-input').click()}
-									>
-										<Icon icon="material-symbols:cloud-upload" width="24" height="24" />
-										<span>Upload Image Reference</span>
-									</div>
+									{:else}
+										<div
+											class="upload-placeholder"
+											onclick={() => document.getElementById('image-prompt-input').click()}
+										>
+											<Icon icon="material-symbols:cloud-upload" width="24" height="24" />
+											<span>Upload Image Reference</span>
+										</div>
+									{/if}
 								{/if}
-								{/if}
-										<div id="live-render" class="live-render">
-											<div class="live-render-desc">Use Live Reference <span title="Use current viewport as a reference image prompt for the A.I. image generation"><Icon  class="help-icon" icon="material-symbols:help-outline" width="20" height="20" /></span></div>
+								<div id="live-render" class="live-render">
+									<div class="live-render-desc">
+										Use Live Reference <span
+											title="Use current viewport as a reference image prompt for the A.I. image generation"
+											><Icon
+												class="help-icon"
+												icon="material-symbols:help-outline"
+												width="20"
+												height="20"
+											/></span
+										>
+									</div>
 
-											<ToggleBtn checked={liveGenState} onToggle={handleLiveRenderToggle} />
-				</div>
-
-								
+									<ToggleBtn checked={liveGenState} onToggle={handleLiveRenderToggle} />
+								</div>
 							</div>
-						
 						</div>
 					{/if}
 				</div>
@@ -1573,7 +1639,7 @@ async function runImageGen() {
 						currentBG = cachedImageUrl;
 
 						// 배경으로 설정
-						BGfromURL(currentBG)
+						BGfromURL(currentBG);
 
 						// 미리보기 닫기
 						onPreview = false;
@@ -1701,7 +1767,7 @@ async function runImageGen() {
 		display: flex;
 		justify-self: center;
 		align-items: center;
-		
+
 		height: 100%;
 		aspect-ratio: 1 / 1;
 		border-right: 1px solid var(--dim-color);
@@ -2539,291 +2605,308 @@ async function runImageGen() {
 		height: 100%;
 	}
 
-	.live-render{
+	.live-render {
 		display: flex;
 		flex-direction: column;
 		justify-content: center;
 		align-items: center;
 		margin-top: 10px;
-			margin-bottom: 10px;
-
+		margin-bottom: 10px;
 	}
 
-	.live-render-desc{
+	.live-render-desc {
 		display: flex;
 		flex-direction: row;
 		justify-content: center;
 		align-items: center;
-		gap:4px;
-
+		gap: 4px;
 	}
 
-	div :global(.help-icon){
+	div :global(.help-icon) {
 		width: 20px;
 		height: 20px;
 		cursor: pointer;
 	}
 
- .live-render-bg {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    z-index: 1;
-    overflow: hidden;
-    border-radius: 8px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-  }
+	.live-render-bg {
+		position: absolute;
+		top: 0;
+		left: 0;
+		width: 100%;
+		height: 100%;
+		z-index: 1;
+		overflow: hidden;
+		border-radius: 8px;
+		display: flex;
+		justify-content: center;
+		align-items: center;
+	}
 
-  /* Main gradient animation */
-  .live-render-bg::before {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(
-      135deg,
-      var(--secondary-color) 0%,
-      #2a1418 25%,
-      var(--highlight-color) 50%,
-      #3a1f29 75%,
-      var(--secondary-color) 100%
-    );
-    background-size: 400% 400%;
-    animation: smoothGradient 12s ease infinite;
-    z-index: 1;
-  }
+	/* Main gradient animation */
+	.live-render-bg::before {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: 0;
+		width: 100%;
+		height: 100%;
+		background: linear-gradient(
+			135deg,
+			var(--secondary-color) 0%,
+			#2a1418 25%,
+			var(--highlight-color) 50%,
+			#3a1f29 75%,
+			var(--secondary-color) 100%
+		);
+		background-size: 400% 400%;
+		animation: smoothGradient 12s ease infinite;
+		z-index: 1;
+	}
 
-  /* Overlay with depth */
-  .live-render-bg::after {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: radial-gradient(
-      circle at center,
-      rgba(77, 56, 66, 0.2) 0%,
-      rgba(23, 2, 2, 0.6) 70%
-    );
-    z-index: 2;
-  }
+	/* Overlay with depth */
+	.live-render-bg::after {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: 0;
+		width: 100%;
+		height: 100%;
+		background: radial-gradient(
+			circle at center,
+			rgba(77, 56, 66, 0.2) 0%,
+			rgba(23, 2, 2, 0.6) 70%
+		);
+		z-index: 2;
+	}
 
-  /* Live indicator container */
-  .live-indicator-container {
-    position: relative;
-    z-index: 5;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    color: var(--text-color-bright);
-    background-color: rgba(20, 10, 10, 0.5);
-    backdrop-filter: blur(2px);
-    padding: 4px 12px;
-    border-radius: 4px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-    border: 1px solid rgba(77, 56, 66, 0.3);
-  }
+	/* Live indicator container */
+	.live-indicator-container {
+		position: relative;
+		z-index: 5;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		color: var(--text-color-bright);
+		background-color: rgba(20, 10, 10, 0.5);
+		backdrop-filter: blur(2px);
+		padding: 4px 12px;
+		border-radius: 4px;
+		box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+		border: 1px solid rgba(77, 56, 66, 0.3);
+	}
 
-  /* Status indicator */
-  .live-indicator-container .status {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 0.8rem;
-    letter-spacing: 0.5px;
-    font-weight: 600;
-  }
+	/* Status indicator */
+	.live-indicator-container .status {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		font-size: 0.8rem;
+		letter-spacing: 0.5px;
+		font-weight: 600;
+	}
 
-  .live-indicator-container .pulse-dot {
-    width: 8px;
-    height: 8px;
-    background: linear-gradient(135deg, #ff5e5e, #d63c3c);
-    border-radius: 50%;
-    box-shadow: 0 0 5px rgba(255, 94, 94, 0.5);
-    animation: pulseDot 1.5s ease-in-out infinite;
-  }
+	.live-indicator-container .pulse-dot {
+		width: 8px;
+		height: 8px;
+		background: linear-gradient(135deg, #ff5e5e, #d63c3c);
+		border-radius: 50%;
+		box-shadow: 0 0 5px rgba(255, 94, 94, 0.5);
+		animation: pulseDot 1.5s ease-in-out infinite;
+	}
 
-  /* Scene elements for depth */
-  .scene-element {
-    position: absolute;
-    background-color: rgba(255, 255, 255, 0.03);
-    border-radius: 2px;
-    z-index: 3;
-    transform-origin: center;
-  }
+	/* Scene elements for depth */
+	.scene-element {
+		position: absolute;
+		background-color: rgba(255, 255, 255, 0.03);
+		border-radius: 2px;
+		z-index: 3;
+		transform-origin: center;
+	}
 
-  .scene-element:nth-child(1) {
-    width: 40px;
-    height: 40px;
-    top: 20px;
-    left: 30px;
-    animation: float 8s ease-in-out infinite;
-  }
+	.scene-element:nth-child(1) {
+		width: 40px;
+		height: 40px;
+		top: 20px;
+		left: 30px;
+		animation: float 8s ease-in-out infinite;
+	}
 
-  .scene-element:nth-child(2) {
-    width: 30px;
-    height: 30px;
-    bottom: 30px;
-    right: 40px;
-    animation: float 6s ease-in-out infinite 1s;
-  }
+	.scene-element:nth-child(2) {
+		width: 30px;
+		height: 30px;
+		bottom: 30px;
+		right: 40px;
+		animation: float 6s ease-in-out infinite 1s;
+	}
 
-  .scene-element:nth-child(3) {
-    width: 25px;
-    height: 25px;
-    bottom: 20px;
-    left: 35px;
-    animation: float 7s ease-in-out infinite 2s;
-  }
+	.scene-element:nth-child(3) {
+		width: 25px;
+		height: 25px;
+		bottom: 20px;
+		left: 35px;
+		animation: float 7s ease-in-out infinite 2s;
+	}
 
-  .scene-element:nth-child(4) {
-    width: 20px;
-    height: 20px;
-    top: 30px;
-    right: 50px;
-    animation: float 5s ease-in-out infinite 0.5s;
-  }
+	.scene-element:nth-child(4) {
+		width: 20px;
+		height: 20px;
+		top: 30px;
+		right: 50px;
+		animation: float 5s ease-in-out infinite 0.5s;
+	}
 
-  /* Expanding ring */
-  .expanding-ring {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 10px;
-    height: 10px;
-    border: 2px solid rgba(255, 255, 255, 0.1);
-    border-radius: 50%;
-    z-index: 3;
-    animation: expandRing 4s ease-out infinite;
-  }
+	/* Expanding ring */
+	.expanding-ring {
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+		width: 10px;
+		height: 10px;
+		border: 2px solid rgba(255, 255, 255, 0.1);
+		border-radius: 50%;
+		z-index: 3;
+		animation: expandRing 4s ease-out infinite;
+	}
 
-  /* Make sure strength slider stays on top */
-  .ip-strength-slider {
-    z-index: 10;
-  }
+	/* Make sure strength slider stays on top */
+	.ip-strength-slider {
+		z-index: 10;
+	}
 
-  /* Animation keyframes */
-  @keyframes smoothGradient {
-    0% { background-position: 0% 50%; }
-    50% { background-position: 100% 50%; }
-    100% { background-position: 0% 50%; }
-  }
+	/* Animation keyframes */
+	@keyframes smoothGradient {
+		0% {
+			background-position: 0% 50%;
+		}
+		50% {
+			background-position: 100% 50%;
+		}
+		100% {
+			background-position: 0% 50%;
+		}
+	}
 
-  @keyframes pulseDot {
-    0% { transform: scale(0.8); opacity: 0.7; }
-    50% { transform: scale(1.1); opacity: 1; box-shadow: 0 0 10px rgba(255, 94, 94, 0.7); }
-    100% { transform: scale(0.8); opacity: 0.7; }
-  }
+	@keyframes pulseDot {
+		0% {
+			transform: scale(0.8);
+			opacity: 0.7;
+		}
+		50% {
+			transform: scale(1.1);
+			opacity: 1;
+			box-shadow: 0 0 10px rgba(255, 94, 94, 0.7);
+		}
+		100% {
+			transform: scale(0.8);
+			opacity: 0.7;
+		}
+	}
 
-  @keyframes float {
-    0% { transform: translateY(0) rotate(0deg); opacity: 0.3; }
-    50% { transform: translateY(-10px) rotate(5deg); opacity: 0.5; }
-    100% { transform: translateY(0) rotate(0deg); opacity: 0.3; }
-  }
+	@keyframes float {
+		0% {
+			transform: translateY(0) rotate(0deg);
+			opacity: 0.3;
+		}
+		50% {
+			transform: translateY(-10px) rotate(5deg);
+			opacity: 0.5;
+		}
+		100% {
+			transform: translateY(0) rotate(0deg);
+			opacity: 0.3;
+		}
+	}
 
-  @keyframes expandRing {
-    0% { width: 10px; height: 10px; opacity: 0.7; }
-    100% { width: 150px; height: 150px; opacity: 0; }
-  }
+	@keyframes expandRing {
+		0% {
+			width: 10px;
+			height: 10px;
+			opacity: 0.7;
+		}
+		100% {
+			width: 150px;
+			height: 150px;
+			opacity: 0;
+		}
+	}
 
-.casting-panel{
-		
+	.casting-panel {
 		box-sizing: border-box;
 		position: absolute;
 		bottom: 100%;
 		display: flex;
 		flex-direction: column;
-		
+
 		margin-bottom: -10px;
 		transition: all ease-in-out 0.2s;
 		min-width: 150px;
 		background-color: var(--primary-color);
 		border-radius: 12px;
 		border: 1px solid var(--dim-color);
-	
-}
+	}
 
-  .title{
-	font-size: 0.9rem;
+	.title {
+		font-size: 0.9rem;
 		padding: 10px 0px;
 		cursor: default;
 		width: 100%;
 		text-align: center;
 		border-bottom: 1px solid var(--dim-color);
-  }
-  .casting-selection{
-	position:relative;
-	width: 300px;
-	   border-top: 1px solid var(--dim-color);
-	   	   border-bottom: 1px solid var(--dim-color);
-	width: 100%;
-  }
+	}
+	.casting-selection {
+		position: relative;
+		width: 300px;
+		border-top: 1px solid var(--dim-color);
+		border-bottom: 1px solid var(--dim-color);
+		width: 100%;
+	}
 
-  .casting-btn-wrapper{
-	width: 100%;
-	
-  }
-  .casting-btn-wrapper button{
-	box-sizing: border-box;
-	border-top: 1px solid var(--dim-color);
-	width: 100%;
-	height: 42px;
-	border-radius: 0 0 12px 12px;
-	color: var(--text-color-standard);
-	transition: all ease-in-out 300ms;
-	
-	
-  }
+	.casting-btn-wrapper {
+		width: 100%;
+	}
+	.casting-btn-wrapper button {
+		box-sizing: border-box;
+		border-top: 1px solid var(--dim-color);
+		width: 100%;
+		height: 42px;
+		border-radius: 0 0 12px 12px;
+		color: var(--text-color-standard);
+		transition: all ease-in-out 300ms;
+	}
 
-   .casting-btn-wrapper button:hover{
-	background-color: var(--highlight-color);
-	color: var(--text-color-bright);
-	
-	
-  }
+	.casting-btn-wrapper button:hover {
+		background-color: var(--highlight-color);
+		color: var(--text-color-bright);
+	}
 
+	.image-ref-mode-switch {
+		width: 100%;
+		height: 42px;
 
-  .image-ref-mode-switch{
-	width: 100%;
-	height: 42px;
+		display: flex;
+		flex-direction: row;
+		justify-content: space-between;
+		align-self: center;
+	}
+	.image-ref-mode-switch button {
+		flex-grow: 1;
+		text-align: center;
+		cursor: pointer;
+		border-right: 1px solid var(--dim-color);
+		border-bottom: 1px solid var(--dim-color);
+	}
 
-	display: flex;
-	flex-direction: row;
-	justify-content: space-between;
-	align-self: center;
-  }
-  .image-ref-mode-switch button{
+	.image-ref-mode-switch button:last-child {
+		border-right: none;
+	}
 
-flex-grow: 1;
-text-align: center;
-cursor: pointer;
-border-right: 1px solid var(--dim-color);
-border-bottom: 1px solid var(--dim-color)
-  }
+	.image-ref-mode-switch button:hover {
+		background-color: var(--highlight-color);
+	}
 
-    .image-ref-mode-switch button:last-child{
-
-
-border-right: none;
-  }
-
-
-    .image-ref-mode-switch button:hover{
-background-color: var(--highlight-color);
-  }
-
-  .selected-img-ref-btn{
-	background-color:  var(--highlight-color);
-  }
-
-
+	.selected-img-ref-btn {
+		background-color: var(--highlight-color);
+	}
 </style>

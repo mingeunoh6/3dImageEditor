@@ -36,7 +36,7 @@ async function getGoogleSheetsClient() {
 }
 
 // Function to log Flux generation data to Google Sheets
-async function logToGoogleSheets(prompt, id, seed) {
+async function logToGoogleSheets(prompt, id, seed, worktype) {
 	try {
 		// Get the spreadsheet ID from environment variable
 		const spreadsheetId = process.env.VITE_GOOGLE_FLUX_LOG_SHEET_ID;
@@ -63,12 +63,12 @@ async function logToGoogleSheets(prompt, id, seed) {
 		const requestTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
 
 		// Prepare the row data
-		const values = [[requestDate, requestTime, prompt, seed, id]];
+		const values = [[requestDate, requestTime, prompt, seed, id, worktype]];
 
 		// Append the row to the spreadsheet using the actual sheet name
 		await sheets.spreadsheets.values.append({
 			spreadsheetId,
-			range: `${firstSheetName}!A1:D1`, // Use the actual sheet name
+			range: `${firstSheetName}!A1:F1`, // Use the actual sheet name
 			valueInputOption: 'USER_ENTERED', // Changed from RAW to handle date formatting better
 			insertDataOption: 'INSERT_ROWS',
 			resource: {
@@ -86,26 +86,38 @@ async function logToGoogleSheets(prompt, id, seed) {
 
 export async function POST({ request }) {
 	try {
-		const { input, mode } = await request.json();
+		const { input, mode, isFinetune } = await request.json();
 		const fluxAPIKEY = process.env.VITE_FLUX_API_KEY;
 
-		console.log('받은 입력:', input, mode);
+		console.log('받은 입력:', input, mode, isFinetune);
 
 		if (!fluxAPIKEY) {
 			return json({ error: { msg: 'NO FLUX API KEY!' } }, { status: 500 });
 		}
 		let modelUrl;
 		// 사용할 모델 및 API 엔드포인트
-		if (mode === 'style-ref') {
-			modelUrl = 'https://api.us1.bfl.ai/v1/flux-pro-1.1-ultra';
-		} else if (mode === 'depth-ref') {
-			modelUrl = 'https://api.us1.bfl.ai/v1/flux-pro-1.0-depth';
-		} else if (mode === 'canny-ref') {
-			modelUrl = 'https://api.us1.bfl.ai/v1/flux-pro-1.0-canny';
+
+		if (isFinetune) {
+			if (mode === 'style-ref') {
+				modelUrl = 'https://api.us1.bfl.ai/v1/flux-pro-finetuned';
+			} else if (mode === 'depth-ref') {
+				modelUrl = 'https://api.us1.bfl.ai/v1/flux-pro-1.0-depth-finetuned';
+			} else if (mode === 'canny-ref') {
+				modelUrl = 'https://api.us1.bfl.ai/v1/flux-pro-1.0-canny-finetuned';
+			} else {
+				modelUrl = 'https://api.us1.bfl.ai/v1/flux-pro-finetuned';
+			}
 		} else {
-			modelUrl = 'https://api.us1.bfl.ai/v1/flux-pro-1.1-ultra';
+			if (mode === 'style-ref') {
+				modelUrl = 'https://api.us1.bfl.ai/v1/flux-pro-1.1-ultra';
+			} else if (mode === 'depth-ref') {
+				modelUrl = 'https://api.us1.bfl.ai/v1/flux-pro-1.0-depth';
+			} else if (mode === 'canny-ref') {
+				modelUrl = 'https://api.us1.bfl.ai/v1/flux-pro-1.0-canny';
+			} else {
+				modelUrl = 'https://api.us1.bfl.ai/v1/flux-pro-1.1-ultra';
+			}
 		}
-		
 
 		// FLUX API에 요청 보내기
 		const startResponse = await fetch(modelUrl, {
@@ -156,14 +168,35 @@ export async function POST({ request }) {
 		// 성공 응답 처리
 		const jsonStartResponse = await startResponse.json();
 		console.log('FLUX API 성공 응답:', jsonStartResponse);
-
+		let workType = 'standard-text prompt only';
 		// Log to Google Sheets
 		if (jsonStartResponse.id) {
 			// Extract the prompt text from input
 			const promptText = input.prompt || JSON.stringify(input);
+			if (isFinetune) {
+				if (mode === 'style-ref') {
+					workType = 'LoLA-with image prompt';
+				} else if (mode === 'depth-ref') {
+					workType = 'LoLA-control-image depth-map';
+				} else if (mode === 'canny-ref') {
+					workType = 'LoLA-control-image canny-map';
+				} else {
+					workType = 'LoLA-text prompt only';
+				}
+			} else {
+				if (mode === 'style-ref') {
+					workType = 'standard-with image prompt';
+				} else if (mode === 'depth-ref') {
+					workType = 'control-image depth-map';
+				} else if (mode === 'canny-ref') {
+					workType = 'control-image canny-map';
+				} else {
+					workType = 'standard-text prompt only';
+				}
+			}
 
 			// Asynchronously log to Google Sheets without waiting for completion
-			logToGoogleSheets(promptText, jsonStartResponse.id, input.seed).catch((err) =>
+			logToGoogleSheets(promptText, jsonStartResponse.id, input.seed, workType).catch((err) =>
 				console.error('Google Sheets logging error:', err)
 			);
 		}
