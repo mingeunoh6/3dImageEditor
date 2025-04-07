@@ -1762,18 +1762,32 @@
 	}
 
 	.logo-wrapper {
-		 font-family: 'Orbit-Regular';
+
 		text-align: center;
 		padding: 12px;
 		box-sizing: border-box;
 		display: flex;
 		justify-self: center;
 		align-items: center;
-
-		height: 100%;
-		aspect-ratio: 1 / 1;
+		 height: 100%; /* Full height of parent */
+  position: relative;
+		
 		border-right: 1px solid var(--dim-color);
+			
 	}
+
+	.logo-wrapper img {
+		  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  height: 100%;
+  width: auto;
+ aspect-ratio: 1 / 1;
+  max-width: 100%;
+	
+	}
+
 
 	.function-wrapper {
 		height: 80px;
