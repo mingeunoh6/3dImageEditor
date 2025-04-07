@@ -1770,22 +1770,27 @@
 		justify-self: center;
 		align-items: center;
 		height: 80px; /* Full height of parent */
-
 		 width: 80px;
+		 min-width: 80px;
+		 position: relative;
 		border-right: 1px solid var(--dim-color);
 			
 	}
 
 	.logo-wrapper img {
-height: 100%;
-width: 100%;
+		width: 100%;
+		height: 100%;
+		display: flex;
+		justify-self: center;
+		align-items: center;
+
 	
 	}
 
 
 	.function-wrapper {
 		height: 80px;
-		flex-grow: 1;
+flex-grow: 1;
 		display: flex;
 		flex-direction: column;
 	}
