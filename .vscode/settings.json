@@ -1,0 +1,11 @@
+{
+	"workbench.colorTheme": "Visual Studio Dark",
+	"color-highlight.markerType": "background",
+	"color-highlight.matchHslWithNoFunction": false,
+	"editor.selectionHighlight": true,
+	"workbench.preferredDarkColorTheme": "Visual Studio Light",
+	"workbench.preferredHighContrastColorTheme": "Visual Studio Light",
+	"workbench.preferredLightColorTheme": "Visual Studio Light",
+	"blockman.n04Sub01ColorComboPresetForDarkTheme": "Classic Dark 2 (Gradients)",
+	"cursor.cmdk.useThemedDiffBackground": true
+}

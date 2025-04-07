@@ -1178,7 +1178,8 @@
 
 	<section class="main-ui-wrapper">
 		<div class="logo-wrapper">
-			<img src="otr_ai_logo.svg" alt="" />
+			<img src="OTRAI_Black.svg" alt="" />
+		
 		</div>
 		<div class="function-wrapper">
 			<div class="tool-menus">
@@ -1761,6 +1762,7 @@
 	}
 
 	.logo-wrapper {
+		 font-family: 'Orbit-Regular';
 		text-align: center;
 		padding: 12px;
 		box-sizing: border-box;
@@ -1906,6 +1908,7 @@
 	}
 
 	#prompt-input {
+		 font-family: 'Orbit-Regular';
 		box-sizing: border-box;
 		display: flex;
 		flex-grow: 1;
@@ -1961,7 +1964,7 @@
 		left: 50%;
 		transform: translateX(-50%);
 		width: 300px;
-		background-color: #18272e;
+		background-color: var(--dim-color);
 		border-radius: 10px;
 		overflow: hidden;
 		z-index: 999;
@@ -1979,7 +1982,7 @@
 
 	.progress-bar {
 		height: 100%;
-		background-color: #4caf50;
+		background-color: var(--highlight-color);
 		transition: width 0.3s ease;
 	}
 
@@ -2102,7 +2105,8 @@
 	}
 
 	.add-item-list .btnSelected {
-		color: white;
+		color: var(--text-color-bright);
+		background-color: var(--highlight-color);
 	}
 
 	.gen-opt-wrapper {
@@ -2305,7 +2309,7 @@
 
 	.progress-bar {
 		height: 100%;
-		background-color: #4caf50;
+		background-color: var(--highlight-color);;
 		transition: width 0.3s ease;
 	}
 
@@ -2316,7 +2320,7 @@
 	}
 
 	.active-generation {
-		background-color: #4caf50; /* Green color for active generation */
+		background-color: var(--highlight-color);; /* Green color for active generation */
 		/* Keep the pulse animation if you want to show activity */
 		animation: pulse 2s infinite;
 	}
@@ -2652,11 +2656,11 @@
 		height: 100%;
 		background: linear-gradient(
 			135deg,
-			var(--secondary-color) 0%,
+			var(--primary-color) 0%,
 			#2a1418 25%,
 			var(--highlight-color) 50%,
 			#3a1f29 75%,
-			var(--secondary-color) 100%
+			var(--primary-color) 100%
 		);
 		background-size: 400% 400%;
 		animation: smoothGradient 12s ease infinite;
@@ -2673,8 +2677,8 @@
 		height: 100%;
 		background: radial-gradient(
 			circle at center,
-			rgba(77, 56, 66, 0.2) 0%,
-			rgba(23, 2, 2, 0.6) 70%
+			var(--secondary-color) 0%,
+			var(--primary-color) 70%
 		);
 		z-index: 2;
 	}
@@ -2688,12 +2692,12 @@
 		align-items: center;
 		justify-content: center;
 		color: var(--text-color-bright);
-		background-color: rgba(20, 10, 10, 0.5);
+		background-color:var(--primary-color);
 		backdrop-filter: blur(2px);
 		padding: 4px 12px;
 		border-radius: 4px;
 		box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-		border: 1px solid rgba(77, 56, 66, 0.3);
+		border: 1px solid var(--dim-color);
 	}
 
 	/* Status indicator */

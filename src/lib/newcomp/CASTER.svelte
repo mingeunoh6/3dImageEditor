@@ -803,7 +803,7 @@ trainPolling(data.finetune_id)
 		left: 50%;
 		transform: translateX(-50%);
 		width: 300px;
-		background-color: #18272e;
+		background-color: var(--secondary-color);
 		border-radius: 10px;
 		overflow: hidden;
 		z-index: 999;

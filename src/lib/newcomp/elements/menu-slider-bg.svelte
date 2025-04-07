@@ -167,8 +167,8 @@
         left: 0;
         width: 50%;
         height: 100%;
-        background-color: rgba(61, 32, 32, 0.5);
-    
+        background-color: var(--highlight-color);
+        opacity: 0.5;
         pointer-events: none;
         /* 트랜지션 제거 - 완벽하게 즉각적인 반응을 위해 */
     }
@@ -182,7 +182,7 @@
         left: 0;
         width: 100%;
         height: 100%;
-        color: var(--text-color-bright);
+        color: var(--primary-color);
         font-size: 0.9rem;
         pointer-events: none;
     }

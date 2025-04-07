@@ -1,5 +1,10 @@
 @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css');
-
+@font-face {
+    font-family: 'Orbit-Regular';
+    src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_2310@1.0/Orbit-Regular.woff2') format('woff2');
+    font-weight: normal;
+    font-style: normal;
+}
 /* Reset HTML styling */
 html,
 body,
@@ -146,6 +151,19 @@ table {
 	--dim-color: #75696db6;
 	--glass-background:#170202c2;
 }
+
+
+.theme-otr-light {
+		--primary-color: #ffffff;
+	--text-color-standard:#141E19;
+	--text-color-bright: #3e6652;
+	--secondary-color: #dbdbdb;
+	--hover-color: rgba(0, 199, 116, 0.715);
+	--highlight-color: rgb(0, 255, 149);
+	--dim-color: #343f3ab6;
+	--glass-background:#ffffffc2;
+}
+
 
 h1 {
 	font-size: 2.3rem;

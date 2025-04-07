@@ -3,6 +3,7 @@
 <script>
     import { onMount, onDestroy } from 'svelte';
     import Icon from '@iconify/svelte';
+	import { fade } from 'svelte/transition';
     import * as THREE from 'three';
     import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
     import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -59,6 +60,22 @@ import { toBase64, toBlobURL, getImageDimensions, revokeBlobURL, getDimensionsFr
     
     let sceneObjects = $state([])
 
+	   let transformControlsVisible = $state(false);
+    let currentTransformMode = $state('move');
+
+	   $effect(() => {
+        transformControlsVisible = selectedObject !== null;
+    });
+      function setTransformMode(mode) {
+        if (!viewportRenderer) return;
+        
+        // Update local state
+        currentTransformMode = mode;
+        
+        // Apply change to renderer
+        viewportRenderer.changeTransformMode(mode);
+    }
+    
 
     // Monitor new model changes from parent component
     $effect(() => {
@@ -989,7 +1006,31 @@ function isHighlightObject(object) {
 
 <div class="viewport-container">
     <canvas id="viewport" bind:this={viewport}></canvas>
-    
+      {#if transformControlsVisible}
+        <div class="transform-controls-toolbar" transition:fade={{duration: 200}}>
+            <button 
+                class={currentTransformMode === 'move' ? 'active' : ''} 
+                title="Move (Translate)" 
+                onclick={() => setTransformMode('move')}
+            >
+                <Icon icon="mdi:cursor-move" width="18" height="18" />
+            </button>
+            <button 
+                class={currentTransformMode === 'rotate' ? 'active' : ''} 
+                title="Rotate" 
+                onclick={() => setTransformMode('rotate')}
+            >
+                <Icon icon="mdi:rotate-3d-variant" width="18" height="18" />
+            </button>
+            <button 
+                class={currentTransformMode === 'scale' ? 'active' : ''} 
+                title="Scale" 
+                onclick={() => setTransformMode('scale')}
+            >
+                <Icon icon="mdi:arrow-expand-all" width="18" height="18" />
+            </button>
+        </div>
+    {/if}
     <!-- Context menu for selected objects -->
     {#if contextMenuVisible && selectedObject}
         <div 
@@ -1063,7 +1104,7 @@ function isHighlightObject(object) {
     justify-content: center;
     align-items: center;
     overflow: hidden;
-
+  position: relative;
   }
 
   #viewport {
@@ -1323,5 +1364,48 @@ function isHighlightObject(object) {
     
     .cancel-button:hover {
         background-color: #555;
+    }
+
+	 
+    /* Add Transform Controls Toolbar styling */
+    .transform-controls-toolbar {
+        position: absolute;
+        left: 20px;
+        top: 50%;
+        transform: translateY(-50%);
+        background-color: var(--primary-color);
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        padding: 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        z-index: 100;
+        backdrop-filter: blur(3px);
+        border: 1px solid var(--dim-color);
+    }
+
+    .transform-controls-toolbar button {
+        width: 36px;
+        height: 36px;
+        border-radius: 6px;
+        border: none;
+        background-color: rgba(255, 255, 255, 0.1);
+        color: var(--dim-color);
+        cursor: pointer;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        transition: all 0.2s ease;
+    }
+
+    .transform-controls-toolbar button:hover {
+        background-color: rgba(255, 255, 255, 0.2);
+        color: var(--text-color-bright);
+    }
+
+    .transform-controls-toolbar button.active {
+        background-color: var(--highlight-color);
+        color: var(--text-color-bright);
     }
 </style>

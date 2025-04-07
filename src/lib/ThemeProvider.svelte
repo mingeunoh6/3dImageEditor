@@ -6,7 +6,7 @@
   // Define route-theme mappings
   const routeThemeMap = {
     '/': 'theme-default',
-    '/new': 'theme-dark',
+    '/new': 'theme-otr-light',
    
     // Add more routes as needed
   };

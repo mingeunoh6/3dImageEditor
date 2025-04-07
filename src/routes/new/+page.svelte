@@ -223,7 +223,7 @@ if(viewportRef){
 switch(type){
   case 'rotation':
     console.log('rotation', value)
-    viewportRef.changeLightRot(value)
+     viewportRef.changeEnvMapSetting(type, value) 
     break
   case 'intensity':
      console.log('intensity', value)
@@ -345,7 +345,7 @@ onMount(() => {
      height: calc(var(--vh, 1vh) * 100);
 
 
-    background: linear-gradient(to top, #170202, #140a0a);
+    background: linear-gradient(to top, var(--primary-color), var(--primary-color));
     overflow: hidden;
   }
 
