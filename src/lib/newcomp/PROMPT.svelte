@@ -1769,22 +1769,16 @@
 		display: flex;
 		justify-self: center;
 		align-items: center;
-		 height: 100%; /* Full height of parent */
-  position: relative;
-		
+		height: 80px; /* Full height of parent */
+
+		 width: 80px;
 		border-right: 1px solid var(--dim-color);
 			
 	}
 
 	.logo-wrapper img {
-		  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  height: 100%;
-  width: auto;
- aspect-ratio: 1 / 1;
-  max-width: 100%;
+height: 100%;
+width: 100%;
 	
 	}
 
