@@ -10,6 +10,7 @@
     import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
     import { ObjectHighlighter, EdgeHighlighter } from '$lib/newcomp/elements/objectHighlighter.js';
     import { mainRenderer } from '$lib/newcomp/elements/main-canvas.js';
+    import MASK from '$lib/newcomp/MASK.svelte';
 import { toBase64, toBlobURL, getImageDimensions, revokeBlobURL, getDimensionsFromRatio } from '$lib/utils/imageUtils';
     // Props from parent component
   let { 
@@ -18,6 +19,10 @@ import { toBase64, toBlobURL, getImageDimensions, revokeBlobURL, getDimensionsFr
         onModelError = () => {},
         onSceneObjectsChanged = () => {},
         currentViewportBG, 
+        maskingMode,
+        activeDrawingMode,
+        brushSize,
+        eraserSize
     } = $props();
 
     
@@ -866,7 +871,7 @@ function isHighlightObject(object) {
     // Handle viewport size based on orientation
    function setViewport() {
     if (!viewport || !viewport.parentElement) return;
-    
+    console.log('setViewport');
     // Get the container's dimensions
     const container = viewport.parentElement;
     const containerRect = container.getBoundingClientRect();
@@ -1051,6 +1056,10 @@ function isHighlightObject(object) {
             </ul>
         </div>
     {/if}
+
+  
+        <MASK {maskingMode} {viewportWidth} {viewportHeight} {activeDrawingMode} {brushSize} {eraserSize} />
+ 
     
     <!-- Loading indicator -->
     {#if isLoading}

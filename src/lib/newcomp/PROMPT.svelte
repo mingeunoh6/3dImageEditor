@@ -28,7 +28,9 @@
 		BGfromURL,
 		requestCurrentViewportImg,
 		liveRenderImage,
-		handleCasting
+		handleCasting,
+		toggleMaskingMode,
+		updateDrawingMode
 	} = $props();
 
 	// UI 상태
@@ -88,6 +90,12 @@
 	let liveGenState = $state(false);
 	let isRenderOpt = $state(false);
 
+	//마스킹 옵션
+	let maskingMode = $state(false);
+	let activeDrawingMode = $state('draw');
+	let brushSize = $state(20);
+	let eraserSize = $state(20);
+
 	//Caster 옵션
 	let currentCasting = $state('');
 	let castingList = [];
@@ -146,6 +154,45 @@
 	function openCastingPanel() {
 		console.log('casting');
 		handleCasting();
+	}
+
+	function handleDrawingMode(event) {
+		//stop the event propagation
+		event.stopPropagation();
+		console.log('drawing mode');
+		let mode = event.target.id;
+		if (mode === 'draw-btn') {
+			activeDrawingMode = 'draw';
+		} else if (mode === 'eraser-btn') {
+			activeDrawingMode = 'eraser';
+		}
+		console.log('activeDrawingMode', activeDrawingMode);
+		updateDrawingMode(activeDrawingMode, brushSize, eraserSize);
+	}
+
+	function setMaskCanvas() {
+		maskingMode = !maskingMode;
+		if (maskingMode) {
+			activeMenu = 'masking-mode';
+				updateDrawingMode(activeDrawingMode, brushSize, eraserSize);
+		} else {
+			activeMenu = null;
+		}
+
+		console.log('maskingMode', maskingMode);
+		toggleMaskingMode();
+	}
+
+
+
+	function updateBrushSize(newValue) {	
+		brushSize = newValue;
+		updateDrawingMode(activeDrawingMode, brushSize, eraserSize);
+	}
+
+	function updateEraserSize(newValue) {
+		eraserSize = newValue;
+		updateDrawingMode(activeDrawingMode, brushSize, eraserSize);
 	}
 
 	//LoLA 데이터 가져오기
@@ -1179,7 +1226,6 @@
 	<section class="main-ui-wrapper">
 		<div class="logo-wrapper">
 			<img src="OTRAI_Black.svg" alt="" />
-		
 		</div>
 		<div class="function-wrapper">
 			<div class="tool-menus">
@@ -1327,6 +1373,52 @@
 											16:9
 										</button>
 									</div>
+								</div>
+							</div>
+						</div>
+					{/if}
+				</div>
+				<div id="masking-mode" class="toolbtn masking-mode" onclick={setMaskCanvas}>
+					<Icon
+						class="tool-icon-mid"
+						icon="mingcute:paint-brush-ai-fill"
+						style={maskingMode ? 'color: var(--highlight-color)' : 'color: var(--dim-color)'}
+					/>
+					{#if activeMenu === 'masking-mode'}
+						<div class="add-item-list" transition:slide>
+							<div class="masking-mode-wrapper">
+								<div class="drawing-mode-wrapper">
+									<button id="draw-btn" onclick={handleDrawingMode} class={activeDrawingMode === 'draw' ? 'selected' : ''}>
+										<Icon class="tool-icon-mid" icon="ph:paint-brush-fill" />
+									</button>
+								<button id="eraser-btn" onclick={handleDrawingMode} class={activeDrawingMode === 'eraser' ? 'selected' : ''}>
+									<Icon class="tool-icon-mid" icon="fluent:eraser-24-filled" />
+								</button>
+								
+								</div>
+								
+								<div class="brush-size-wrapper">
+									{#if activeDrawingMode === 'draw'}
+										<Slider
+											value={brushSize}
+											min={1}
+											max={100}
+											scale={1}
+											name="Brush Size"
+											unit="px"
+											onValueChange={(newValue) => updateBrushSize(newValue)}
+										/>
+									{:else if activeDrawingMode === 'eraser'}
+										<Slider
+											value={eraserSize}
+											min={1}
+											max={100}
+											scale={1}
+											name="Eraser Size"
+											unit="px"
+											onValueChange={(newValue) => updateEraserSize(newValue)}
+										/>
+									{/if}
 								</div>
 							</div>
 						</div>
@@ -1762,7 +1854,6 @@
 	}
 
 	.logo-wrapper {
-
 		text-align: center;
 		padding: 12px;
 		box-sizing: border-box;
@@ -1770,11 +1861,10 @@
 		justify-self: center;
 		align-items: center;
 		height: 80px; /* Full height of parent */
-		 width: 80px;
-		 min-width: 80px;
-		 position: relative;
+		width: 80px;
+		min-width: 80px;
+		position: relative;
 		border-right: 1px solid var(--dim-color);
-			
 	}
 
 	.logo-wrapper img {
@@ -1783,14 +1873,11 @@
 		display: flex;
 		justify-self: center;
 		align-items: center;
-
-	
 	}
-
 
 	.function-wrapper {
 		height: 80px;
-flex-grow: 1;
+		flex-grow: 1;
 		display: flex;
 		flex-direction: column;
 	}
@@ -1921,7 +2008,7 @@ flex-grow: 1;
 	}
 
 	#prompt-input {
-		 font-family: 'Orbit-Regular';
+		font-family: 'Orbit-Regular';
 		box-sizing: border-box;
 		display: flex;
 		flex-grow: 1;
@@ -2322,7 +2409,7 @@ flex-grow: 1;
 
 	.progress-bar {
 		height: 100%;
-		background-color: var(--highlight-color);;
+		background-color: var(--highlight-color);
 		transition: width 0.3s ease;
 	}
 
@@ -2333,7 +2420,7 @@ flex-grow: 1;
 	}
 
 	.active-generation {
-		background-color: var(--highlight-color);; /* Green color for active generation */
+		background-color: var(--highlight-color); /* Green color for active generation */
 		/* Keep the pulse animation if you want to show activity */
 		animation: pulse 2s infinite;
 	}
@@ -2705,7 +2792,7 @@ flex-grow: 1;
 		align-items: center;
 		justify-content: center;
 		color: var(--text-color-bright);
-		background-color:var(--primary-color);
+		background-color: var(--primary-color);
 		backdrop-filter: blur(2px);
 		padding: 4px 12px;
 		border-radius: 4px;
@@ -2924,6 +3011,45 @@ flex-grow: 1;
 	}
 
 	.selected-img-ref-btn {
+		background-color: var(--highlight-color);
+	}
+
+	.masking-mode-wrapper {
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		align-items: center;
+		width: 100%;
+		
+	}
+
+	.brush-size-wrapper {
+		display: flex;
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: center;
+		width: 100%;
+		height: 32px;
+	}
+
+	.drawing-mode-wrapper {
+		display: flex;
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: center;
+		width: 100%;
+		border-bottom: 1px solid var(--dim-color);
+	}
+
+	.drawing-mode-wrapper button {
+		width: 100%;
+		height: 36px;
+		border: none !important;
+		color: var(--text-color-standard);
+		transition: all ease-in-out 300ms;
+	}
+
+	.drawing-mode-wrapper button.selected {
 		background-color: var(--highlight-color);
 	}
 </style>

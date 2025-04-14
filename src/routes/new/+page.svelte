@@ -8,6 +8,7 @@ import PROMPT from '$lib/newcomp/PROMPT.svelte';
 import VIEWPORT from '$lib/newcomp/VIEWPORT.svelte';
 import EDITOR from '$lib/newcomp/EDITOR.svelte';
 import CASTER from '$lib/newcomp/CASTER.svelte'
+import MASK from '$lib/newcomp/MASK.svelte';
 
 import Icon from '@iconify/svelte';
 // Model loading states
@@ -18,6 +19,14 @@ let uploadError = $state(null);
 
 //casting states
 let onCasting = $state(false);
+
+//masking states
+let maskingMode = $state(false);
+
+//drawing states
+let activeDrawingMode = $state('draw');
+let newBrushSize = $state(20);
+let newEraserSize = $state(20);
 
 // Scene objects tracking
 let sceneObjects = $state([]);
@@ -95,10 +104,21 @@ function updateSceneObjects(objectsList) {
 
 }
 
+function updateDrawingMode(mode, brushSize, eraserSize){
+  console.log('drawing mode', mode);
+  console.log('brushSize', brushSize);
+  console.log('eraserSize', eraserSize);
+  activeDrawingMode = mode;
+  newBrushSize = brushSize;
+  newEraserSize = eraserSize;
+}
+
 
 function updateCurrentBG(data){
   currentViewportBG = data;
-  console.log('currentBGsize', currentViewportBG.width, currentViewportBG.height)
+  if (data) {
+    console.log('currentBGsize', currentViewportBG.width, currentViewportBG.height);
+  }
 }
 
 // Handle object selection from LT component
@@ -135,14 +155,15 @@ function handleObjectDelete(objectId) {
   }}
 
   function changeBG(file){
-    console.log('new hdr', file)
-     if (viewportRef) {
-    viewportRef.changeBG(file, true)
-     }
+    console.log('new hdr', file);
+    if (viewportRef) {
+      viewportRef.changeBG(file, true);
+    }
 
-     if(file === null){
+    if (file === null) {
       currentViewportBG = null;
-     }
+      currentBG = null;
+    }
   }
 
   function changeBGfromURL(url){
@@ -233,6 +254,11 @@ switch(type){
 }
 }
 
+function toggleMaskingMode(){
+  maskingMode = !maskingMode;
+  console.log('maskingMode', maskingMode);
+}
+
 
 onMount(() => {
     // Run the function on initial load and resize
@@ -295,6 +321,10 @@ onMount(() => {
         onModelError={handleModelError}
         onSceneObjectsChanged={updateSceneObjects}
         currentViewportBG={(data)=>updateCurrentBG(data)}
+        {maskingMode}
+        {activeDrawingMode}
+        {newBrushSize}
+        {newEraserSize}
       />
     </div>
     <div class="prompt-wrapper">
@@ -307,6 +337,8 @@ onMount(() => {
         requestCurrentViewportImg={(data)=>getCurrentViewportAsImg(data)}
         liveRenderImage={liveRenderImage}
         handleCasting={()=>handleCasting()}
+        toggleMaskingMode={()=>toggleMaskingMode()}
+        updateDrawingMode={updateDrawingMode}
       />
     </div>
   </div>
