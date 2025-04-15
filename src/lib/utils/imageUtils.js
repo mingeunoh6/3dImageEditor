@@ -164,16 +164,16 @@ export function generateImageFilename(prefix = 'image', extension = 'png') {
 
 // Calculate the file size from a base64 string
 export function getBase64FileSize(base64String) {
-  // Base64 size calculation: every 4 base64 characters represent 3 bytes
-  // Add 33% to get the approximate byte size
-  return Math.round((base64String.length * 3) / 4);
+	// Base64 size calculation: every 4 base64 characters represent 3 bytes
+	// Add 33% to get the approximate byte size
+	return Math.round((base64String.length * 3) / 4);
 }
 
 // Format file size to human-readable format
 export function formatFileSize(bytes) {
-  if (bytes < 1024) return bytes + ' bytes';
-  else if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
-  else return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+	if (bytes < 1024) return bytes + ' bytes';
+	else if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
+	else return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
 }
 
 export async function compressAndConvertToBase64(
@@ -237,5 +237,134 @@ export async function compressAndConvertToBase64(
 
 		// Read the file as a data URL
 		reader.readAsDataURL(file);
+	});
+}
+
+export async function matchDimension(referenceImage, targetImage, options = {}) {
+	const { quality = 0.9, preserveAlpha = true, outputFormat = null, debug = false } = options;
+
+	// Input validation with detailed error
+	if (!referenceImage) {
+		throw new Error('Reference image is required but was not provided');
+	}
+
+	if (!targetImage) {
+		throw new Error('Target image to resize is required but was not provided');
+	}
+
+	// Helper function to ensure data URL format
+	const ensureDataUrl = (img, defaultMime = 'image/jpeg') => {
+		if (img.startsWith('data:')) return img;
+		return `data:${defaultMime};base64,${img}`;
+	};
+
+	// Ensure images have proper format
+	const refImgSrc = ensureDataUrl(referenceImage);
+	const targetImgSrc = ensureDataUrl(targetImage);
+
+	if (debug) {
+		console.log('Reference image format:', refImgSrc.substring(0, 30) + '...');
+		console.log('Target image format:', targetImgSrc.substring(0, 30) + '...');
+	}
+
+	return new Promise((resolve, reject) => {
+		try {
+			// Create and load the reference image to get dimensions
+			const refImg = new Image();
+
+			refImg.onload = () => {
+				try {
+					const targetWidth = refImg.width;
+					const targetHeight = refImg.height;
+
+					if (debug) {
+						console.log(`Reference dimensions: ${targetWidth}x${targetHeight}`);
+					}
+
+					// Now load the target image to resize it
+					const targetImg = new Image();
+
+					targetImg.onload = () => {
+						try {
+							if (debug) {
+								console.log(`Original target dimensions: ${targetImg.width}x${targetImg.height}`);
+							}
+
+							// Create canvas for resizing
+							const canvas = document.createElement('canvas');
+							canvas.width = targetWidth;
+							canvas.height = targetHeight;
+
+							// Get drawing context - use 2d context with alpha if preserving transparency
+							const ctx = canvas.getContext('2d', { alpha: preserveAlpha });
+
+							// Clear canvas
+							if (preserveAlpha) {
+								ctx.clearRect(0, 0, targetWidth, targetHeight);
+							} else {
+								// Fill with white if not preserving alpha
+								ctx.fillStyle = '#FFFFFF';
+								ctx.fillRect(0, 0, targetWidth, targetHeight);
+							}
+
+							// Draw the target image resized to match reference dimensions
+							ctx.drawImage(targetImg, 0, 0, targetWidth, targetHeight);
+
+							// Determine output format
+							let finalFormat = 'image/png'; // Default for alpha preservation
+
+							if (outputFormat) {
+								// Use specified format if provided
+								finalFormat = outputFormat;
+							} else if (!preserveAlpha) {
+								// Use JPEG if alpha is not important
+								finalFormat = 'image/jpeg';
+							} else if (
+								targetImgSrc.includes('data:image/jpeg') ||
+								targetImgSrc.includes('data:image/jpg')
+							) {
+								// Otherwise try to match original format
+								finalFormat = 'image/jpeg';
+							}
+
+							// Convert to data URL
+							const resizedDataUrl = canvas.toDataURL(finalFormat, quality);
+
+							// Clean up
+							canvas.remove();
+
+							if (debug) {
+								console.log(`Resized to ${targetWidth}x${targetHeight}, format: ${finalFormat}`);
+							}
+
+							// Resolve with the resized data URL
+							resolve(resizedDataUrl);
+						} catch (error) {
+							reject(new Error(`Error processing target image: ${error.message}`));
+						}
+					};
+
+					// Handle target image loading error
+					targetImg.onerror = (error) => {
+						reject(new Error(`Failed to load target image: ${error?.message || 'Unknown error'}`));
+					};
+
+					// Set target image source
+					targetImg.src = targetImgSrc;
+				} catch (error) {
+					reject(new Error(`Error after loading reference image: ${error.message}`));
+				}
+			};
+
+			// Handle reference image loading error
+			refImg.onerror = (error) => {
+				reject(new Error(`Failed to load reference image: ${error?.message || 'Unknown error'}`));
+			};
+
+			// Set reference image source
+			refImg.src = refImgSrc;
+		} catch (error) {
+			reject(new Error(`Unexpected error in matchDimension: ${error.message}`));
+		}
 	});
 }

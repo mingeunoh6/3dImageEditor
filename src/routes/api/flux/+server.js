@@ -104,6 +104,8 @@ export async function POST({ request }) {
 				modelUrl = 'https://api.us1.bfl.ai/v1/flux-pro-1.0-depth-finetuned';
 			} else if (mode === 'canny-ref') {
 				modelUrl = 'https://api.us1.bfl.ai/v1/flux-pro-1.0-canny-finetuned';
+			} else if (mode === 'fill') {
+				modelUrl = 'https://api.us1.bfl.ai/v1/flux-pro-1.0-fill-finetuned';
 			} else {
 				modelUrl = 'https://api.us1.bfl.ai/v1/flux-pro-finetuned';
 			}
@@ -114,6 +116,8 @@ export async function POST({ request }) {
 				modelUrl = 'https://api.us1.bfl.ai/v1/flux-pro-1.0-depth';
 			} else if (mode === 'canny-ref') {
 				modelUrl = 'https://api.us1.bfl.ai/v1/flux-pro-1.0-canny';
+			} else if (mode === 'fill') {
+				modelUrl = 'https://api.us1.bfl.ai/v1/flux-pro-1.0-fill';
 			} else {
 				modelUrl = 'https://api.us1.bfl.ai/v1/flux-pro-1.1-ultra';
 			}
@@ -144,7 +148,7 @@ export async function POST({ request }) {
 					{
 						error: {
 							msg:
-								errorJson.detail?.[0]?.msg ||
+								errorJson.detail[0].msg ||
 								errorJson.message ||
 								errorJson.detail ||
 								'Fail to request generating model'
@@ -180,6 +184,8 @@ export async function POST({ request }) {
 					workType = 'LoLA-control-image depth-map';
 				} else if (mode === 'canny-ref') {
 					workType = 'LoLA-control-image canny-map';
+				} else if (mode === 'fill') {
+					workType = 'LoLA-control-image Mask Fill';
 				} else {
 					workType = 'LoLA-text prompt only';
 				}
@@ -190,6 +196,8 @@ export async function POST({ request }) {
 					workType = 'control-image depth-map';
 				} else if (mode === 'canny-ref') {
 					workType = 'control-image canny-map';
+				} else if (mode === 'fill') {
+					workType = 'Mask Fill';
 				} else {
 					workType = 'standard-text prompt only';
 				}

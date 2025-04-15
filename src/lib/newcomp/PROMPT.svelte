@@ -16,7 +16,8 @@
 		formatFileSize,
 		getBase64FileSize,
 		getDimensionsFromRatio,
-		generateImageFilename
+		generateImageFilename,
+		matchDimension  
 	} from '$lib/utils/imageUtils';
 
 	// Props from parent
@@ -399,6 +400,17 @@
 			}
 		}
 
+		if(maskingMode && currentMaskImage !== null){
+			console.log('masking 모드로 생성합니다.')
+			try {
+				fluxPrompt.image = await GetCurrentScreenAsImageRef();
+			} catch (error) {
+				console.error('Error getting screen reference:', error);
+				generationError = 'Failed to capture current view for masking';
+				return;
+			}
+		}
+
 		// 랜덤 시드 생성
 		if (isRandomSeed) {
 			fluxPrompt.seed = Math.floor(Math.random() * 1000000);
@@ -527,10 +539,105 @@
 				// Include the strength parameter
 			}
 
-			//마스킹 이미지가 있는지 확인
-			if(maskingMode && currentMaskImage !== null){
-				console.log('masking 모드로 생성합니다.')
-			}
+			// Check if we have an image prompt to include
+			if (fluxPrompt.image && maskingMode && currentMaskImage) {
+    console.log('Mask detected, checking size...');
+
+    // Calculate the size of the base64 string
+    const estimatedSize = getBase64FileSize(fluxPrompt.image);
+    console.log(`Estimated image size: ${formatFileSize(estimatedSize)}`);
+
+    // If image is larger than 4MB, compress it
+    if (estimatedSize > 4 * 1024 * 1024) {
+        console.log('Image prompt is too large, compressing...');
+
+        try {
+            // Create a Blob from the base64 string
+            const byteString = atob(fluxPrompt.image);
+            const ab = new ArrayBuffer(byteString.length);
+            const ia = new Uint8Array(ab);
+
+            for (let i = 0; i < byteString.length; i++) {
+                ia[i] = byteString.charCodeAt(i);
+            }
+
+            const blob = new Blob([ab], { type: 'image/jpeg' });
+            const imageFile = new File([blob], 'image-prompt.jpg', { type: 'image/jpeg' });
+
+            // First compression attempt (moderate)
+            let compressedBase64 = await compressAndConvertToBase64(imageFile, 1024, 1024, 0.8);
+            let compressedSize = getBase64FileSize(compressedBase64);
+            console.log(`Compressed image size (first pass): ${formatFileSize(compressedSize)}`);
+
+            // If still too large, compress more aggressively
+            if (compressedSize > 4 * 1024 * 1024) {
+                console.log('Image still too large, compressing more aggressively...');
+                compressedBase64 = await compressAndConvertToBase64(imageFile, 600, 600, 0.5);
+                compressedSize = getBase64FileSize(compressedBase64);
+                console.log(`Compressed image size (second pass): ${formatFileSize(compressedSize)}`);
+
+                // If still too large after second compression, try one last time
+                if (compressedSize > 4 * 1024 * 1024) {
+                    console.log('Final compression attempt...');
+                    compressedBase64 = await compressAndConvertToBase64(imageFile, 400, 400, 0.4);
+                    compressedSize = getBase64FileSize(compressedBase64);
+                    console.log(
+                        `Compressed image size (final pass): ${formatFileSize(compressedSize)}`
+                    );
+                }
+            }
+
+            // Update the image prompt with the compressed version and match mask dimensions
+            apiRequestData.image = compressedBase64;
+            genMode = 'fill';
+            
+            try {
+                // Match the mask dimensions to the image dimensions
+                const dataPrefix = 'data:image/jpeg;base64,';
+                const fullImageData = dataPrefix + compressedBase64;
+                const matchedMask = await matchDimension(fullImageData, currentMaskImage);
+                apiRequestData.mask = matchedMask.split(',')[1]; // Remove data URL prefix if needed
+                console.log('Mask dimensions matched to image');
+            } catch (error) {
+                console.error('Error matching dimension of mask image', error);
+                apiRequestData.mask = currentMaskImage;
+                console.log('Using original mask as fallback');
+            }
+        } catch (error) {
+            console.error('Error compressing image:', error);
+            // If compression fails, just use the original and hope for the best
+            apiRequestData.image = fluxPrompt.image;
+            try {
+                // Still try to match dimensions with original image
+                const dataPrefix = 'data:image/jpeg;base64,';
+                const fullImageData = dataPrefix + fluxPrompt.image;
+                const matchedMask = await matchDimension(fullImageData, currentMaskImage);
+                apiRequestData.mask = matchedMask.split(',')[1];
+            } catch (e) {
+                console.error('Fallback dimension matching failed:', e);
+                apiRequestData.mask = currentMaskImage;
+            }
+            genMode = 'fill';
+        }
+    } else {
+        // Image is small enough, use as is
+        apiRequestData.image = fluxPrompt.image;
+        genMode = 'fill';
+        
+        try {
+            // Match the mask dimensions to the image dimensions
+            const dataPrefix = 'data:image/jpeg;base64,';
+            const fullImageData = dataPrefix + fluxPrompt.image;
+            const matchedMask = await matchDimension(fullImageData, currentMaskImage);
+            apiRequestData.mask = matchedMask.split(',')[1]; // Remove data URL prefix if needed
+            console.log('Mask dimensions matched to image');
+        } catch (error) {
+            console.error('Error matching dimension of mask image', error);
+            apiRequestData.mask = currentMaskImage;
+            console.log('Using original mask as fallback');
+        }
+    }
+}
 
 			console.log('API 요청 데이터:', apiRequestData);
 
@@ -1565,7 +1672,7 @@
 					<button
 						title="upload image reference"
 						class={imagePrompt ? 'IP' : 'IP none'}
-						disabled={isGenerating}
+						disabled={isGenerating || maskingMode}
 						onclick={() => (openImagePrompt = !openImagePrompt)}
 					>
 						<Icon icon="ri:image-ai-line" width="20" height="20" />
