@@ -22,6 +22,7 @@ let onCasting = $state(false);
 
 //masking states
 let maskingMode = $state(false);
+let currentMaskImage = $state(null)
 
 //drawing states
 let activeDrawingMode = $state('draw');
@@ -258,6 +259,10 @@ function toggleMaskingMode(){
   console.log('maskingMode', maskingMode);
 }
 
+function updateMaskImage(maskImage){
+  currentMaskImage = maskImage
+}
+
 
 onMount(() => {
     // Run the function on initial load and resize
@@ -324,6 +329,7 @@ onMount(() => {
         {activeDrawingMode}
         {newBrushSize}
         {newEraserSize}
+        updateMaskImage={(maskImage)=>updateMaskImage(maskImage)}
       />
     </div>
     <div class="prompt-wrapper">
@@ -338,6 +344,7 @@ onMount(() => {
         handleCasting={()=>handleCasting()}
         toggleMaskingMode={()=>toggleMaskingMode()}
         updateDrawingMode={updateDrawingMode}
+        {currentMaskImage}
       />
     </div>
   </div>

@@ -30,7 +30,8 @@
 		liveRenderImage,
 		handleCasting,
 		toggleMaskingMode,
-		updateDrawingMode
+		updateDrawingMode,
+		currentMaskImage
 	} = $props();
 
 	// UI 상태
@@ -95,6 +96,7 @@
 	let activeDrawingMode = $state('draw');
 	let brushSize = $state(20);
 	let eraserSize = $state(20);
+
 
 	//Caster 옵션
 	let currentCasting = $state('');
@@ -173,10 +175,10 @@
 	function setMaskCanvas() {
 		maskingMode = !maskingMode;
 		if (maskingMode) {
-			activeMenu = 'masking-mode';
+			
 				updateDrawingMode(activeDrawingMode, brushSize, eraserSize);
 		} else {
-			activeMenu = null;
+			
 		}
 
 		console.log('maskingMode', maskingMode);
@@ -523,6 +525,11 @@
 				}
 
 				// Include the strength parameter
+			}
+
+			//마스킹 이미지가 있는지 확인
+			if(maskingMode && currentMaskImage !== null){
+				console.log('masking 모드로 생성합니다.')
 			}
 
 			console.log('API 요청 데이터:', apiRequestData);
@@ -1380,7 +1387,7 @@
 						</div>
 					{/if}
 				</div>
-				<div id="masking-mode" class="toolbtn masking-mode" onclick={setMaskCanvas}>
+				<div id="masking-mode" class="toolbtn masking-mode" onclick={menuToggle}>
 					<Icon
 						class="tool-icon-mid"
 						icon="mingcute:paint-brush-ai-fill"
@@ -1389,7 +1396,12 @@
 					{#if activeMenu === 'masking-mode'}
 						<div class="add-item-list" transition:slide>
 							<div class="masking-mode-wrapper">
-								<div class="drawing-mode-wrapper">
+								<div class="masking-toggle-wrapper">
+									<div class="masking-title">Masking</div>
+									<ToggleBtn checked={maskingMode} onToggle={setMaskCanvas} />
+								</div>
+								{#if maskingMode}
+								<div class="drawing-mode-wrapper" transition:slide>
 									<button id="draw-btn" onclick={handleDrawingMode} class={activeDrawingMode === 'draw' ? 'selected' : ''}>
 										<Icon class="tool-icon-mid" icon="ph:paint-brush-fill" />
 									</button>
@@ -1399,7 +1411,7 @@
 								
 								</div>
 								
-								<div class="brush-size-wrapper">
+								<div class="brush-size-wrapper" transition:slide>
 									{#if activeDrawingMode === 'draw'}
 										<Slider
 											value={brushSize}
@@ -1422,6 +1434,7 @@
 										/>
 									{/if}
 								</div>
+								{/if}
 							</div>
 						</div>
 					{/if}
@@ -3023,6 +3036,26 @@
 		align-items: center;
 		width: 100%;
 		
+	}
+
+	.masking-toggle-wrapper{
+		width: 100%;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		align-items: center;
+		border-bottom: 1px solid var(--dim-color);
+	}
+
+	.masking-title{
+			width: 100%;
+		text-align: center;
+		display: flex;
+		flex-direction: row;
+		justify-content: center;
+		align-items: center;
+		padding: 12px 6px;
+		border-bottom: 1px solid var(--dim-color);
 	}
 
 	.brush-size-wrapper {

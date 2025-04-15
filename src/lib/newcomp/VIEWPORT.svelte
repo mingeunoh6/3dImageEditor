@@ -22,7 +22,8 @@ import { toBase64, toBlobURL, getImageDimensions, revokeBlobURL, getDimensionsFr
         maskingMode,
         activeDrawingMode,
         newBrushSize,
-        newEraserSize
+        newEraserSize,
+        updateMaskImage
     } = $props();
 
     
@@ -36,6 +37,9 @@ import { toBase64, toBlobURL, getImageDimensions, revokeBlobURL, getDimensionsFr
     let edgeHighlighter;
     let aspectRatio = $state(1)
     let resizeObserver;
+
+    //Mask image state
+    let maskImage = $state(null)
 
 
     // Model loading state
@@ -131,6 +135,13 @@ export function changeLightColor(type, lightColor){
 export function changeEnvMapSetting(type, value){
           if (!viewportRenderer) return;
     viewportRenderer.changeEnvMapSetting(type, value)
+}
+
+function sendMaskingData(data){
+   
+    maskImage = data
+     console.log('mask',maskImage)
+    updateMaskImage(maskImage)
 }
    
 
@@ -1058,7 +1069,7 @@ function isHighlightObject(object) {
     {/if}
 
   
-        <MASK {maskingMode} {viewportWidth} {viewportHeight} {activeDrawingMode} {newBrushSize} {newEraserSize} />
+        <MASK {maskingMode} {viewportWidth} {viewportHeight} {activeDrawingMode} {newBrushSize} {newEraserSize} sendMaskingData={(data)=>sendMaskingData(data)}/>
  
     
     <!-- Loading indicator -->

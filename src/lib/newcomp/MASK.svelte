@@ -10,7 +10,8 @@ let {
     viewportHeight,
     activeDrawingMode,
     newBrushSize,
-    newEraserSize
+    newEraserSize,
+    sendMaskingData,
 } = $props();
 
 let brushHelper; 
@@ -35,25 +36,71 @@ $effect(()=> {
     }
 });
 
+// Create a black and white mask from the current drawing
+function createBWMask() {
+    if (!maskCanvas || !ctx) return null;
+    
+    // Create an offscreen canvas for the B&W mask
+    const offscreenCanvas = document.createElement('canvas');
+    offscreenCanvas.width = maskCanvas.width;
+    offscreenCanvas.height = maskCanvas.height;
+    const offscreenCtx = offscreenCanvas.getContext('2d');
+    
+    if (!offscreenCtx) return null;
+    
+    // Fill with black background
+    offscreenCtx.fillStyle = 'black';
+    offscreenCtx.fillRect(0, 0, offscreenCanvas.width, offscreenCanvas.height);
+    
+    // Get current canvas data
+    const imageData = ctx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
+    const data = imageData.data;
+    
+    // Create a new image data for the B&W mask
+    const maskImageData = offscreenCtx.createImageData(maskCanvas.width, maskCanvas.height);
+    const maskData = maskImageData.data;
+    
+    // Convert to black and white mask
+    // Any non-transparent pixel in the original becomes white in the mask
+    for (let i = 0; i < data.length; i += 4) {
+        // If pixel has any opacity (alpha > 0), make it white
+        if (data[i + 3] > 0) {
+            maskData[i] = 255;     // R
+            maskData[i + 1] = 255; // G
+            maskData[i + 2] = 255; // B
+            maskData[i + 3] = 255; // A
+        } else {
+            // Keep it black (already filled with black)
+            maskData[i + 3] = 255; // Make sure alpha is 255 for black pixels too
+        }
+    }
+    
+    // Put the B&W mask on the offscreen canvas
+    offscreenCtx.putImageData(maskImageData, 0, 0);
+    
+    // Return the B&W mask as data URL
+    return offscreenCanvas.toDataURL('image/png');
+}
+
 // Separate function to save the drawing state
 function saveDrawingData() {
+    console.log('saving')
     if (maskCanvas && ctx) {
-        // Temporarily set composite operation to source-over to ensure proper saving
-        const originalComposite = ctx.globalCompositeOperation;
-        ctx.globalCompositeOperation = 'source-over';
+        // Save the original drawing data for restoration
+        originalDrawingData = maskCanvas.toDataURL('image/png');
+        console.log('Original drawing data saved for restoration');
         
-        // Save the current drawing data
-        drawingData = maskCanvas.toDataURL('image/png');
-        console.log('Drawing data saved when masking mode turned off');
-        
-        // Restore original composite operation
-        ctx.globalCompositeOperation = originalComposite;
+        // Create and save the B&W mask for export
+        drawingData = createBWMask();
+        sendMaskingData(drawingData)
     }
+    //send to parent component
+   
 }
 
 // Separate function to restore the drawing state
 function restoreDrawingData() {
-    if (drawingData && maskCanvas && ctx) {
+    if (originalDrawingData && maskCanvas && ctx) {
         // Always use source-over when restoring images to prevent transparency issues
         ctx.globalCompositeOperation = 'source-over';
         
@@ -61,9 +108,9 @@ function restoreDrawingData() {
         img.onload = () => {
             // Clear the canvas first to ensure a clean slate
             ctx.clearRect(0, 0, maskCanvasWidth, maskCanvasHeight);
-            // Draw the saved image
+            // Draw the saved original image (not the B&W mask)
             ctx.drawImage(img, 0, 0, maskCanvasWidth, maskCanvasHeight);
-            console.log('Drawing data restored');
+            console.log('Original drawing data restored');
             
             // Only set drawing mode after restoration is complete
             // but don't apply eraser mode globally to the canvas
@@ -71,7 +118,7 @@ function restoreDrawingData() {
                 updateDrawingMode();
             }
         };
-        img.src = drawingData;
+        img.src = originalDrawingData;
     }
 }
 
@@ -98,7 +145,8 @@ $effect(()=> {
 
 let maskCanvas;
 let ctx = $state(null)
-let drawingData = $state(null)
+let drawingData = $state(null) // Stores the B&W mask image for export
+let originalDrawingData = $state(null) // Stores the original drawing for display
 let maskCanvasWidth = $state(0);
 let maskCanvasHeight = $state(0);
 let isDrawing = $state(false);
@@ -248,7 +296,10 @@ function draw(e) {
 function stopDrawing() {
     if (isDrawing && maskCanvas) {
         // Save the current drawing state when mouse is released
-        saveDrawingData();
+        // but only update the originalDrawingData, not the B&W mask
+        originalDrawingData = maskCanvas.toDataURL('image/png');
+        console.log('Original drawing data updated after drawing operation');
+        saveDrawingData()
     }
     isDrawing = false;
 }
@@ -359,6 +410,13 @@ function updateHelperPosition(clientX, clientY) {
     const helperSize = currentMode === 'draw' ? currentBrushSize : currentEraserSize;
     helperX = clientX - (helperSize / 2);
     helperY = clientY - (helperSize / 2);
+}
+
+// Function to get the current B&W mask
+// This can be called externally when the mask is needed
+function getMask() {
+    // Create and return a fresh B&W mask
+    return createBWMask();
 }
 
 onMount(() => {
