@@ -13,28 +13,92 @@ let {
     newEraserSize
 } = $props();
 
-$effect(()=>{
+let brushHelper; 
+let eraserHelper;
+let helperX = $state(0);
+let helperY = $state(0);
+let isHelperVisible = $state(false);
+
+
+$effect(()=> {
     console.log('maskingMode', maskingMode);
+
+    if(maskingMode){
+         // First resize the canvas with the current viewport dimensions
+         resizeMaskCanvas(viewportWidth, viewportHeight);
+         
+         // Then restore saved drawing data if available
+         restoreDrawingData();
+    } else {
+         // When masking mode is turned off, save the current state
+         saveDrawingData();
+    }
+});
+
+// Separate function to save the drawing state
+function saveDrawingData() {
+    if (maskCanvas && ctx) {
+        // Temporarily set composite operation to source-over to ensure proper saving
+        const originalComposite = ctx.globalCompositeOperation;
+        ctx.globalCompositeOperation = 'source-over';
+        
+        // Save the current drawing data
+        drawingData = maskCanvas.toDataURL('image/png');
+        console.log('Drawing data saved when masking mode turned off');
+        
+        // Restore original composite operation
+        ctx.globalCompositeOperation = originalComposite;
+    }
+}
+
+// Separate function to restore the drawing state
+function restoreDrawingData() {
+    if (drawingData && maskCanvas && ctx) {
+        // Always use source-over when restoring images to prevent transparency issues
+        ctx.globalCompositeOperation = 'source-over';
+        
+        const img = new Image();
+        img.onload = () => {
+            // Clear the canvas first to ensure a clean slate
+            ctx.clearRect(0, 0, maskCanvasWidth, maskCanvasHeight);
+            // Draw the saved image
+            ctx.drawImage(img, 0, 0, maskCanvasWidth, maskCanvasHeight);
+            console.log('Drawing data restored');
+            
+            // Only set drawing mode after restoration is complete
+            // but don't apply eraser mode globally to the canvas
+            if (currentMode === 'draw') {
+                updateDrawingMode();
+            }
+        };
+        img.src = drawingData;
+    }
+}
+
+$effect(()=> {
     console.log('activeDrawingMode', activeDrawingMode);
     console.log('brushSize', newBrushSize);
     console.log('eraserSize', newEraserSize);
-    if(maskingMode){
-         resizeMaskCanvas(viewportWidth, viewportHeight);
-
-       
-    }
+   
       if(activeDrawingMode === 'draw'){
             currentMode = 'draw';
             currentBrushSize = newBrushSize;
             currentEraserSize = newEraserSize;
+            
         }else if(activeDrawingMode === 'eraser'){
             currentMode = 'eraser';
             currentBrushSize = newBrushSize;
             currentEraserSize = newEraserSize;
+          
         }
+        
+        // We don't update the drawing mode here as it would apply to the entire canvas
+        // Instead, we'll only apply the drawing mode during actual draw operations
 });
 
 let maskCanvas;
+let ctx = $state(null)
+let drawingData = $state(null)
 let maskCanvasWidth = $state(0);
 let maskCanvasHeight = $state(0);
 let isDrawing = $state(false);
@@ -47,34 +111,99 @@ let currentEraserSize = $state(20);
 
 function resizeMaskCanvas(width, height){
     console.log('resizeMaskCanvas', width, height);
-    maskCanvasWidth = width;
-    maskCanvasHeight = height;
+    
     if(maskCanvas){
-        maskCanvas.width = maskCanvasWidth;
-        maskCanvas.height = maskCanvasHeight;
-        initializeCanvas();
+        // Get device pixel ratio for high quality on high-DPI displays
+        const pixelRatio = window.devicePixelRatio || 1;
+        
+        // Get current context
+        ctx = maskCanvas.getContext('2d');
+        
+        // Save important context properties
+        const contextSettings = {
+            lineWidth: ctx.lineWidth,
+            strokeStyle: ctx.strokeStyle,
+            fillStyle: ctx.fillStyle,
+            globalAlpha: ctx.globalAlpha,
+            globalCompositeOperation: ctx.globalCompositeOperation,
+            lineCap: ctx.lineCap,
+            lineJoin: ctx.lineJoin
+        };
+        
+        // Store original image data
+        const originalWidth = maskCanvas.width;
+        const originalHeight = maskCanvas.height;
+        const originalImageData = ctx.getImageData(0, 0, originalWidth, originalHeight);
+        
+        // Calculate new canvas size with pixel ratio for high resolution
+        maskCanvasWidth = Math.floor(width);
+        maskCanvasHeight = Math.floor(height);
+        
+        // Set display size (CSS)
+        maskCanvas.style.width = `${maskCanvasWidth}px`;
+        maskCanvas.style.height = `${maskCanvasHeight}px`;
+        
+        // Set actual size in memory (scaled to account for extra pixel density)
+        maskCanvas.width = maskCanvasWidth * pixelRatio;
+        maskCanvas.height = maskCanvasHeight * pixelRatio;
+        
+        // After resizing, we have the same context object but it's reset
+        // Scale all drawing operations by the pixel ratio
+        ctx.scale(pixelRatio, pixelRatio);
+        
+        // Create an offscreen high-resolution canvas
+        const offscreenCanvas = document.createElement('canvas');
+        offscreenCanvas.width = originalWidth;
+        offscreenCanvas.height = originalHeight;
+        const offscreenCtx = offscreenCanvas.getContext('2d');
+        
+        // Put the original pixel data
+        if (offscreenCtx) {
+            offscreenCtx.putImageData(originalImageData, 0, 0);
+        }
+        
+        // Calculate the scale factor to maintain aspect ratio while filling canvas
+        const scaleX = maskCanvasWidth / originalWidth;
+        const scaleY = maskCanvasHeight / originalHeight;
+        
+        // For a mask, we likely want to fill the entire canvas
+        ctx.drawImage(
+            offscreenCanvas,
+            0, 0, originalWidth, originalHeight,
+            0, 0, maskCanvasWidth, maskCanvasHeight
+        );
+        
+        // Restore context settings
+        Object.assign(ctx, contextSettings);
+        
         setupCanvasEvents();
     }
-}
-
-function initializeCanvas() {
-    const ctx = maskCanvas.getContext('2d');
-    ctx.fillStyle = 'rgba(0, 0, 0, 0)';
-    ctx.fillRect(0, 0, maskCanvasWidth, maskCanvasHeight);
 }
 
 
 
 function getMousePos(e) {
     const rect = maskCanvas.getBoundingClientRect();
-    const scaleX = maskCanvas.width / rect.width;
-    const scaleY = maskCanvas.height / rect.height;
+    const pixelRatio = window.devicePixelRatio || 1;
     
-    return {
-        x: (e.clientX - rect.left) * scaleX,
-        y: (e.clientY - rect.top) * scaleY
-    };
+    // Calculate proper mouse position accounting for:
+    // 1. Canvas position in viewport (rect)
+    // 2. CSS vs actual canvas size difference
+    // 3. Device pixel ratio
+    
+    // Get mouse position relative to canvas CSS size
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    
+    // Convert to canvas coordinate system
+    // This accounts for the difference between display size and actual canvas size
+    const x = mouseX * (maskCanvas.width / rect.width / pixelRatio);
+    const y = mouseY * (maskCanvas.height / rect.height / pixelRatio);
+    
+    return { x, y };
 }
+
+
 
 function startDrawing(e) {
     console.log('startDrawing');
@@ -87,32 +216,60 @@ function startDrawing(e) {
 function draw(e) {
     if (!isDrawing) return;
     
-    const ctx = maskCanvas.getContext('2d');
+    ctx = maskCanvas.getContext('2d');
     const pos = getMousePos(e);
     
-    ctx.beginPath();
-    ctx.moveTo(lastX, lastY);
-    ctx.lineTo(pos.x, pos.y);
-    
+    // Apply the correct drawing mode only during the actual drawing operation
     if (currentMode === 'draw') {
         ctx.globalCompositeOperation = 'source-over';
         ctx.strokeStyle = 'rgba(255, 255, 255, 1.0)';
         ctx.lineWidth = currentBrushSize;
-    } else {
-        ctx.globalCompositeOperation = 'source-over';
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0)';
+    } else { // Eraser mode
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.strokeStyle = 'rgba(0, 0, 0, 1)';
         ctx.lineWidth = currentEraserSize;
     }
-    
     ctx.lineCap = 'round';
+    
+    ctx.beginPath();
+    ctx.moveTo(lastX, lastY);
+    ctx.lineTo(pos.x, pos.y);
     ctx.stroke();
+
+    // After drawing/erasing, restore to source-over to prevent accidental clearing
+    if (currentMode === 'eraser') {
+        ctx.globalCompositeOperation = 'source-over';
+    }
 
     lastX = pos.x;
     lastY = pos.y;
 }
 
 function stopDrawing() {
+    if (isDrawing && maskCanvas) {
+        // Save the current drawing state when mouse is released
+        saveDrawingData();
+    }
     isDrawing = false;
+}
+
+// Function to update the canvas context based on current drawing mode
+// But only apply these settings during actual drawing operations
+function updateDrawingMode() {
+    if (!ctx) return;
+    
+    if (currentMode === 'draw') {
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.strokeStyle = 'rgba(255, 255, 255, 1.0)';
+        ctx.lineWidth = currentBrushSize;
+    } else {
+        // Only set destination-out during actual erasing operations
+        // but not during canvas setup or data restoration
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.strokeStyle = 'rgba(0, 0, 0, 1)';
+        ctx.lineWidth = currentEraserSize;
+    }
+    ctx.lineCap = 'round';
 }
 
 function setupCanvasEvents() {
@@ -121,17 +278,126 @@ function setupCanvasEvents() {
     maskCanvas.removeEventListener('mousemove', draw);
     maskCanvas.removeEventListener('mouseup', stopDrawing);
     maskCanvas.removeEventListener('mouseout', stopDrawing);
+    maskCanvas.removeEventListener('mousemove', handleMouseMove);
+    maskCanvas.removeEventListener('mouseenter', handleMouseEnter);
+    maskCanvas.removeEventListener('mouseleave', handleMouseLeave);
     
     // Add new event listeners
     maskCanvas.addEventListener('mousedown', startDrawing);
     maskCanvas.addEventListener('mousemove', draw);
     maskCanvas.addEventListener('mouseup', stopDrawing);
     maskCanvas.addEventListener('mouseout', stopDrawing);
+    
+    // Add mouse move event for helper tracking
+    maskCanvas.addEventListener('mousemove', handleMouseMove);
+    maskCanvas.addEventListener('mouseenter', handleMouseEnter);
+    maskCanvas.addEventListener('mouseleave', handleMouseLeave);
+    
+    // Add touch event support for mobile devices
+    maskCanvas.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        const touch = e.touches[0];
+        const mouseEvent = new MouseEvent('mousedown', {
+            clientX: touch.clientX,
+            clientY: touch.clientY
+        });
+        startDrawing(mouseEvent);
+        
+        // Update helper for touch start
+        updateHelperPosition(touch.clientX, touch.clientY);
+        isHelperVisible = true;
+    });
+    
+    maskCanvas.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        const touch = e.touches[0];
+        const mouseEvent = new MouseEvent('mousemove', {
+            clientX: touch.clientX,
+            clientY: touch.clientY
+        });
+        draw(mouseEvent);
+        
+        // Update helper for touch move
+        updateHelperPosition(touch.clientX, touch.clientY);
+    });
+    
+    maskCanvas.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        stopDrawing();
+        
+        // Hide helper on touch end
+        isHelperVisible = false;
+    });
+}
+
+function handleMouseEnter(e) {
+    isHelperVisible = true;
+}
+
+function handleMouseLeave(e) {
+    isHelperVisible = false;
+}
+
+function handleMouseMove(e) {
+    if (!isDrawing) {
+        // Only update helper position when not drawing
+        updateHelperPosition(e.clientX, e.clientY);
+    } else {
+        // Still update position while drawing
+        updateHelperPosition(e.clientX, e.clientY);
+    }
+}
+
+function updateHelperPosition(clientX, clientY) {
+    if (!maskCanvas) return;
+    
+    // Convert client coordinates to canvas-relative coordinates
+    const rect = maskCanvas.getBoundingClientRect();
+    
+    // Calculate the center position for the helper
+    // We need to offset by half the helper size so the cursor is in the center
+    const helperSize = currentMode === 'draw' ? currentBrushSize : currentEraserSize;
+    helperX = clientX - (helperSize / 2);
+    helperY = clientY - (helperSize / 2);
 }
 
 onMount(() => {
     console.log('mask canvas mounted');
     resizeMaskCanvas(viewportWidth, viewportHeight);
+    
+    // Always use source-over as the default composite operation
+    // to prevent accidental clearing of the entire canvas
+    if (maskCanvas && ctx) {
+        ctx.globalCompositeOperation = 'source-over';
+    }
+    
+    // Add global mouse move event for tracking outside the canvas
+    // This helps with smooth transitions at canvas boundaries
+    window.addEventListener('mousemove', (e) => {
+        if (maskingMode && maskCanvas) {
+            const rect = maskCanvas.getBoundingClientRect();
+            
+            // Check if mouse is inside canvas bounds
+            if (
+                e.clientX >= rect.left && 
+                e.clientX <= rect.right && 
+                e.clientY >= rect.top && 
+                e.clientY <= rect.bottom
+            ) {
+                // Mouse is over canvas, update helper position
+                updateHelperPosition(e.clientX, e.clientY);
+                if (!isHelperVisible) isHelperVisible = true;
+            } else {
+                // Mouse is outside canvas, hide helper
+                if (isHelperVisible) isHelperVisible = false;
+            }
+        }
+    });
+    
+    // Cleanup function
+    return () => {
+        window.removeEventListener('mousemove', handleMouseMove);
+    };
 });
 </script>
 
@@ -142,6 +408,23 @@ onMount(() => {
         bind:this={maskCanvas}
     ></canvas>
 
+    {#if isHelperVisible}
+        {#if currentMode === 'draw'}
+            <div 
+                class="drawing-helper brush-helper" 
+                bind:this={brushHelper}
+                style="width: {currentBrushSize}px; height: {currentBrushSize}px; left: {helperX}px; top: {helperY}px;"
+                transition:fade={{ duration: 150 }}
+            ></div>
+        {:else if currentMode === 'eraser'}
+            <div 
+                class="drawing-helper eraser-helper" 
+                bind:this={eraserHelper}
+                style="width: {currentEraserSize}px; height: {currentEraserSize}px; left: {helperX}px; top: {helperY}px;"
+                transition:fade={{ duration: 150 }}
+            ></div>
+        {/if}
+    {/if}
 {/if}
 
 <style>
@@ -166,5 +449,25 @@ onMount(() => {
         top: 50%;
         transform: translateY(-50%);
         z-index: 1000;
+    }
+
+    .drawing-helper {
+        position: fixed;
+        z-index: 999;
+        border: 1px solid var(--dim-color);
+        border-radius: 50%;
+        pointer-events: none;
+        transform: translate(0, 0);
+        transition: width 0.2s ease, height 0.2s ease;
+    }
+
+    .brush-helper {
+        background-color: rgba(255, 255, 255, 0.5);
+        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.3);
+    }
+    
+    .eraser-helper {
+        background-color: rgba(255, 0, 0, 0.2);
+        border: 1px dashed rgba(255, 255, 255, 0.8);
     }
 </style>

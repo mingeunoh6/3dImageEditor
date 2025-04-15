@@ -21,8 +21,8 @@ import { toBase64, toBlobURL, getImageDimensions, revokeBlobURL, getDimensionsFr
         currentViewportBG, 
         maskingMode,
         activeDrawingMode,
-        brushSize,
-        eraserSize
+        newBrushSize,
+        newEraserSize
     } = $props();
 
     
@@ -1058,7 +1058,7 @@ function isHighlightObject(object) {
     {/if}
 
   
-        <MASK {maskingMode} {viewportWidth} {viewportHeight} {activeDrawingMode} {brushSize} {eraserSize} />
+        <MASK {maskingMode} {viewportWidth} {viewportHeight} {activeDrawingMode} {newBrushSize} {newEraserSize} />
  
     
     <!-- Loading indicator -->

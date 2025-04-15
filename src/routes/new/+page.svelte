@@ -105,12 +105,11 @@ function updateSceneObjects(objectsList) {
 }
 
 function updateDrawingMode(mode, brushSize, eraserSize){
-  console.log('drawing mode', mode);
-  console.log('brushSize', brushSize);
-  console.log('eraserSize', eraserSize);
+ console.log('드로잉 정보 업데이트', mode, brushSize, eraserSize)
   activeDrawingMode = mode;
   newBrushSize = brushSize;
   newEraserSize = eraserSize;
+  
 }
 
 

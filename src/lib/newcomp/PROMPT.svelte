@@ -187,11 +187,13 @@
 
 	function updateBrushSize(newValue) {	
 		brushSize = newValue;
+		console.log('브러쉬사이즈변경',brushSize)
 		updateDrawingMode(activeDrawingMode, brushSize, eraserSize);
 	}
 
 	function updateEraserSize(newValue) {
 		eraserSize = newValue;
+		console.log('지우개 사이즈 변경',eraserSize)
 		updateDrawingMode(activeDrawingMode, brushSize, eraserSize);
 	}
 
