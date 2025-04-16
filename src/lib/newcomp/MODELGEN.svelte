@@ -45,6 +45,28 @@
     let progressPercentage = $state(0);
     let newAImodel = $state(null);
 
+    let taskId = $state('')
+    	let flux_polling_url = $state('');
+        let generatedImageUrl = $state(''); // 생성된 이미지 URL (표시용)
+	let cachedImageBlob = $state(null); // 실제 이미지 blob 저장
+	let cachedImageUrl = $state(''); // 로컬 blob URL 저장
+
+    // FLUX API 요청 데이터
+	let fluxPrompt = $state({
+		prompt: '',
+		image_prompt: '', // base64 문자열 (API 요청용)
+		image_prompt_strength: 0.2,
+		aspect_ratio: '1:1',
+		width: 1024,
+		height: 1024,
+		prompt_upsampling: false,
+		seed: 930331,
+		safety_tolerance: 2,
+		output_format: 'png',
+		webhook_url: '',
+		webhook_secret: ''
+	});
+
 	function offPanel() {
 		close3Dgen();
 	}
@@ -72,9 +94,214 @@
         }
     }
 
-    function runImageGen() {
-        // This function could be used for image generation if needed
+    async function runImageGen() {
+      if (isGenerating) return; // 중복 호출 방지
+
+      fluxPrompt.seed = Math.floor(Math.random() * 1000000);
+      fluxPrompt.prompt = prompt;
+      	isGenerating = true;
+		isPending = false;
+		progressPercentage = 0;
+		errorMessage = null;
+		taskId = '';
+		clearPollingTimers();
+ generationStatus = 'Waiting';
+
+        try{
+	let genMode = '';
+			let isFinetune = false;
+
+            	let apiRequestData = {
+				prompt: fluxPrompt.prompt,
+				aspect_ratio: fluxPrompt.aspect_ratio,
+				width: fluxPrompt.width,
+				height: fluxPrompt.height,
+				prompt_upsampling: fluxPrompt.prompt_upsampling,
+				seed: fluxPrompt.seed,
+				safety_tolerance: fluxPrompt.safety_tolerance,
+				output_format: fluxPrompt.output_format
+			};
+
+// 서버에 요청 전송
+			const response = await fetch('api/flux', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({ input: apiRequestData, mode: genMode, isFinetune })
+			});
+
+console.log('응답 상태:', response.status, response.statusText);
+
+// 응답 데이터 처리
+			const data = await response.json();
+			console.log('응답 데이터:', data);
+
+// 에러 처리
+			if (!response.ok || data.error) {
+				throw new Error(data.error?.msg || 'Image generation request failed');
+			}
+            // 작업 ID 저장
+			taskId = data.id;
+			flux_polling_url = data.polling_url;
+			console.log('이미지 생성 요청 성공, 작업 ID:', taskId);
+
+            // 이미지 생성 상태 모니터링 시작
+			fluxPolling(flux_polling_url, taskId);
+
+            
+			// 생성 타임아웃 설정 (5분)
+			pollingTimeout = setTimeout(() => {
+				if (isGenerating) {
+					clearInterval(pollingInterval);
+					errorMessage = 'Generation timeout - please try again';
+					isGenerating = false;
+					isPending = false;
+					enableUI();
+				}
+			}, 300000); // 5분
+
+
+        }catch(error){
+            console.error('이미지 생성 실패:', error);
+            errorMessage = error.message || 'Failed to generate image for 3d';
+            isGenerating = false;
+            	isPending = false;
+        }
+
     }
+
+    // FLUX API 상태 모니터링
+	function fluxPolling(pollingURL, result_id) {
+		console.log('pollingURL:', pollingURL);
+
+		if (!pollingURL) {
+			errorMessage = 'Invalid polling URL';
+			isGenerating = false;
+			return;
+		}
+
+		// URL에서 ID 추출
+		const url = new URL(pollingURL);
+		const id = result_id;
+
+		if (!id) {
+			errorMessage = 'Invalid polling URL format';
+			isGenerating = false;
+			return;
+		}
+
+		// 프록시 URL 생성
+		const proxyPollingUrl = `/api/flux?id=${id}`;
+
+		// 폴링 인터벌 설정
+		pollingInterval = setInterval(async () => {
+			try {
+				const response = await fetch(proxyPollingUrl);
+				if (!response.ok) {
+					throw new Error(`Polling failed with status: ${response.status}`);
+				}
+
+				const data = await response.json();
+				console.log('polling data:', data);
+
+				// 상태에 따른 처리
+				if (data.status === 'Ready') {
+                    generationStatus ='Done'
+					// 이미지 생성 완료
+					isPending = false;
+					console.log('이미지 생성 완료:', data.result.sample);
+
+					// 원본 URL 가져오기
+					const originalImageUrl = data.result.sample;
+
+					// CORS 이슈 방지를 위한 프록시 URL 생성
+					const proxiedImageUrl = `/api/flux?url=${encodeURIComponent(originalImageUrl)}`;
+					console.log('Proxied image URL:', proxiedImageUrl);
+
+					// 이미지 처리 완료
+					completeFluxTask(proxiedImageUrl);
+
+					// 타이머 정리
+					clearPollingTimers();
+				} else if (data.status === 'Error') {
+                     generationStatus ='Error'
+					// 이미지 생성 실패
+					console.error('이미지 생성 실패:', data.error);
+					errorMessage = data.error;
+					isGenerating = false;
+					isPending = false;
+					clearPollingTimers();
+				} else if (data.status === 'Pending') {
+					// 이미지 생성 중
+					isPending = true;
+generationStatus = 'Generating'
+					// 진행 상황 업데이트
+					if (data.progress !== undefined && data.progress !== null) {
+						// 0-1 범위를 0-100 범위로 변환
+						progressPercentage = Math.round(data.progress * 100);
+					} else {
+						// 구체적인 진행 상황이 없으면 기본값 사용
+						progressPercentage = 5;
+                         generationStatus = 'Waiting';
+					}
+					console.log('Image generation in progress:', progressPercentage);
+				} else {
+					console.log('Polling status:', data.status);
+				}
+			} catch (error) {
+				console.error('polling error:', error);
+				errorMessage = error.message || 'Error during image generation polling';
+				isGenerating = false;
+				isPending = false;
+				clearPollingTimers();
+			}
+		}, 1000);
+	}
+
+    // FLUX 작업 완료 처리
+	async function completeFluxTask(imageURL) {
+		try {
+			// 로딩 상태 표시
+			isGenerating = true;
+
+			// 이미지 즉시 가져오기
+			console.log('Fetching image from:', imageURL);
+			const response = await fetch(imageURL);
+
+			if (!response.ok) {
+				throw new Error(`Failed to fetch image: ${response.statusText}`);
+			}
+
+			// 이미지를 blob으로 가져와 캐시
+			cachedImageBlob = await response.blob();
+
+			// 이전 URL이 있으면 해제
+			if (cachedImageUrl) {
+				revokeBlobURL(cachedImageUrl);
+			}
+
+			// blob에 대한 로컬 URL 생성
+			cachedImageUrl = URL.createObjectURL(cachedImageBlob);
+
+			// 생성된 이미지 URL 업데이트
+			generatedImageUrl = cachedImageUrl;
+
+			console.log('Image successfully cached locally', generatedImageUrl);
+
+			// 생성 완료
+			isGenerating = false;
+			trainItems.image = generatedImageUrl;
+
+			// UI 활성화
+			
+		} catch (error) {
+			console.error('Error caching image:', error);
+			errorMessage = `Failed to load generated image: ${error.message}`;
+			isGenerating = false;
+			
+		}
+	}
 
     async function run3Dgen() {
         if (!trainItems.file && !trainItems.image) {
@@ -417,14 +644,16 @@
 </script>
 
 <main transition:fade>
-	<div class="title">AI 3D Generator</div>
-    <div class="desc">Upload image<br> to convert into 3D model</div>
+	<div class="title"><Icon icon="mingcute:ai-fill" class="in-line-icon" width="20" height="20" />
+      <span>Image to 3D</span> 
+    </div>
+    <div class="desc">Upload image or Generate image<br> to convert into 3D model</div>
 
 	<div class="image-file-input">
         {#if trainItems.image}
         <div class="upload-label">
             <img src={trainItems.image} alt="Input image">
-            <div class="delete-icon" on:click={() => deleteImage()}>
+            <div class="delete-icon" onclick={() => deleteImage()}>
 				<Icon icon="mdi:close-circle" width="20" height="20" />
 			</div>
         </div>
@@ -437,17 +666,17 @@
 			type="file"
 			accept="image/*"
 			class="file-input"
-			on:change={(event) => handleFileUpload(event)}
+			onchange={(event) => handleFileUpload(event)}
 		/>
         {/if}
 	</div>
 
     <div class={trainItems.image ? 'text-prompt-input-wrapper-gen-ready' : 'text-prompt-input-wrapper'}>
-        <input class="prompt-input" type="text" placeholder="Describe your image here" value={prompt} on:input={onchangePrompt}>
+        <input class="prompt-input" type="text" placeholder="Describe your image here" value={prompt} oninput={onchangePrompt}>
         
-		<!-- <button class="go-btn" on:click={runImageGen} disabled={isGenerating}>
+		<button class="go-btn" onclick={runImageGen} disabled={isGenerating}>
 			<Icon icon="jam:arrow-up" width="24" height="24" />
-		</button> -->
+		</button>
     </div>
 
     {#if errorMessage}
@@ -469,11 +698,11 @@
         <div class="download-section">
             <p class="success-message">3D model ready!</p>
             <div class="button-group">
-                <button class="download-button" on:click={downloadModel}>
+                <button class="download-button" onclick={downloadModel}>
                     <Icon icon="mdi:download" width="20" height="20" />
                     Download
                 </button>
-                <button class="scene-button" on:click={addToScene} disabled={isAddingToScene || newAImodel}>
+                <button class="scene-button" onclick={addToScene} disabled={isAddingToScene || newAImodel}>
                     {#if isAddingToScene}
                     <Icon icon="mdi:loading" class="spin" width="20" height="20" />
                     Loading...
@@ -495,7 +724,7 @@
     {/if}
 
     {#if trainItems.image && !isGenerating && !modelDownloadUrl}
-    <button on:click={run3Dgen} class="main-gen-btn" disabled={isGenerating}>
+    <button onclick={run3Dgen} class="main-gen-btn" disabled={isGenerating}>
         {#if isGenerating}
         Generating...
         {:else}
@@ -504,7 +733,7 @@
     </button>
     {/if}
 
-	<div class="close-btn" on:click={() => offPanel()}>
+	<div class="close-btn" onclick={() => offPanel()}>
 		<Icon icon="carbon:close" width="24" height="24" />
 	</div>
 </main>
@@ -555,16 +784,34 @@
         cursor: not-allowed;
     }
 
+    div :global(.in-line-icon){
+margin-right: 2px;
+         display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
     .title {
         text-align: center;
         font-size: 1rem;
         box-sizing: border-box;
         display: flex;
         justify-content: center;
-        align-items: center;
+        align-items: flex-end;
         width: 100%;
+         height: 100%;
         border-bottom: 1px solid var(--dim-color);
+        
         padding: 18px;
+    }
+
+    .title span{
+        height: 100%;
+       
+         box-sizing: border-box;
+        display: flex;
+        justify-content: center;
+        align-items: center;
     }
     
     .text-prompt-input-wrapper {

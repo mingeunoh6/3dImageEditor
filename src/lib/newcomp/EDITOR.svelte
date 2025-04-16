@@ -506,12 +506,12 @@ onChangeEnvSetting('intensity',bgBrightness)
 
 					{#if activeMenu === '3d-add-set'}
 						<div class="add-item-list" transition:slide>
-							<button id="add-image-btn" onclick={open3Dgenerator}>AI Generate</button>
+							<button id="add-image-btn" onclick={open3Dgenerator}><Icon icon="mingcute:ai-fill" class="in-line-icon" width="18" height="18" />3D AI</button>
 							<button
 								onclick={() => document.getElementById('glb-import').click()}
 								id="add-model-btn"
 							>
-								3D Model
+								Import 3D
 							</button>
 							
 						</div>
