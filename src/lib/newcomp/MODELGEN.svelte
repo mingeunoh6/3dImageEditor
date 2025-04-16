@@ -20,7 +20,7 @@
 	let { close3Dgen, addModelToScene } = $props();
 
 	let images = $state(null);
-	let prompt = $state('the wooden chair');
+	let prompt = $state('');
 	let condition_mode = $state('concat');
 	let seed = $state(930331);
 	let geometry_file_format = $state('glb');
@@ -418,7 +418,7 @@
 
 <main transition:fade>
 	<div class="title">AI 3D Generator</div>
-    <div class="desc">Upload or generate image<br> to convert into 3D model</div>
+    <div class="desc">Upload image<br> to convert into 3D model</div>
 
 	<div class="image-file-input">
         {#if trainItems.image}
@@ -443,11 +443,11 @@
 	</div>
 
     <div class={trainItems.image ? 'text-prompt-input-wrapper-gen-ready' : 'text-prompt-input-wrapper'}>
-        <input class="prompt-input" type="text" value={prompt} on:input={onchangePrompt}>
+        <input class="prompt-input" type="text" placeholder="Describe your image here" value={prompt} on:input={onchangePrompt}>
         
-		<button class="go-btn" on:click={runImageGen} disabled={isGenerating}>
+		<!-- <button class="go-btn" on:click={runImageGen} disabled={isGenerating}>
 			<Icon icon="jam:arrow-up" width="24" height="24" />
-		</button>
+		</button> -->
     </div>
 
     {#if errorMessage}
