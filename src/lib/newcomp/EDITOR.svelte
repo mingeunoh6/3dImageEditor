@@ -28,7 +28,8 @@
 		onObjectDelete = (id) => console.log(`Delete object: ${id}`),
 		onChangeFOV,
 		onChangeLight,
-		onChangeEnvSetting
+		onChangeEnvSetting,
+		open3dgen
 	} = $props();
 
 	// BGfromPrompt가 변경되면 현재 백그라운드 업데이트
@@ -64,6 +65,9 @@
 	// 컴포넌트 상태
 	let isBusy = $state(false);
 	let abortController = null;
+
+	//AI 3D 상태
+	let generatorOpen = $state(false)
 
 	// 설정 상태
 	let isBG = $state(false);
@@ -459,6 +463,12 @@ onChangeEnvSetting('intensity',bgBrightness)
 		}
 	}
 
+	function open3Dgenerator(){
+		console.log('open 3d gen')
+		generatorOpen = true
+		open3dgen()
+	}
+
 	// 컴포넌트 소멸 시 메모리 정리
 	onMount(() => {
 		return () => {
@@ -496,13 +506,14 @@ onChangeEnvSetting('intensity',bgBrightness)
 
 					{#if activeMenu === '3d-add-set'}
 						<div class="add-item-list" transition:slide>
+							<button id="add-image-btn" onclick={open3Dgenerator}>AI Generate</button>
 							<button
 								onclick={() => document.getElementById('glb-import').click()}
 								id="add-model-btn"
 							>
 								3D Model
 							</button>
-							<button id="add-image-btn"> 3D Wall </button>
+							
 						</div>
 					{/if}
 				</div>

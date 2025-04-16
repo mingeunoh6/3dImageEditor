@@ -146,7 +146,7 @@ export function createImageData({
 		height,
 		ratio,
 		blob,
-		type: type || blob?.type || ''
+		type: type || blob.type || ''
 	};
 }
 
@@ -367,4 +367,141 @@ export async function matchDimension(referenceImage, targetImage, options = {}) 
 			reject(new Error(`Unexpected error in matchDimension: ${error.message}`));
 		}
 	});
+}
+
+/**
+ * 이미지 크기를 확인하고 필요시 압축하는 함수
+ * @param {string} base64Image - 압축할 base64 이미지 문자열 (헤더 없이)
+ * @param {number} maxSizeBytes - 최대 허용 크기 (바이트 단위, 기본값: 4MB)
+ * @param {Object} options - 압축 옵션
+ * @param {number} options.initialQuality - 첫 번째 압축 품질 (0-1, 기본값: 0.8)
+ * @param {number} options.secondQuality - 두 번째 압축 품질 (0-1, 기본값: 0.5)
+ * @param {number} options.finalQuality - 마지막 압축 품질 (0-1, 기본값: 0.4)
+ * @param {number} options.initialMaxWidth - 첫 번째 압축 최대 너비 (기본값: 1024)
+ * @param {number} options.initialMaxHeight - 첫 번째 압축 최대 높이 (기본값: 1024)
+ * @param {number} options.secondMaxWidth - 두 번째 압축 최대 너비 (기본값: 600)
+ * @param {number} options.secondMaxHeight - 두 번째 압축 최대 높이 (기본값: 600)
+ * @param {number} options.finalMaxWidth - 마지막 압축 최대 너비 (기본값: 400)
+ * @param {number} options.finalMaxHeight - 마지막 압축 최대 높이 (기본값: 400)
+ * @param {boolean} options.debug - 디버그 로깅 활성화 여부 (기본값: false)
+ * @returns {Promise<Object>} 압축된 이미지 정보 (base64, size, compressed)
+ */
+export async function checkAndCompressImage(base64Image, maxSizeBytes, options) {
+	// 기본값 설정
+	maxSizeBytes = maxSizeBytes || 4 * 1024 * 1024;
+	options = options || {};
+
+	// 기본 옵션 설정
+	const initialQuality = options.initialQuality || 0.8;
+	const secondQuality = options.secondQuality || 0.5;
+	const finalQuality = options.finalQuality || 0.4;
+	const initialMaxWidth = options.initialMaxWidth || 1024;
+	const initialMaxHeight = options.initialMaxHeight || 1024;
+	const secondMaxWidth = options.secondMaxWidth || 600;
+	const secondMaxHeight = options.secondMaxHeight || 600;
+	const finalMaxWidth = options.finalMaxWidth || 400;
+	const finalMaxHeight = options.finalMaxHeight || 400;
+	const debug = options.debug || false;
+
+	// 이미지 크기 계산
+	const originalSize = getBase64FileSize(base64Image);
+
+	// 디버그 로깅
+	if (debug) {
+		console.log('Original image size: ' + formatFileSize(originalSize));
+	}
+
+	// 이미지 크기가 최대 크기보다 작으면 압축하지 않음
+	if (originalSize <= maxSizeBytes) {
+		return {
+			base64: base64Image,
+			size: originalSize,
+			compressed: false
+		};
+	}
+
+	// 디버그 로깅
+	if (debug) {
+		console.log('Image is too large (' + formatFileSize(originalSize) + '), compressing...');
+	}
+
+	try {
+		// base64 문자열을 Blob으로 변환
+		const byteString = atob(base64Image);
+		const ab = new ArrayBuffer(byteString.length);
+		const ia = new Uint8Array(ab);
+
+		for (let i = 0; i < byteString.length; i++) {
+			ia[i] = byteString.charCodeAt(i);
+		}
+
+		const blob = new Blob([ab], { type: 'image/jpeg' });
+		const imageFile = new File([blob], 'image-to-compress.jpg', { type: 'image/jpeg' });
+
+		// 첫 번째 압축 시도 (보통 수준)
+		let compressedBase64 = await compressAndConvertToBase64(
+			imageFile,
+			initialMaxWidth,
+			initialMaxHeight,
+			initialQuality
+		);
+		let compressedSize = getBase64FileSize(compressedBase64);
+
+		if (debug) {
+			console.log('Compressed image size (first pass): ' + formatFileSize(compressedSize));
+		}
+
+		// 여전히 크기가 크면 더 강한 압축 시도
+		if (compressedSize > maxSizeBytes) {
+			if (debug) {
+				console.log('Image still too large, compressing more aggressively...');
+			}
+
+			compressedBase64 = await compressAndConvertToBase64(
+				imageFile,
+				secondMaxWidth,
+				secondMaxHeight,
+				secondQuality
+			);
+			compressedSize = getBase64FileSize(compressedBase64);
+
+			if (debug) {
+				console.log('Compressed image size (second pass): ' + formatFileSize(compressedSize));
+			}
+
+			// 두 번째 압축 후에도 여전히 크기가 크면 마지막 압축 시도
+			if (compressedSize > maxSizeBytes) {
+				if (debug) {
+					console.log('Final compression attempt...');
+				}
+
+				compressedBase64 = await compressAndConvertToBase64(
+					imageFile,
+					finalMaxWidth,
+					finalMaxHeight,
+					finalQuality
+				);
+				compressedSize = getBase64FileSize(compressedBase64);
+
+				if (debug) {
+					console.log('Compressed image size (final pass): ' + formatFileSize(compressedSize));
+				}
+			}
+		}
+
+		return {
+			base64: compressedBase64,
+			size: compressedSize,
+			compressed: true
+		};
+	} catch (error) {
+		console.error('Error compressing image:', error);
+		// 압축 실패시 원본 이미지 반환
+		return {
+			base64: base64Image,
+			size: originalSize,
+			compressed: false,
+			error: error.message
+		};
+	}
 }

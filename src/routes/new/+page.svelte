@@ -8,7 +8,7 @@ import PROMPT from '$lib/newcomp/PROMPT.svelte';
 import VIEWPORT from '$lib/newcomp/VIEWPORT.svelte';
 import EDITOR from '$lib/newcomp/EDITOR.svelte';
 import CASTER from '$lib/newcomp/CASTER.svelte'
-import MASK from '$lib/newcomp/MASK.svelte';
+import MODELGEN from '$lib/newcomp/MODELGEN.svelte'
 
 import Icon from '@iconify/svelte';
 // Model loading states
@@ -19,6 +19,9 @@ let uploadError = $state(null);
 
 //casting states
 let onCasting = $state(false);
+
+//3d model ai states
+let on3Dgenerater = $state(false)
 
 //masking states
 let maskingMode = $state(false);
@@ -264,6 +267,14 @@ function updateMaskImage(maskImage){
 }
 
 
+function open3dgen(){
+  on3Dgenerater = true
+}
+
+function close3Dgen(){
+  on3Dgenerater = false
+}
+
 onMount(() => {
     // Run the function on initial load and resize
   window.addEventListener('resize', setVhVariable);
@@ -311,6 +322,7 @@ onMount(() => {
     onChangeFOV={handleFOV}
     onChangeLight={handleLight}
     onChangeEnvSetting = {handleEnvSetting}
+    open3dgen = {open3dgen}
       />
     </div>
     <div class="viewport-wrapper">
@@ -356,6 +368,9 @@ onMount(() => {
 
   {/if}
 
+ {#if on3Dgenerater}
+  <MODELGEN close3Dgen = {close3Dgen}/>
+  {/if}
 	
 
   {#if uploadError}
