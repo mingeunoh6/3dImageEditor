@@ -275,6 +275,41 @@ function close3Dgen(){
   on3Dgenerater = false
 }
 
+function ai3dToScene(modelData) {
+  console.log('AI created model:', modelData);
+  
+  if (!modelData || !modelData.url) {
+    console.error('Invalid model data received');
+    return;
+  }
+  
+  // Create a File-like object that VIEWPORT can handle
+  fetch(modelData.url)
+    .then(response => response.blob())
+    .then(blob => {
+      // Create a File-like object from the blob
+      const file = new File([blob], modelData.name || 'ai-model.glb', { 
+        type: 'model/gltf-binary',
+        lastModified: new Date().getTime()
+      });
+      
+      // Create metadata with AI information
+      const metadata = {
+        name: modelData.name || 'AI Generated Model',
+        prompt: modelData.prompt || '',
+        isAIGenerated: true,
+        originalUrl: modelData.originalUrl
+      };
+      
+      // Now use the existing function with compatible parameters
+      addModelToScene(file, metadata);
+    })
+    .catch(error => {
+      console.error('Failed to load AI model:', error);
+      uploadError = 'Failed to load AI-generated model: ' + error.message;
+    });
+}
+
 onMount(() => {
     // Run the function on initial load and resize
   window.addEventListener('resize', setVhVariable);
@@ -369,7 +404,7 @@ onMount(() => {
   {/if}
 
  {#if on3Dgenerater}
-  <MODELGEN close3Dgen = {close3Dgen}/>
+  <MODELGEN close3Dgen = {close3Dgen} addModelToScene={(modelData)=>{ai3dToScene(modelData)}}/>
   {/if}
 	
 

@@ -144,7 +144,48 @@ export async function GET({ url, fetch }) {
 			return json({ error: { msg: 'NO RODIN API KEY!' } }, { status: 500 });
 		}
 
-		// Check if this is an result proxy request
+		// Check if this is a model proxy request
+		const modelUrl = url.searchParams.get('modelUrl');
+
+		if (modelUrl) {
+			console.log('Proxying model download from:', modelUrl);
+
+			try {
+				// Fetch the model file through the server to bypass CORS
+				const modelResponse = await fetch(modelUrl, {
+					headers: {
+						// Some providers might check for a reasonable user agent
+						'User-Agent': 'Mozilla/5.0 SvelteKit Model Proxy'
+					}
+				});
+
+				if (!modelResponse.ok) {
+					console.error(
+						`Failed to fetch model: ${modelResponse.status} ${modelResponse.statusText}`
+					);
+					return new Response(`Failed to fetch model: ${modelResponse.statusText}`, {
+						status: modelResponse.status
+					});
+				}
+
+				// Get the model data
+				const modelData = await modelResponse.arrayBuffer();
+
+				// Return the model data with appropriate headers
+				return new Response(modelData, {
+					status: 200,
+					headers: {
+						'Content-Type': 'model/gltf-binary',
+						'Content-Disposition': 'attachment; filename="model.glb"'
+					}
+				});
+			} catch (error) {
+				console.error('Error proxying model:', error);
+				return new Response(`Error proxying model: ${error.message}`, { status: 500 });
+			}
+		}
+
+		// Check if this is a result proxy request
 		const uuid = url.searchParams.get('uuid');
 
 		if (uuid) {

@@ -17,7 +17,7 @@
         checkAndCompressImage  
 	} from '$lib/utils/imageUtils';
 
-	let { close3Dgen } = $props();
+	let { close3Dgen, addModelToScene } = $props();
 
 	let images = $state(null);
 	let prompt = $state('the wooden chair');
@@ -34,6 +34,7 @@
 	let isProcessing = $state(false);
 	let isPending = $state(false);
 	let errorMessage = $state('');
+    let isAddingToScene = $state(false);
 
 	let trainItems = $state({ image: null, file: null });
 	let generationUUID = $state(null);
@@ -42,6 +43,7 @@
 	let modelDownloadUrl = $state('');
 	let modelName = $state('');
     let progressPercentage = $state(0);
+    let newAImodel = $state(null);
 
 	function offPanel() {
 		close3Dgen();
@@ -89,6 +91,7 @@
             modelDownloadUrl = '';
             modelName = '';
             progressPercentage = 0;
+            newAImodel = null;
             
             console.log('3D generation starting');
             
@@ -322,6 +325,65 @@
         }
     }
 
+  async function addToScene() {
+        if (!modelDownloadUrl) {
+            errorMessage = "No model available to add to scene";
+            return;
+        }
+        
+        try {
+            isAddingToScene = true;
+            errorMessage = '';
+            
+            console.log("Fetching 3D model via proxy from URL:", modelDownloadUrl);
+            
+            // Create a proxy URL through our server endpoint
+            const proxyUrl = `/api/3dgen?modelUrl=${encodeURIComponent(modelDownloadUrl)}`;
+            
+            // Fetch the GLB file through our proxy
+            const response = await fetch(proxyUrl);
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('Failed to fetch model through proxy:', errorText);
+                throw new Error(`Failed to fetch model: ${errorText}`);
+            }
+            
+            // Get the model as an ArrayBuffer
+            const modelBuffer = await response.arrayBuffer();
+            
+            // Create a Blob from the ArrayBuffer
+            const modelBlob = new Blob([modelBuffer], { type: 'model/gltf-binary' });
+            
+            // Create an object URL for the model
+            const modelObjectUrl = URL.createObjectURL(modelBlob);
+            
+            // Store the model data
+            newAImodel = {
+                name: modelName,
+                url: modelObjectUrl,
+                blob: modelBlob,
+                buffer: modelBuffer,
+                prompt: prompt,
+                originalUrl: modelDownloadUrl
+            };
+            
+            console.log("Model added to scene variable:", newAImodel);
+
+            //부모 컴포넌트로 보내서 VIEWPORT에 추가하기
+            addModelToScene(newAImodel)
+            
+            // Here you could emit an event to notify parent components
+            
+        } catch (error) {
+            console.error("Error adding model to scene:", error);
+            errorMessage = error.message || "Failed to add model to scene";
+        } finally {
+            isAddingToScene = false;
+        }
+    }
+
+
     function clearPollingTimers() {
         if (pollingInterval) {
             clearInterval(pollingInterval);
@@ -345,6 +407,11 @@
         // Revoke object URLs to prevent memory leaks
         if (trainItems.image) {
             URL.revokeObjectURL(trainItems.image);
+        }
+        
+        // Also revoke any model object URL if it exists
+        if (newAImodel && newAImodel.url) {
+            URL.revokeObjectURL(newAImodel.url);
         }
     });
 </script>
@@ -401,10 +468,27 @@
         {:else if modelDownloadUrl}
         <div class="download-section">
             <p class="success-message">3D model ready!</p>
-            <button class="download-button" on:click={downloadModel}>
-                <Icon icon="mdi:download" width="20" height="20" />
-                Download {modelName || '3D Model'}
-            </button>
+            <div class="button-group">
+                <button class="download-button" on:click={downloadModel}>
+                    <Icon icon="mdi:download" width="20" height="20" />
+                    Download
+                </button>
+                <button class="scene-button" on:click={addToScene} disabled={isAddingToScene || newAImodel}>
+                    {#if isAddingToScene}
+                    <Icon icon="mdi:loading" class="spin" width="20" height="20" />
+                    Loading...
+                    {:else if newAImodel}
+                    <Icon icon="mdi:check" width="20" height="20" />
+                    Added to Scene
+                    {:else}
+                    <Icon icon="mdi:cube-outline" width="20" height="20" />
+                    Add to Scene
+                    {/if}
+                </button>
+            </div>
+            {#if newAImodel}
+            <p class="info-message">Model "{modelName}" added to scene variable</p>
+            {/if}
         </div>
         {/if}
     </div>
@@ -671,7 +755,20 @@
         margin: 0;
     }
     
-    .download-button {
+    .info-message {
+        color: var(--text-color-bright);
+        font-size: 0.8rem;
+        margin: 4px 0 0 0;
+        opacity: 0.8;
+    }
+    
+    .button-group {
+        display: flex;
+        gap: 8px;
+        justify-content: center;
+    }
+    
+    .download-button, .scene-button {
         display: flex;
         align-items: center;
         gap: 8px;
@@ -684,7 +781,31 @@
         font-size: 0.9rem;
     }
     
-    .download-button:hover {
+    .scene-button {
+        background-color: var(--glass-background);
+        border: 1px solid var(--highlight-color);
+        color: var(--text-color-bright);
+    }
+    
+    .download-button:hover, .scene-button:hover {
         background-color: var(--hover-color);
+    }
+    
+    .scene-button:hover {
+        background-color: rgba(var(--highlight-color-rgb), 0.2);
+    }
+    
+    .download-button:disabled, .scene-button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+    
+    .spin {
+        animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
     }
 </style>
