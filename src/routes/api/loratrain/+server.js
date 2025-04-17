@@ -1,4 +1,4 @@
-// api/flux/+server.js
+// api/loratrain/+server.js
 
 import { json, error } from '@sveltejs/kit';
 import { google } from 'googleapis';
@@ -209,14 +209,14 @@ export async function POST({ request }) {
 export async function GET({ url, fetch }) {
 	try {
 		// Check if this is a polling request
-		const id = url.searchParams.get('id');
+		const id = url.searchParams.get('result');
 
 		if (id) {
 			const fluxAPIKEY = process.env.VITE_FLUX_API_KEY;
 
 			// Make the request to the polling URL
 
-			const response = await fetch(`https://api.us1.bfl.ai/v1/finetune_details?finetune_id=${id}`, {
+			const response = await fetch(`https://api.us1.bfl.ai/v1/get_result?id=${id}`, {
 				method: 'GET',
 				headers: {
 					'X-Key': fluxAPIKEY
@@ -234,10 +234,11 @@ export async function GET({ url, fetch }) {
 			return json(data);
 		}
 
-		const result_id = url.searchParams.get('result');
-		if (result_id) {
+	// Check if this is a result request
+		const finetune_id = url.searchParams.get('finetune_id');
+		if (finetune_id) {
 			const fluxAPIKEY = process.env.VITE_FLUX_API_KEY;
-			const response = await fetch(`https://api.us1.bfl.ai/v1/get_result?id=${result_id}`, {
+			const response = await fetch(`https://api.us1.bfl.ai/v1/finetune_details?finetune_id=${finetune_id}`, {
 				method: 'GET',
 				headers: {
 					'X-Key': fluxAPIKEY

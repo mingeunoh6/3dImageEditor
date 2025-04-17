@@ -32,8 +32,16 @@
 		handleCasting,
 		toggleMaskingMode,
 		updateDrawingMode,
-		currentMaskImage
+		currentMaskImage,
+		castingStatus
 	} = $props();
+
+	$effect(() => {
+		if (castingStatus && castingStatus.training_status === 'Done') {
+			// If casting/training is done, reload the model list
+			getLoLAlist();
+		}
+	});
 
 	// UI 상태
 	let openImagePrompt = $state(false);
@@ -1546,52 +1554,72 @@
 						</div>
 					{/if}
 				</div>
-				<!-- <div id="casting-model" class="toolbtn casting-model" onclick={menuToggle}>
-					<Icon
-						class="tool-icon-mid"
-						icon="mage:scan-user-fill"
-						style={currentCasting ? 'color: var(--text-color-bright)' : ''}
-					/>
-					{#if activeMenu === 'casting-model'}
-						<div class="casting-panel" transition:slide>
-							<div class="title">Casting model</div>
+		<div id="casting-model" class="toolbtn casting-model" onclick={menuToggle}>
 
-							<div class="casting-selection">
-								<Dropdown
-									label=""
-									placeholder="Select a model"
-									options={castingList.map((item) => ({
-										label: `- ${item.name} (${item.triggerWord})`,
-										value: item.id
-									}))}
-									selected={currentCasting}
-									onChange={(option) => (currentCasting = option.value)}
-									labelPosition="left"
-								/>
-							</div>
+<Icon
+    class={`tool-icon-mid ${castingStatus && ['Queue', 'Waiting', 'Training'].includes(castingStatus.training_status) ? 'casting-active' : ''}`}
+    icon="mage:scan-user-fill"
+    style={currentCasting ? 'color: var(--highlight-color)' : ''}
+/>
+	{#if activeMenu === 'casting-model'}
+		<div class="casting-panel" transition:slide>
+			<div class="title">Casting model</div>
 
-							{#if currentCasting}
-								<div class="slider-setting-group" transition:fade>
-									<Slider
-										value={finetune_strength}
-										min={0}
-										max={2}
-										scale={0.1}
-										name="Strength"
-										unit=""
-										onValueChange={(newValue) => (finetune_strength = newValue)}
-									/>
-								</div>
-								<div class="casting-btn-wrapper">
-									<button onclick={() => (currentCasting = '')}>Cancel Casting</button>
-								</div>
-							{/if}
-							<div class="casting-btn-wrapper">
-								<button onclick={openCastingPanel}>Casting new model</button>
-							</div>
-						</div>
+			{#if castingStatus}
+				<div class="casting-status status-{castingStatus.training_status.toLowerCase()}">
+					{#if castingStatus.training_status === 'Queue'}
+						<strong>{castingStatus.modelName}</strong> is in queue for training...
+					{:else if castingStatus.training_status === 'Waiting'}
+						<strong>{castingStatus.modelName}</strong> is waiting to start training...
+					{:else if castingStatus.training_status === 'Training'}
+						<strong>{castingStatus.modelName}</strong> is training... 
+						{#if castingStatus.progress}
+							({castingStatus.progress}% complete)
+						{/if}
+					{:else if castingStatus.training_status === 'Done'}
+						<strong>{castingStatus.modelName}</strong> training has completed successfully!
+					{:else if castingStatus.training_status === 'Failed'}
+						<strong>{castingStatus.modelName}</strong> training has failed.
 					{/if}
-				</div> -->
+				</div>
+			{/if}
+
+			<div class="casting-selection">
+				<Dropdown
+					label=""
+					placeholder="Select a model"
+					options={castingList.map((item) => ({
+						label: `- ${item.name} (${item.triggerWord})`,
+						value: item.id
+					}))}
+					selected={currentCasting}
+					onChange={(option) => (currentCasting = option.value)}
+					labelPosition="left"
+				/>
+			</div>
+
+			{#if currentCasting}
+				<div class="slider-setting-group" transition:fade>
+					<Slider
+						value={finetune_strength}
+						min={0}
+						max={2}
+						scale={0.1}
+						name="Strength"
+						unit=""
+						onValueChange={(newValue) => (finetune_strength = newValue)}
+					/>
+				</div>
+				<div class="casting-btn-wrapper">
+					<button onclick={() => (currentCasting = '')}>Cancel Casting</button>
+				</div>
+			{/if}
+			<div class="casting-btn-wrapper">
+				<button onclick={openCastingPanel}>Casting new model</button>
+			</div>
+		</div>
+	{/if}
+</div>
 
 				<!-- <div id="bg-set" class="toolbtn BG" onclick={menuToggle}>
 					{#if activeMenu === 'bg-set'}
@@ -3193,5 +3221,94 @@
 
 	.drawing-mode-wrapper button.selected {
 		background-color: var(--highlight-color);
+	}
+
+	
+	/* Blinking animation for the casting icon */
+	@keyframes blink {
+		0% { opacity: 0.4; }
+		50% { opacity: 1; }
+		100% { opacity: 0.4; }
+	}
+
+	.casting-active {
+		animation: blink 1.5s ease-in-out infinite;
+		color: var(--highlight-color) !important;
+	}
+	
+	.casting-status {
+		margin: 10px 0;
+		padding: 8px;
+		background: var(--glass-background);
+		font-size: 0.9rem;
+		line-height: 1.4;
+	}
+	
+	.status-queue {
+		color: #ffb74d;
+	}
+	
+	.status-waiting {
+		color: #64b5f6;
+	}
+	
+	.status-training {
+		color: #4fc3f7;
+	}
+	
+	.status-done {
+		color: #81c784;
+	}
+	
+	.status-failed {
+		color: #e57373;
+	}
+	
+	/* Status indicators */
+	.status-indicator {
+		display: inline-block;
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		margin-right: 8px;
+	}
+	
+	.status-indicator.queue {
+		background-color: #ffb74d;
+		box-shadow: 0 0 5px rgba(255, 183, 77, 0.5);
+	}
+	
+	.status-indicator.waiting {
+		background-color: #64b5f6;
+		box-shadow: 0 0 5px rgba(100, 181, 246, 0.5);
+	}
+	
+	.status-indicator.training {
+		background-color: #4fc3f7;
+		box-shadow: 0 0 5px rgba(79, 195, 247, 0.5);
+	}
+	
+	.status-indicator.done {
+		background-color: #81c784;
+		box-shadow: 0 0 5px rgba(129, 199, 132, 0.5);
+	}
+	
+	.status-indicator.failed {
+		background-color: #e57373;
+		box-shadow: 0 0 5px rgba(229, 115, 115, 0.5);
+	}
+	
+	/* Progress display styling */
+	.progress-display {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-top: 8px;
+		font-size: 0.85rem;
+	}
+	
+	.progress-display .percentage {
+		font-weight: bold;
+		color: var(--highlight-color);
 	}
 </style>

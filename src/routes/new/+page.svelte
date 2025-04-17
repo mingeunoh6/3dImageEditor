@@ -19,6 +19,7 @@ let uploadError = $state(null);
 
 //casting states
 let onCasting = $state(false);
+let castingStatus = $state(null);
 
 //3d model ai states
 let on3Dgenerater = $state(false)
@@ -310,6 +311,11 @@ function ai3dToScene(modelData) {
     });
 }
 
+function updateTrainStatus(status){
+  console.log('trainStatus', status)
+  castingStatus = status;
+}
+
 onMount(() => {
     // Run the function on initial load and resize
   window.addEventListener('resize', setVhVariable);
@@ -392,6 +398,7 @@ onMount(() => {
         toggleMaskingMode={()=>toggleMaskingMode()}
         updateDrawingMode={updateDrawingMode}
         {currentMaskImage}
+        {castingStatus}
       />
     </div>
   </div>
@@ -399,7 +406,7 @@ onMount(() => {
 
   {#if onCasting}
 
-<CASTER offPanel={()=>offCasting()} />
+<CASTER offPanel={()=>offCasting()} reportTrainStatus={updateTrainStatus} />
 
   {/if}
 

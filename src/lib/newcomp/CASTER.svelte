@@ -1,13 +1,13 @@
 <script>
 	import { onMount } from 'svelte';
-	import { fade, slide } from 'svelte/transition';
+	import { fade, slide, scale } from 'svelte/transition';
 	import Icon from '@iconify/svelte';
 	import Dropdown from '$lib/newcomp/elements/menu-dropdown.svelte';
-    	import ToggleBtn from '$lib/newcomp/elements/menu-toggle-btn.svelte';
+	import ToggleBtn from '$lib/newcomp/elements/menu-toggle-btn.svelte';
 	// Import JSZip for creating ZIP files
 	import JSZip from 'jszip';
 
-	let { offPanel } = $props();
+	let { offPanel, reportTrainStatus } = $props();
 
     //Finetune LoRA data state
 	let castingType = $state('character');
@@ -16,18 +16,26 @@
     let file_data = $state(null);
     let isGenerating = $state(false);
 	let isProcessing = $state(false);
-let pollingInterval = $state(null);
+    let pollingInterval = $state(null);
 	let pollingTimeout = $state(null);
 	let isPending = $state(false);
-    let trainProcess = $state(0)
-    let isTraining = $state(false)
-    let autoCaption = $state(false)
+    let trainProcess = $state(0);
+    let isTraining = $state(false);
+    let autoCaption = $state(false);
 	let trainError = $state(null);
-    	let onPreview = $state(false);
+	let trainStatus = $state({});
+    let onPreview = $state(false);
+    let canClosePanel = $state(false);
 	// State for tracking uploaded images and captions
 	let trainItems = $state([{ image: null, caption: '' }]);
     let zipBlob = $state(null); // Store the ZIP blob for direct download
-let showDownloadButton = $state(false); // Control visibility of download button
+    let showDownloadButton = $state(false); // Control visibility of download button
+
+
+function updateTrainStatus(){
+	reportTrainStatus(trainStatus);
+}
+
 
     function onTriggerwordInput(e) {
         triggerWord = e.target.value;
@@ -211,15 +219,14 @@ async function prepareZipForDownload() {
             return;
         }
         
-        // Check if all captions are filled
-     // Check if all captions are filled when autoCaption is false
-if (!autoCaption) {
-    const emptyCaptions = itemsToProcess.some(item => !item.caption.trim());
-    if (emptyCaptions) {
-        alert("Please provide captions for all images");
-        return;
-    }
-}
+        // Check if all captions are filled when autoCaption is false
+        if (!autoCaption) {
+            const emptyCaptions = itemsToProcess.some(item => !item.caption.trim());
+            if (emptyCaptions) {
+                alert("Please provide captions for all images");
+                return;
+            }
+        }
 
         // Prepare data files as base64 encoded zip file
         const zipfile64 = await createAndDownloadZip();
@@ -262,18 +269,27 @@ if (!autoCaption) {
                 throw new Error(data.error?.msg || 'Training request failed');
             }
             
-            // Success message
-            alert(`Training for ${modelName} has been started successfully!`);
+            // Success message - Set status to Queue
+            trainStatus = {
+				message: `Training for ${modelName} has been started successfully!`,
+				modelName: modelName,
+				triggerWord: triggerWord,
+				castingType: castingType,
+				training_status: 'Queue',
+                id: data.finetune_id
+			};
+            updateTrainStatus();
+            
+            // Allow user to close panel
+            canClosePanel = true;
 
-            // trainPolling(data.polling_url, data.finetune_id)
-
-trainPolling(data.finetune_id)
-
+            // Start the polling process
+            trainPolling(data.finetune_id);
             
         } catch (error) {
             console.error('Error finetuning:', error);
             alert(`Training failed: ${error.message}`);
-            isTraining = false
+            isTraining = false;
         } finally {
             isTraining = false;
         }
@@ -304,17 +320,17 @@ trainPolling(data.finetune_id)
 		const id = result_id;
 
         // 프록시 URL 생성
-        const proxyPollingUrl = `/api/loratrain?result=${id}`
+        const proxyPollingUrl = `/api/loratrain?result=${id}`;
 
-        pollingInterval = setInterval(async()=>{
-            try{
-                const response = await fetch(proxyPollingUrl)
-                if (!response.ok){
-                    	throw new Error(`Training failed with status: ${response.status}`);
+        pollingInterval = setInterval(async() => {
+            try {
+                const response = await fetch(proxyPollingUrl);
+                if (!response.ok) {
+                    throw new Error(`Training failed with status: ${response.status}`);
                 }
 
-                const data = await response.json()
-                console.log('train polling data:', data)
+                const data = await response.json();
+                console.log('train polling data:', data);
                 console.log('Polling status:', data.status);
                 
 				// 상태에 따른 처리
@@ -322,11 +338,11 @@ trainPolling(data.finetune_id)
 					// 이미지 생성 완료
 					isPending = false;
 					console.log('학습 로라 생성 완료:', data.result);
+					console.log('학습 로라 생성 완료:', data.result.finetune_id);
 
-
-                   getTrainDetail(result_id)
+                    getTrainDetail(result_id);
+					completeTrainTask(data.result.finetune_id);
 					
-			
 					// 타이머 정리
 					clearPollingTimers();
 				} else if (data.status === 'Error') {
@@ -335,15 +351,49 @@ trainPolling(data.finetune_id)
 					trainError = data.error;
 					isTraining = false;
 					isPending = false;
+					
+					trainStatus = {
+                        message: `${modelName} training failed!`,
+                        modelName: modelName,
+                        triggerWord: triggerWord,
+                        castingType: castingType,
+                        training_status: 'Failed',
+                        id: result_id
+                    };
+
+                    updateTrainStatus();
 					clearPollingTimers();
 				} else if (data.status === 'Pending') {
-					// 이미지 생성 중
+					// 학습 대기 중
 					isPending = true;
+
+					trainStatus = {
+                        message: `${modelName} is preparing for training!`,
+                        modelName: modelName,
+                        triggerWord: triggerWord,
+                        castingType: castingType,
+                        training_status: 'Waiting',
+                        id: result_id
+                    };
+
+                    updateTrainStatus();
 
 					// 진행 상황 업데이트
 					if (data.progress !== undefined && data.progress !== null) {
 						// 0-1 범위를 0-100 범위로 변환
 						trainProcess = Math.round(data.progress * 100);
+                        
+                        // Update the training status with progress
+                        trainStatus = {
+                            message: `${modelName} is training: ${trainProcess}% complete`,
+                            modelName: modelName,
+                            triggerWord: triggerWord,
+                            castingType: castingType,
+                            training_status: 'Training',
+                            progress: trainProcess,
+                            id: result_id
+                        };
+                        updateTrainStatus();
 					} else {
 						// 구체적인 진행 상황이 없으면 기본값 사용
 						trainProcess = 5;
@@ -353,45 +403,54 @@ trainPolling(data.finetune_id)
 					console.log('Polling status:', data.status);
 				}
 
-            }catch(error){
-
+            } catch (error) {
+				console.error('polling error:', error);
+				trainError = error.message || 'Error during training polling';
+				isTraining = false;
+				isPending = false;
+				clearPollingTimers();
             }
-        })
-
-
-
+        }, 3000);
     }
 
-    	// FLUX 작업 완료 처리
-	async function completeTrainTask(trainUrl) {
+    // FLUX 작업 완료 처리
+	async function completeTrainTask(finetune_id) {
 		try {
 			// 로딩 상태 표시
 			isGenerating = true;
 
+			const trainProxyUrl = `/api/loratrain?finetune_id=${finetune_id}`;
+
 			// 이미지 즉시 가져오기
-			console.log('Fetching image from:', trainUrl);
-			const response = await fetch(trainUrl);
+			console.log('Fetching train data from:', trainProxyUrl);
+			const response = await fetch(trainProxyUrl);
 
 			if (!response.ok) {
 				throw new Error(`Failed to fetch image: ${response.statusText}`);
 			}
 
 			// 이미지를 blob으로 가져와 캐시
-			 const trainDetail = await response.json()
+			const trainDetail = await response.json();
 
 			console.log('Train done', trainDetail);
 
+			trainStatus = {
+				message: `${modelName} is done!`,
+				modelName: modelName,
+				triggerWord: triggerWord,
+				castingType: castingType,
+				training_status: 'Done',
+                id: finetune_id
+			};
+			updateTrainStatus();
+
 			// 생성 완료
 			isGenerating = false;
-			onPreview = true;
-		
-			// UI 활성화
 		
 		} catch (error) {
 			console.error('Error caching image:', error);
 			trainError = `Failed to load generated image: ${error.message}`;
 			isGenerating = false;
-		
 		}
 	}
 
@@ -414,12 +473,21 @@ trainPolling(data.finetune_id)
 			trainItems.forEach((item) => {
 				if (item.image) URL.revokeObjectURL(item.image);
 			});
+            
+            // Important! Keep polling even after the component is unmounted 
+            // by NOT clearing the intervals here
 		};
 	});
 </script>
 
-<main transition:fade>
-	<div class="title">Casting new model(building now...)</div>
+<!-- Animated backdrop overlay -->
+<div class="animated-backdrop" transition:fade={{ duration: 500 }}>
+    
+   
+</div>
+
+<main transition:scale={{ duration: 400, start: 0.95 }}>
+	<div class="title">Casting new model</div>
 	<div class="caster-basic-info-wrapper">
 		<div class="caster-input">
 			<span>Model name.</span>
@@ -454,11 +522,11 @@ trainPolling(data.finetune_id)
 
 	<div class="train-list-wrapper">
         <div class="title-wrapper">
-            	<div class="sub-title">Model image & Caption</div>
-        <div class="title-option">
-  <span>Auto caption</span>
-        <ToggleBtn checked={autoCaption} onToggle={handleAutoCaption} />
-        </div>
+            <div class="sub-title">Model image & Caption</div>
+            <div class="title-option">
+                <span>Auto caption</span>
+                <ToggleBtn checked={autoCaption} onToggle={handleAutoCaption} />
+            </div>
         </div>
 	
       
@@ -505,6 +573,7 @@ trainPolling(data.finetune_id)
 	</div>
 
 	<div class="casting-btn-wrapper">
+		{#if !canClosePanel}
 		<button onclick={goTraining} disabled={isProcessing || isTraining}>
 			{#if isProcessing}
 				Creating ZIP...
@@ -514,10 +583,20 @@ trainPolling(data.finetune_id)
 				Start casting!
 			{/if}
 		</button>
-            <!-- Test button to prepare and download zip -->
-    <button class="secondary-btn" onclick={prepareZipForDownload} disabled={isProcessing}>
-        Check ZIP File
-    </button>
+        <!-- Test button to prepare and download zip -->
+        <button class="secondary-btn" onclick={prepareZipForDownload} disabled={isProcessing}>
+            Download the training data
+        </button>
+        {:else}
+        <!-- Show different message when training is in Queue -->
+        <div class="info-message" transition:slide>
+            <Icon icon="mdi:check-circle" width="24" height="24" class="success-icon" />
+            <p>Training has started and will continue even if you close this panel!</p>
+            <button class="close-panel-btn" onclick={() => offPanel()}>
+                Close Panel
+            </button>
+        </div>
+        {/if}
 	</div>
 
 	<div class="close-btn" onclick={() => offPanel()}>
@@ -554,17 +633,16 @@ trainPolling(data.finetune_id)
 		<div class="upload-info">
 			<span class="stage-label">
 				{#if isPending}
-					Train datas... {trainProcess > 0 ? `${trainProcess}%` : 'Starting...'}
+					<span class="status-indicator training"></span>
+					Training in progress... {trainProcess > 0 ? `${trainProcess}%` : 'Starting...'}
 				{:else if trainProcess >= 100}
+					<span class="status-indicator done"></span>
 					Casting almost done!...
 				{:else}
+					<span class="status-indicator queue"></span>
 					Casting will start soon...
 				{/if}
 			</span>
-<!-- 
-			<button class="cancel-btn" onclick={cancelGeneration}>
-				<Icon icon="carbon:close" width="16" height="16" />
-			</button> -->
 		</div>
 	</div>
 {/if}
@@ -580,7 +658,24 @@ trainPolling(data.finetune_id)
 {/if}
 
 <style>
+    .animated-backdrop {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background-color:var(--glass-background);
+        backdrop-filter: blur(2px);
+        z-index: 998;
+        overflow: hidden;
+    }
+
+
+  
+
+  
 	main {
+		box-sizing: border-box;
 		top: 50%;
 		left: 50%;
 		transform: translate(-50%, -50%);
@@ -596,21 +691,23 @@ trainPolling(data.finetune_id)
 		border-radius: 12px;
 		backdrop-filter: blur(3px);
 		width: 500px;
-		max-width: 90vw;
+		max-width: 70vw;
 		max-height: 80vh;
 		overflow-y: auto;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 	}
 
-
-
 	.caster-basic-info-wrapper {
+		width: 100%;
+		box-sizing: border-box;
 		display: flex;
 		flex-direction: row;
-		gap: 10px;
-		margin-bottom: 20px;
+		gap: 8px;
+		margin-bottom: 10px;
 	}
 
 	.caster-input {
+		box-sizing: border-box;
 		display: flex;
 		flex-direction: column;
 		gap: 6px;
@@ -618,6 +715,7 @@ trainPolling(data.finetune_id)
 	}
 
 	.caster-input input {
+		box-sizing: border-box;
 		background: none;
 		border: 1px solid var(--dim-color);
 		font-size: 0.9rem;
@@ -625,16 +723,19 @@ trainPolling(data.finetune_id)
 		color: var(--text-color-bright);
 		padding: 4px 12px;
 		border-radius: 4px;
+		width: 100%;
 	}
 
 	.train-list {
+		box-sizing: border-box;
 		display: flex;
 		flex-direction: column;
-		gap: 10px;
-		margin-bottom: 20px;
+		gap: 4px;
+		margin-bottom: 8px;
 	}
 
 	.train-item {
+		
 		box-sizing: border-box;
 		display: flex;
 		flex-direction: row;
@@ -734,12 +835,16 @@ trainPolling(data.finetune_id)
 	}
 
 	.train-list-wrapper {
-		margin-bottom: 20px;
+		margin-bottom: 4px;
 	}
 
 	.casting-btn-wrapper {
-		height: 48px;
-		margin-top: 10px;
+				display: flex;
+		justify-content: center;
+		align-items: center;
+		
+		
+		
 	}
 
 	.casting-btn-wrapper button {
@@ -747,7 +852,7 @@ trainPolling(data.finetune_id)
 		justify-content: center;
 		align-items: center;
 		width: 100%;
-		height: 100%;
+		height: 42px;
 		border: 1px solid var(--dim-color);
 		font-size: 1rem;
 		cursor: pointer;
@@ -781,7 +886,13 @@ trainPolling(data.finetune_id)
 		top: 8px;
 		z-index: 999;
 		cursor: pointer;
+        color: var(--dim-color);
+        transition: color 0.2s ease;
 	}
+
+    .close-btn:hover {
+        color: var(--text-color-bright);
+    }
 
     .dropdown-container{
          width: 100%;
@@ -794,7 +905,6 @@ trainPolling(data.finetune_id)
         border-radius: 6px;
         padding: 1.5px;
     }
-
     
 	.upload-container,
 	.generation-container {
@@ -901,130 +1011,236 @@ trainPolling(data.finetune_id)
         flex-direction: row;
         justify-self: space-between;
         align-items: center;
-  
         gap: 10px;
         margin-top: 32px;
     }
 
-    	.title {
+    .title {
 		text-align: center;
 		margin-bottom: 30px;
 		font-size: 1rem;
 		margin-top: 10px;
-
-             font-size: 1.1rem;
+        font-size: 1.1rem;
 	}
-    	.sub-title {
-	 display: flex;
-           flex-direction: row;
+    
+    .sub-title {
+	    display: flex;
+        flex-direction: row;
         justify-self: center;
         align-items: center;
-
-          font-size: 1rem;
-        
-          flex-grow: 1;
+        font-size: 1rem;
+        flex-grow: 1;
 	}
 
     .title-option{
         display: flex;
-           flex-direction: row;
+        flex-direction: row;
         justify-self: center;
         align-items: center;
-        
     }
 
-.casting-btn-wrapper {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    height: auto;
-    margin-top: 10px;
-}
+    .casting-btn-wrapper {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        height: auto;
+        margin-top: 5px;
+    }
 
-.secondary-btn {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    width: 100%;
-    height: 40px;
-    border: 1px solid var(--dim-color);
-    font-size: 0.9rem;
-    cursor: pointer;
-    transition: all ease-in-out 200ms;
-    border-radius: 4px;
-    background: none;
-    color: var(--dim-color);
-}
+    .secondary-btn {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 100%;
+        height: 40px;
+        border: 1px solid var(--dim-color);
+        font-size: 0.9rem;
+        cursor: pointer;
+        transition: all ease-in-out 200ms;
+        border-radius: 4px;
+        background: none;
+        color: var(--dim-color);
+    }
 
-.secondary-btn:hover:not([disabled]) {
-    border-color: var(--highlight-color);
-    color: var(--text-color-bright);
-}
+    .secondary-btn:hover:not([disabled]) {
+        border: 1px solid var(--dim-color);
+        color: var(--text-color-bright);
+    }
 
-.secondary-btn[disabled] {
-    opacity: 0.6;
-    cursor: not-allowed;
-}
+    .secondary-btn[disabled] {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
 
-.download-zip-container {
-    position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 340px;
-    background-color: var(--secondary-color);
-    border-radius: 10px;
-    overflow: hidden;
-    z-index: 1001;
-    padding: 16px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-    border: 1px solid var(--highlight-color);
-}
+    .download-zip-container {
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 340px;
+        background-color: var(--secondary-color);
+        border-radius: 10px;
+        overflow: hidden;
+        z-index: 1001;
+        padding: 16px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        border: 1px solid var(--highlight-color);
+    }
 
-.download-zip-content {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
+    .download-zip-content {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
 
-.download-zip-content p {
-    margin: 0;
-    text-align: center;
-    color: var(--text-color-bright);
-}
+    .download-zip-content p {
+        margin: 0;
+        text-align: center;
+        color: var(--text-color-bright);
+    }
 
-.download-btn {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 8px;
-    padding: 10px;
-    background-color: var(--highlight-color);
-    color: var(--text-color-standard);
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 0.9rem;
-    transition: all ease-in-out 200ms;
-}
+    .download-btn {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 8px;
+        padding: 10px;
+        background-color: var(--highlight-color);
+        color: var(--text-color-standard);
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.9rem;
+        transition: all ease-in-out 200ms;
+    }
 
-.download-btn:hover {
-    background-color: var(--hover-color);
-}
+    .download-btn:hover {
+        background-color: var(--hover-color);
+    }
 
-.close-download-btn {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    background: none;
-    border: none;
-    color: var(--dim-color);
-    cursor: pointer;
-    padding: 4px;
-    transition: color 0.2s;
-}
+    .close-download-btn {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: none;
+        border: none;
+        color: var(--dim-color);
+        cursor: pointer;
+        padding: 4px;
+        transition: color 0.2s;
+    }
 
-.close-download-btn:hover {
-    color: var(--text-color-bright);
-}
+    .close-download-btn:hover {
+        color: var(--text-color-bright);
+    }
+
+    .info-message {
+        background-color: rgba(0, 128, 0, 0.1);
+        border: 1px solid rgba(0, 128, 0, 0.3);
+        border-radius: 8px;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 10px;
+    }
+
+    .info-message p {
+        margin: 0;
+        line-height: 1.5;
+    }
+
+    .info-message .success-icon {
+        color: #4caf50;
+    }
+
+    .close-panel-btn {
+        background-color: var(--highlight-color);
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+
+    .close-panel-btn:hover {
+        background-color: var(--hover-color);
+    }
+
+    .auto-caption-message {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        flex-grow: 1;
+        background-color: rgba(0, 0, 0, 0.05);
+        color: var(--dim-color);
+        padding: 8px;
+        font-style: italic;
+    }
+   
+    .auto-caption-message p {
+        margin: 0;
+    }
+    
+    /* Active training progress bar styling */
+    .active-generation {
+        background-color: var(--highlight-color) !important;
+        animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+        0% { opacity: 0.6; }
+        50% { opacity: 1; }
+        100% { opacity: 0.6; }
+    }
+    
+    /* Progress display styling */
+    .progress-display {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 8px;
+        font-size: 0.85rem;
+    }
+    
+    .progress-display .percentage {
+        font-weight: bold;
+        color: var(--highlight-color);
+    }
+    
+    /* Status indicators */
+    .status-indicator {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 8px;
+    }
+    
+    .status-indicator.queue {
+        background-color: #ffb74d;
+        box-shadow: 0 0 5px rgba(255, 183, 77, 0.5);
+    }
+    
+    .status-indicator.waiting {
+        background-color: #64b5f6;
+        box-shadow: 0 0 5px rgba(100, 181, 246, 0.5);
+    }
+    
+    .status-indicator.training {
+        background-color: #4fc3f7;
+        box-shadow: 0 0 5px rgba(79, 195, 247, 0.5);
+    }
+    
+    .status-indicator.done {
+        background-color: #81c784;
+        box-shadow: 0 0 5px rgba(129, 199, 132, 0.5);
+    }
+    
+    .status-indicator.failed {
+        background-color: #e57373;
+        box-shadow: 0 0 5px rgba(229, 115, 115, 0.5);
+    }
 </style>
