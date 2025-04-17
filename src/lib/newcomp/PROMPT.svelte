@@ -37,11 +37,19 @@
 	} = $props();
 
 	$effect(() => {
-		if (castingStatus && castingStatus.training_status === 'Done') {
-			// If casting/training is done, reload the model list
-			getLoLAlist();
-		}
-	});
+  if (castingStatus) {
+    console.log(`Casting status changed: ${castingStatus.training_status}`);
+    
+    if (castingStatus.training_status === 'Done') {
+      // If training is done, reload the castingList after a short delay
+      // to ensure the API has time to update
+      setTimeout(async () => {
+        await getLoLAlist();
+      }, 2000);
+    }
+  }
+});
+
 
 	// UI 상태
 	let openImagePrompt = $state(false);
@@ -108,6 +116,7 @@
 
 
 	//Caster 옵션
+	let castingListLoading = $state(false);
 	let currentCasting = $state('');
 	let castingList = [];
 
@@ -210,21 +219,36 @@
 
 	//LoLA 데이터 가져오기
 	async function getLoLAlist() {
-		try {
-			const response = await fetch('api/getTrain', {
-				method: 'GET',
-				headers: {
-					'Content-Type': 'application/json'
-				}
-			});
+  console.log('Loading LoRA list...');
+  castingListLoading = true;
+  
+  try {
+    const response = await fetch('api/getTrain', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
 
-			const data = await response.json();
-			castingList = data.data;
-			console.log('loralist', castingList);
-		} catch (error) {
-			console.error(error);
-		}
-	}
+    if (!response.ok) {
+      throw new Error(`Failed to fetch LoRA list: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    
+    if (!data || !data.data || !Array.isArray(data.data)) {
+      console.warn('Received invalid castingList data format', data);
+      return;
+    }
+    
+    castingList = data.data;
+    console.log(`LoRA list loaded: ${castingList.length} items`);
+  } catch (error) {
+    console.error('Error fetching LoRA list:', error);
+  } finally {
+    castingListLoading = false;
+  }
+}
 
 	//imageprompt 모드 스위쳐
 	function switchImagePromptMode(event) {
@@ -1271,7 +1295,22 @@
 
 	onMount(async () => {
 		//loRA 데이터 불러오기
-		await getLoLAlist();
+		 try {
+    // Load LoRA data with retry mechanism
+    await getLoLAlist();
+    
+    // If the list is empty after initial load, try once more
+    if (castingList.length === 0) {
+      console.log('Initial castingList empty, retrying...');
+      setTimeout(async () => {
+        await getLoLAlist();
+      }, 1000);
+    }
+  } catch (error) {
+    console.error('Failed to load casting list on mount:', error);
+  } finally {
+    castingListLoading = false;
+  }
 
 		return () => {
 			clearPollingTimers();
@@ -1554,71 +1593,90 @@
 						</div>
 					{/if}
 				</div>
-		<div id="casting-model" class="toolbtn casting-model" onclick={menuToggle}>
-
-<Icon
+	<div id="casting-model" class="toolbtn casting-model" onclick={menuToggle}>
+  <Icon
     class={`tool-icon-mid ${castingStatus && ['Queue', 'Waiting', 'Training'].includes(castingStatus.training_status) ? 'casting-active' : ''}`}
     icon="mage:scan-user-fill"
     style={currentCasting ? 'color: var(--highlight-color)' : ''}
-/>
-	{#if activeMenu === 'casting-model'}
-		<div class="casting-panel" transition:slide>
-			<div class="title">Casting model</div>
+  />
+  {#if activeMenu === 'casting-model'}
+    <div class="casting-panel" transition:slide>
+      <div class="title">Casting model</div>
 
-			{#if castingStatus}
-				<div class="casting-status status-{castingStatus.training_status.toLowerCase()}">
-					{#if castingStatus.training_status === 'Queue'}
-						<strong>{castingStatus.modelName}</strong> is in queue for training...
-					{:else if castingStatus.training_status === 'Waiting'}
-						<strong>{castingStatus.modelName}</strong> is waiting to start training...
-					{:else if castingStatus.training_status === 'Training'}
-						<strong>{castingStatus.modelName}</strong> is training... 
-						{#if castingStatus.progress}
-							({castingStatus.progress}% complete)
-						{/if}
-					{:else if castingStatus.training_status === 'Done'}
-						<strong>{castingStatus.modelName}</strong> training has completed successfully!
-					{:else if castingStatus.training_status === 'Failed'}
-						<strong>{castingStatus.modelName}</strong> training has failed.
-					{/if}
-				</div>
-			{/if}
+ <div class="refresh-btn-wrapper">
+        <button class="refresh-btn" onclick={() => getLoLAlist()} disabled={castingListLoading}>
+          <Icon icon="mdi:refresh" width="16" height="16" class={castingListLoading ? 'rotating' : ''} />
+          Refresh Casting List
+        </button>
+      </div>
+      {#if castingStatus}
+        <div class="casting-status status-{castingStatus.training_status.toLowerCase()}">
+          {#if castingStatus.training_status === 'Queue'}
+            <span class="status-indicator queue"></span>
+            <strong>{castingStatus.modelName}</strong> is in queue for training...
+          {:else if castingStatus.training_status === 'Waiting'}
+            <span class="status-indicator waiting"></span>
+            <strong>{castingStatus.modelName}</strong> is waiting to start training...
+          {:else if castingStatus.training_status === 'Training'}
+            <span class="status-indicator training"></span>
+            <strong>{castingStatus.modelName}</strong> is training... 
+            {#if castingStatus.progress}
+              ({castingStatus.progress}% complete)
+            {/if}
+          {:else if castingStatus.training_status === 'Done'}
+            <span class="status-indicator done"></span>
+            <strong>{castingStatus.modelName}</strong> training has completed successfully!
+          {:else if castingStatus.training_status === 'Failed'}
+            <span class="status-indicator failed"></span>
+            <strong>{castingStatus.modelName}</strong> training has failed.
+          {/if}
+        </div>
+      {/if}
 
-			<div class="casting-selection">
-				<Dropdown
-					label=""
-					placeholder="Select a model"
-					options={castingList.map((item) => ({
-						label: `- ${item.name} (${item.triggerWord})`,
-						value: item.id
-					}))}
-					selected={currentCasting}
-					onChange={(option) => (currentCasting = option.value)}
-					labelPosition="left"
-				/>
-			</div>
-
-			{#if currentCasting}
-				<div class="slider-setting-group" transition:fade>
-					<Slider
-						value={finetune_strength}
-						min={0}
-						max={2}
-						scale={0.1}
-						name="Strength"
-						unit=""
-						onValueChange={(newValue) => (finetune_strength = newValue)}
-					/>
-				</div>
-				<div class="casting-btn-wrapper">
-					<button onclick={() => (currentCasting = '')}>Cancel Casting</button>
-				</div>
-			{/if}
-			<div class="casting-btn-wrapper">
-				<button onclick={openCastingPanel}>Casting new model</button>
-			</div>
-		</div>
-	{/if}
+      <div class="casting-selection">
+        {#if castingListLoading}
+          <div class="casting-loading">
+            <div class="spinner"></div>
+            Loading models...
+          </div>
+        {:else}
+          <Dropdown
+            label=""
+            placeholder={castingList.length > 0 ? "Select a model" : "No models available"}
+            options={castingList.map((item) => ({
+              label: `- ${item.name} (${item.triggerWord})`,
+              value: item.id
+            }))}
+            selected={currentCasting}
+            onChange={(option) => (currentCasting = option.value)}
+            labelPosition="left"
+          />
+        {/if}
+      </div>
+  
+      {#if currentCasting}
+        <div class="slider-setting-group" transition:fade>
+          <Slider
+            value={finetune_strength}
+            min={0}
+            max={2}
+            scale={0.1}
+            name="Strength"
+            unit=""
+            onValueChange={(newValue) => (finetune_strength = newValue)}
+          />
+        </div>
+		
+        <div class="casting-btn-wrapper">
+          <button onclick={() => (currentCasting = '')}>Cancel Casting</button>
+        </div>
+      {/if}
+      <div class="casting-btn-wrapper">
+        <button onclick={openCastingPanel}>Casting new model</button>
+      </div>
+   
+    </div>
+  {/if}
 </div>
 
 				<!-- <div id="bg-set" class="toolbtn BG" onclick={menuToggle}>
@@ -3095,7 +3153,7 @@
 
 		margin-bottom: -10px;
 		transition: all ease-in-out 0.2s;
-		min-width: 150px;
+		min-width: 120px;
 		background-color: var(--primary-color);
 		border-radius: 12px;
 		border: 1px solid var(--dim-color);
@@ -3111,7 +3169,7 @@
 	}
 	.casting-selection {
 		position: relative;
-		width: 300px;
+		
 		border-top: 1px solid var(--dim-color);
 		border-bottom: 1px solid var(--dim-color);
 		width: 100%;
@@ -3311,4 +3369,60 @@
 		font-weight: bold;
 		color: var(--highlight-color);
 	}
+
+	.casting-loading {
+    padding: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    color: var(--dim-color);
+    font-style: italic;
+  }
+  
+  .spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--dim-color);
+    border-top-color: var(--highlight-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+  
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+  
+  .refresh-btn-wrapper {
+    padding: 8px;
+    display: flex;
+    justify-content: center;
+  }
+  
+  .refresh-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: none;
+    border: none;
+    font-size: 0.8rem;
+    color: var(--dim-color);
+    padding: 4px 8px;
+    cursor: pointer;
+    transition: color 0.2s ease;
+  }
+  
+  .refresh-btn:hover:not(:disabled) {
+    color: var(--text-color-bright);
+  }
+  
+  .refresh-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  
+  .rotating {
+    animation: spin 1s linear infinite;
+  }
 </style>
