@@ -323,7 +323,12 @@ generationStatus = 'Generating'
             console.log('3D generation starting');
             
             // Generate random seed between 0 and 999999
-            seed = Math.floor(Math.random() * 1000000);
+            seed = Math.floor(Math.random() * 10000);
+            if(seed > 60000){
+                while(seed > 60000) {
+                    seed = Math.floor(Math.random() * 10000);
+                }
+            }
             
             // Create FormData object
             const formData = new FormData();

@@ -1,5 +1,6 @@
 <script>
     import { onMount } from "svelte";
+    import { TutorialCanvas } from "./elements/tutorial-canvas";
 
 let {
 
@@ -9,6 +10,7 @@ let {
 } = $props()
 
 let tutorialCanvas;
+let tutorialScene;
 
 
 $effect(()=>{
@@ -30,11 +32,15 @@ function resizeCanvas(width, height){
         
     }
 }
+function initTutorial(){
+ tutorialScene = new TutorialCanvas(tutorialCanvas)
+}
 
 
 onMount(() => {
   console.log('TUTORIAL ACTIVE');
    resizeCanvas(viewportWidth,viewportHeight)
+initTutorial()
   
 });
 
@@ -49,7 +55,7 @@ onMount(() => {
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%);
-        border: 1px solid pink;
+        border: none;
         z-index: 990;
         border-radius: 16px;
     }
