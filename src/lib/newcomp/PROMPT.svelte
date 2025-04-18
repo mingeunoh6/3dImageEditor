@@ -1293,6 +1293,27 @@
 		console.log('Image reference removed');
 	}
 
+	async function downloadCurrentScreen(){
+		console.log('현재 화면 캡쳐 후 다운로드')
+		let newImage = await GetCurrentScreenAsImageRef();
+		
+		// Create a temporary anchor element for download
+		const downloadLink = document.createElement('a');
+		
+		// Set the href to the image data
+		downloadLink.href = `data:image/png;base64,${newImage}`;
+		
+		// Set download attribute with filename
+		downloadLink.download = `otrai-img-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.png`;
+		
+		// Append to body, click and remove
+		document.body.appendChild(downloadLink);
+		downloadLink.click();
+		document.body.removeChild(downloadLink);
+		
+		console.log('Screen capture downloaded successfully');
+	}
+
 	onMount(async () => {
 		//loRA 데이터 불러오기
 		 try {
@@ -1677,6 +1698,15 @@
    
     </div>
   {/if}
+</div>
+<div class="toolbtn"  onclick={downloadCurrentScreen}>
+
+		 <Icon
+    class="tool-icon-mid"
+    icon="material-symbols:download"
+   
+  />
+	
 </div>
 
 				<!-- <div id="bg-set" class="toolbtn BG" onclick={menuToggle}>

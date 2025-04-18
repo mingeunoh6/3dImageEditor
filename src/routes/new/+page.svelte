@@ -9,8 +9,15 @@ import VIEWPORT from '$lib/newcomp/VIEWPORT.svelte';
 import EDITOR from '$lib/newcomp/EDITOR.svelte';
 import CASTER from '$lib/newcomp/CASTER.svelte'
 import MODELGEN from '$lib/newcomp/MODELGEN.svelte'
+import TUTORIAL from '$lib/newcomp/TUTORIAL.svelte';
 
 import Icon from '@iconify/svelte';
+
+
+let viewportWidth =$state(0)
+let viewportHeight = $state(0)
+
+
 // Model loading states
 let newModel = $state(null);
 let liveRenderImage = $state(null);
@@ -45,7 +52,7 @@ let currentModelInfo = $state({
 });
 
 // Reference to the viewport component
-let viewportRef;
+let viewportRef=$state(null);
 let currentBG = $state(null);
 let currentViewportBG = $state(null);
 
@@ -316,6 +323,12 @@ function updateTrainStatus(status){
   castingStatus = status;
 }
 
+function updateViewportSize(viewport){
+  viewportWidth = viewport.viewportWidth
+  viewportHeight = viewport.viewportHeight
+  console.log('캔버스 글로벌 업데이트 기록', viewportWidth,viewportHeight)
+}
+
 onMount(() => {
     // Run the function on initial load and resize
   window.addEventListener('resize', setVhVariable);
@@ -367,7 +380,7 @@ onMount(() => {
       />
     </div>
     <div class="viewport-wrapper">
- 
+  <!-- <TUTORIAL viewportWidth={viewportWidth} viewportHeight={viewportHeight}/> -->
       <VIEWPORT 
         bind:this={viewportRef}
         {newModel} 
@@ -383,6 +396,7 @@ onMount(() => {
         {newBrushSize}
         {newEraserSize}
         updateMaskImage={(maskImage)=>updateMaskImage(maskImage)}
+        updateViewportSize={(viewportsize)=>updateViewportSize(viewportsize)}
       />
     </div>
     <div class="prompt-wrapper">
@@ -421,6 +435,12 @@ onMount(() => {
       <button onclick={() => uploadError = null}>Dismiss</button>
     </div>
   {/if}
+
+
+
+ 
+
+
 </main>
 
 <style>

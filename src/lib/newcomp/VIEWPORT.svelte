@@ -23,7 +23,8 @@ import { toBase64, toBlobURL, getImageDimensions, revokeBlobURL, getDimensionsFr
         activeDrawingMode,
         newBrushSize,
         newEraserSize,
-        updateMaskImage
+        updateMaskImage,
+        updateViewportSize
     } = $props();
 
     
@@ -125,6 +126,7 @@ export function changeLightRot(rot){
 }
 export function changeLightIntensity(type, intensity){
           if (!viewportRenderer) return;
+        
     viewportRenderer.changeLightIntensity(type, intensity)
 }
 export function changeLightColor(type, lightColor){
@@ -877,6 +879,12 @@ function isHighlightObject(object) {
         hideContextMenu();
     }
 }
+//function to return current viewport width and height
+export function getCurrentViewportSize(){
+    let width = viewportWidth;
+    let height = viewportHeight;
+    return {width, height};
+}
 
 
     // Handle viewport size based on orientation
@@ -929,6 +937,10 @@ function isHighlightObject(object) {
     viewport.style.width = `${viewportWidth}px`;
     viewport.style.height = `${viewportHeight}px`;
     
+
+    updateViewportSize({viewportWidth,viewportHeight })
+
+
     // Update renderer if it exists
     if (viewportRenderer) {
         viewportRenderer.resize();
