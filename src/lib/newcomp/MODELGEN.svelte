@@ -82,9 +82,13 @@
 		trainItems.file = files[0]; // Store the actual file
 	}
 
-    function onchangePrompt(e) {
-        prompt = e.target.value;
-    }
+   
+
+
+   function onchangePrompt(e) {
+    prompt = e.target.value;
+    errorMessage = ''; // Clear any error messages when prompt changes
+}
 
     function deleteImage() {
         if(trainItems.image) {
@@ -303,113 +307,198 @@ generationStatus = 'Generating'
 		}
 	}
 
-    async function run3Dgen() {
-        if (!trainItems.file && !trainItems.image) {
-            errorMessage = "Please upload an image first";
-            return;
-        }
-
-        try {
-            isGenerating = true;
-            errorMessage = '';
-            generationUUID = null;
-            subscriptionKey = null;
-            generationStatus = 'Waiting';
-            modelDownloadUrl = '';
-            modelName = '';
-            progressPercentage = 0;
-            newAImodel = null;
-            
-            console.log('3D generation starting');
-            
-            // Generate random seed between 0 and 999999
-            seed = Math.floor(Math.random() * 10000);
-            if(seed > 60000){
-                while(seed > 60000) {
-                    seed = Math.floor(Math.random() * 10000);
-                }
-            }
-            
-            // Create FormData object
-            const formData = new FormData();
-            
-            // Handle the image file
-            if (trainItems.file) {
-                // Use the original file directly
-                formData.append('images', trainItems.file);
-                console.log('Using original file for upload');
-            } else if (trainItems.image) {
-                // Convert blob URL back to file
-                try {
-                    const response = await fetch(trainItems.image);
-                    const blob = await response.blob();
-                    formData.append('images', blob, 'image.jpg');
-                    console.log('Converted blob URL to file for upload');
-                } catch (err) {
-                    console.error('Error converting blob URL:', err);
-                    throw new Error('Failed to process the image');
-                }
-            }
-            
-            // Add other parameters
-            formData.append('prompt', prompt);
-            formData.append('condition_mode', condition_mode);
-            formData.append('seed', seed.toString());
-            formData.append('geometry_file_format', geometry_file_format);
-            formData.append('material', material);
-            formData.append('quality', quality);
-            formData.append('tier', tier);
-            
-            console.log('Sending request to server with parameters:', {
-                prompt,
-                condition_mode,
-                seed,
-                geometry_file_format,
-                material,
-                quality,
-                tier
-            });
-            
-            // Make request to your server endpoint
-            const response = await fetch('/api/3dgen', {
-                method: 'POST',
-                body: formData
-            });
-            
-            console.log('Server response status:', response.status);
-            
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error?.msg || 'Failed to generate 3D model');
-            }
-            
-            const data = await response.json();
-            console.log('Generation response:', data);
-            
-            if (data.error) {
-                throw new Error(data.error.msg || 'Error in 3D generation');
-            }
-            
-            // Store the UUID and subscription_key
-            generationUUID = data.uuid;
-            subscriptionKey = data.jobs?.subscription_key;
-            
-            console.log('3D generation submitted successfully, UUID:', generationUUID);
-            console.log('Subscription key:', subscriptionKey);
-            
-            if (!subscriptionKey) {
-                throw new Error('No subscription key received for polling');
-            }
-            
-            // Start status checking
-            startPolling();
-            
-        } catch (error) {
-            console.error('3D generation error:', error);
-            errorMessage = error.message || 'Failed to generate 3D model';
-            isGenerating = false;
-        }
+   async function run3Dgen() {
+    if (!trainItems.file && !trainItems.image) {
+        errorMessage = "Please upload an image first";
+        return;
     }
+
+    try {
+        isGenerating = true;
+        isProcessing = true;
+        errorMessage = '';
+        generationUUID = null;
+        subscriptionKey = null;
+        generationStatus = 'Processing';
+        modelDownloadUrl = '';
+        modelName = '';
+        progressPercentage = 0;
+        newAImodel = null;
+        
+        console.log('3D generation starting');
+        
+        // Generate random seed between 0 and 999999
+        seed = Math.floor(Math.random() * 10000);
+        if(seed > 60000){
+            while(seed > 60000) {
+                seed = Math.floor(Math.random() * 10000);
+            }
+        }
+        
+        // Create FormData object
+        const formData = new FormData();
+        
+        // Set maximum file size (4MB is a common limit for many servers)
+        const MAX_FILE_SIZE = 4 * 1024 * 1024; // 4MB
+        
+        // Handle the image file with compression if needed
+        if (trainItems.file) {
+            // Check if the file is too large
+            if (trainItems.file.size > MAX_FILE_SIZE) {
+                console.log(`Original file size: ${formatFileSize(trainItems.file.size)}, compressing...`);
+                
+                // Convert file to base64 for compression
+                const fileBase64 = await toBase64(trainItems.file, true);
+                
+                // Compress the image
+                const compressedResult = await checkAndCompressImage(fileBase64, MAX_FILE_SIZE, {
+                    initialQuality: 0.8,
+                    secondQuality: 0.6,
+                    finalQuality: 0.4,
+                    initialMaxWidth: 1024,
+                    initialMaxHeight: 1024,
+                    debug: true
+                });
+                
+                // Create a new blob from the compressed base64
+                const byteString = atob(compressedResult.base64);
+                const ab = new ArrayBuffer(byteString.length);
+                const ia = new Uint8Array(ab);
+                
+                for (let i = 0; i < byteString.length; i++) {
+                    ia[i] = byteString.charCodeAt(i);
+                }
+                
+                // Create a new blob with the original mime type if possible
+                const mimeType = trainItems.file.type || 'image/jpeg';
+                const compressedBlob = new Blob([ab], { type: mimeType });
+                
+                // Create a new file from the blob
+                const compressedFile = new File(
+                    [compressedBlob], 
+                    trainItems.file.name || 'compressed-image.jpg', 
+                    { type: mimeType }
+                );
+                
+                console.log(`Compressed file size: ${formatFileSize(compressedFile.size)}`);
+                formData.append('images', compressedFile);
+            } else {
+                // Use the original file if it's already small enough
+                formData.append('images', trainItems.file);
+                console.log('Using original file for upload, size:', formatFileSize(trainItems.file.size));
+            }
+        } else if (trainItems.image) {
+            // Convert blob URL back to file
+            try {
+                const response = await fetch(trainItems.image);
+                const blob = await response.blob();
+                
+                // Check if the blob is too large
+                if (blob.size > MAX_FILE_SIZE) {
+                    console.log(`Original blob size: ${formatFileSize(blob.size)}, compressing...`);
+                    
+                    // Convert blob to base64 for compression
+                    const blobBase64 = await toBase64(blob, true);
+                    
+                    // Compress the image
+                    const compressedResult = await checkAndCompressImage(blobBase64, MAX_FILE_SIZE, {
+                        initialQuality: 0.8,
+                        secondQuality: 0.6,
+                        finalQuality: 0.4,
+                        initialMaxWidth: 1024,
+                        initialMaxHeight: 1024,
+                        debug: true
+                    });
+                    
+                    // Create a new blob from the compressed base64
+                    const byteString = atob(compressedResult.base64);
+                    const ab = new ArrayBuffer(byteString.length);
+                    const ia = new Uint8Array(ab);
+                    
+                    for (let i = 0; i < byteString.length; i++) {
+                        ia[i] = byteString.charCodeAt(i);
+                    }
+                    
+                    // Create a new blob with the original mime type if possible
+                    const mimeType = blob.type || 'image/jpeg';
+                    const compressedBlob = new Blob([ab], { type: mimeType });
+                    
+                    console.log(`Compressed blob size: ${formatFileSize(compressedBlob.size)}`);
+                    formData.append('images', compressedBlob, 'image.jpg');
+                } else {
+                    // Use the original blob if it's already small enough
+                    formData.append('images', blob, 'image.jpg');
+                    console.log('Using original blob for upload, size:', formatFileSize(blob.size));
+                }
+            } catch (err) {
+                console.error('Error converting blob URL:', err);
+                throw new Error('Failed to process the image');
+            }
+        }
+        
+        // Add other parameters
+        formData.append('prompt', prompt);
+        formData.append('condition_mode', condition_mode);
+        formData.append('seed', seed.toString());
+        formData.append('geometry_file_format', geometry_file_format);
+        formData.append('material', material);
+        formData.append('quality', quality);
+        formData.append('tier', tier);
+        
+        console.log('Sending request to server with parameters:', {
+            prompt,
+            condition_mode,
+            seed,
+            geometry_file_format,
+            material,
+            quality,
+            tier
+        });
+        
+        isProcessing = false;
+        generationStatus = 'Waiting';
+        
+        // Make request to your server endpoint
+        const response = await fetch('/api/3dgen', {
+            method: 'POST',
+            body: formData
+        });
+        
+        console.log('Server response status:', response.status);
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error?.msg || 'Failed to generate 3D model');
+        }
+        
+        const data = await response.json();
+        console.log('Generation response:', data);
+        
+        if (data.error) {
+            throw new Error(data.error.msg || 'Error in 3D generation');
+        }
+        
+        // Store the UUID and subscription_key
+        generationUUID = data.uuid;
+        subscriptionKey = data.jobs?.subscription_key;
+        
+        console.log('3D generation submitted successfully, UUID:', generationUUID);
+        console.log('Subscription key:', subscriptionKey);
+        
+        if (!subscriptionKey) {
+            throw new Error('No subscription key received for polling');
+        }
+        
+        // Start status checking
+        startPolling();
+        
+    } catch (error) {
+        console.error('3D generation error:', error);
+        errorMessage = error.message || 'Failed to generate 3D model';
+        isGenerating = false;
+        isProcessing = false;
+    }
+}
 
     function startPolling() {
         if (!subscriptionKey) {
@@ -690,17 +779,21 @@ generationStatus = 'Generating'
     </div>
     {/if}
 
-    {#if isGenerating || modelDownloadUrl}
-    <div class="status-container">
-        {#if isGenerating}
-        <div class="progress-bar">
-            <div class="progress-fill" style="width: {progressPercentage}%"></div>
-        </div>
-        <div class="status-text">
-            {generationStatus}: {progressPercentage}%
-        </div>
-        {:else if modelDownloadUrl}
-        <div class="download-section">
+    {#if isGenerating || isProcessing || modelDownloadUrl}
+<div class="status-container">
+    {#if isGenerating || isProcessing}
+    <div class="progress-bar">
+        <div class="progress-fill" style="width: {progressPercentage}%"></div>
+    </div>
+    <div class="status-text">
+        {#if isProcessing}
+        Processing: Compressing image...
+        {:else}
+        {generationStatus}: {progressPercentage}%
+        {/if}
+    </div>
+    {:else if modelDownloadUrl}
+    <div class="download-section">
             <p class="success-message">3D model ready!</p>
             <div class="button-group">
                 <button class="download-button" onclick={downloadModel}>
@@ -728,15 +821,17 @@ generationStatus = 'Generating'
     </div>
     {/if}
 
-    {#if trainItems.image && !isGenerating && !modelDownloadUrl}
-    <button onclick={run3Dgen} class="main-gen-btn" disabled={isGenerating}>
-        {#if isGenerating}
-        Generating...
-        {:else}
-        Image to 3D
-        {/if}
-    </button>
+   {#if trainItems.image && !isGenerating && !modelDownloadUrl}
+<button onclick={run3Dgen} class="main-gen-btn" disabled={isGenerating || isProcessing}>
+    {#if isGenerating}
+    Generating...
+    {:else if isProcessing}
+    Processing Image...
+    {:else}
+    Image to 3D
     {/if}
+</button>
+{/if}
 
 	<div class="close-btn" onclick={() => offPanel()}>
 		<Icon icon="carbon:close" width="24" height="24" />
