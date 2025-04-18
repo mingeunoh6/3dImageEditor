@@ -20,6 +20,20 @@ export class TutorialCanvas {
         this.heroTargetPosition = new THREE.Vector3(0, 0, 0); // Move to center
         this.heroAnimationComplete = false;
         this.heroAnimationSpeed = 0.02; // Adjust speed as needed
+        this.lookAtUserDuration = 1.0; // seconds to look at user before tracking mouse
+        this.lookAtUserTimer = 0;
+        this.isLookingAtUser = false;
+
+        // Mouse tracking variables
+        this.mouse = new THREE.Vector2();
+        this.mouseWorldPosition = new THREE.Vector3();
+        this.rotationSpeed = 3.0; // Higher value = faster rotation
+
+        // Rotation limits (in radians)
+        this.maxRotationX = Math.PI * 0.2; // Up/down limits
+        this.minRotationX = -Math.PI * 0.2;
+        this.maxRotationY = Math.PI * 0.5; // Left/right limits
+        this.minRotationY = -Math.PI * 0.5;
 
         if (canvas) {
             this.init();
@@ -33,7 +47,7 @@ export class TutorialCanvas {
         // Create camera
         const aspect = this.canvas.clientWidth / this.canvas.clientHeight;
         this.camera = new THREE.PerspectiveCamera(60, aspect, 0.1, 1000);
-        this.camera.position.set(0, 0, 3);
+        this.camera.position.set(0, 0, 2);
 
         // Create renderer
         this.renderer = new THREE.WebGLRenderer({
@@ -86,12 +100,113 @@ export class TutorialCanvas {
             this.heroModel.rotation.y = Math.PI * 0.5; // Rotate to face right/center
         }
 
+        // Add mouse move event listener to the entire window instead of just the canvas
+        window.addEventListener('mousemove', (event) => this.onMouseMove(event));
+
         // Start animation loop
         this.animate();
 
         // Handle window resize
         window.addEventListener('resize', () => this.onWindowResize());
         this.onWindowResize();
+    }
+
+    onMouseMove(event) {
+        // Get window dimensions
+        const windowWidth = window.innerWidth;
+        const windowHeight = window.innerHeight;
+
+        // Calculate mouse position in normalized device coordinates (-1 to +1)
+        // based on the entire window, not just the canvas
+        this.mouse.x = (event.clientX / windowWidth) * 2 - 1;
+        this.mouse.y = -(event.clientY / windowHeight) * 2 + 1;
+
+        // Update the world position of the mouse
+        this.updateMouseWorldPosition();
+    }
+
+    updateMouseWorldPosition() {
+        // Create a ray from the camera through the mouse position
+        const raycaster = new THREE.Raycaster();
+        raycaster.setFromCamera(this.mouse, this.camera);
+
+        // Create a plane at z = 0
+        const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1));
+
+        // Find the point where the ray intersects the plane
+        raycaster.ray.intersectPlane(plane, this.mouseWorldPosition);
+    }
+
+    lookAtUser(deltaTime) {
+        if (!this.isLookingAtUser) return false;
+
+        this.lookAtUserTimer += deltaTime;
+
+        if (this.lookAtUserTimer >= this.lookAtUserDuration) {
+            this.isLookingAtUser = false;
+            return false;
+        }
+
+        // During this phase, the head is looking directly at the user/camera
+        const targetRotation = new THREE.Euler(0, 0, 0);
+
+        // Smoothly interpolate to looking at the user
+        this.heroModel.rotation.x = THREE.MathUtils.lerp(
+            this.heroModel.rotation.x,
+            targetRotation.x,
+            this.rotationSpeed * deltaTime
+        );
+
+        this.heroModel.rotation.y = THREE.MathUtils.lerp(
+            this.heroModel.rotation.y,
+            targetRotation.y,
+            this.rotationSpeed * deltaTime
+        );
+
+        return true;
+    }
+
+    lookAtMouse(deltaTime) {
+        if (this.isLookingAtUser) return;
+
+        // Direction from hero to mouse position
+        const direction = new THREE.Vector3()
+            .subVectors(this.mouseWorldPosition, this.heroModel.position)
+            .normalize();
+
+        // Create a look-at target
+        const lookTarget = new THREE.Vector3().copy(this.heroModel.position).add(direction);
+
+        // Create a temporary object to use lookAt
+        const tempObj = new THREE.Object3D();
+        tempObj.position.copy(this.heroModel.position);
+        tempObj.lookAt(lookTarget);
+
+        // Apply rotation limits
+        let targetRotationX = THREE.MathUtils.clamp(
+            tempObj.rotation.x,
+            this.minRotationX,
+            this.maxRotationX
+        );
+
+        let targetRotationY = THREE.MathUtils.clamp(
+            tempObj.rotation.y,
+            this.minRotationY,
+            this.maxRotationY
+        );
+
+        // Smoothly interpolate current rotation to target rotation
+        this.heroModel.rotation.x = THREE.MathUtils.lerp(
+            this.heroModel.rotation.x,
+            targetRotationX,
+            this.rotationSpeed * deltaTime
+        );
+
+        this.heroModel.rotation.y = THREE.MathUtils.lerp(
+            this.heroModel.rotation.y,
+            targetRotationY,
+            this.rotationSpeed * deltaTime
+        );
     }
 
     animate() {
@@ -116,6 +231,19 @@ export class TutorialCanvas {
                 this.heroAnimationComplete = true;
                 this.heroModel.position.copy(this.heroTargetPosition);
                 this.heroModel.position.y = 0; // Reset the y position
+
+                // Start looking at user when reaching the center
+                this.isLookingAtUser = true;
+                this.lookAtUserTimer = 0;
+            }
+        }
+
+        // Handle head rotation (either looking at user or tracking mouse)
+        if (this.heroAnimationComplete) {
+            const isStillLookingAtUser = this.lookAtUser(deltaTime);
+
+            if (!isStillLookingAtUser) {
+                this.lookAtMouse(deltaTime);
             }
         }
 
@@ -197,6 +325,8 @@ export class TutorialCanvas {
             cancelAnimationFrame(this.animationFrameId);
         }
 
+        // Remove event listeners
+        window.removeEventListener('mousemove', this.onMouseMove);
         window.removeEventListener('resize', this.onWindowResize);
 
         // Dispose resources

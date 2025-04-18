@@ -79,7 +79,7 @@
 
 	// FLUX API 요청 데이터
 	let fluxPrompt = $state({
-		prompt: 'Beautiful living room interior design with modern furniture and decor',
+		prompt: '',
 		image_prompt: '', // base64 문자열 (API 요청용)
 		image_prompt_strength: 0.2,
 		aspect_ratio: '1:1',
@@ -420,6 +420,13 @@
 	// Updated runImageGen function with image compression right before API call
 	async function runImageGen() {
 		if (isGenerating) return; // 중복 호출 방지
+		//이미지 프롬프트나 텍스트 프롬프트가 없으면 중단
+		// Check if both image prompt and text prompt are empty
+		if (!fluxPrompt.image_prompt && !fluxPrompt.prompt.trim()) {
+			console.log('No image prompt or text prompt provided');
+			generationError = 'Please provide either an image or text prompt to generate';
+			return;
+		}
 
 		// 라이브 렌더링 상태에 따라 처리
 		if (liveGenState) {
