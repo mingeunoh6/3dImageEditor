@@ -33,8 +33,15 @@
 		toggleMaskingMode,
 		updateDrawingMode,
 		currentMaskImage,
-		castingStatus
+		castingStatus,
+		  syncBGdata
 	} = $props();
+
+	$effect(()=>{
+		if(syncBGdata){
+			currentBG = syncBGdata.src
+		}
+	})
 
 	$effect(() => {
   if (castingStatus) {
@@ -133,22 +140,9 @@
 	let isBG = $state(false);
 	let currentBG = $state('');
 	let currentBGratio = $state('1:1');
-	let bgRotation = $state(180);
-	let bgBrightness = $state(1);
 
-	$effect(() => {
-		console.log(bgRotation);
-	});
 
-	$effect(() => {
-		console.log(bgBrightness);
-	});
-
-	$effect(() => {
-		if (currentBG && isBG) {
-			BGfromURL(currentBG);
-		}
-	});
+	
 
 	// 부모 컴포넌트의 로딩 상태 모니터링
 	$effect(() => {
@@ -1156,71 +1150,7 @@
 		}
 	}
 
-	// 배경 썸네일 변경
-	function changeBGThumbnail(currentBG) {
-		const thumbnailImg = document.querySelector('.bg-preview-thumbnail img');
 
-		if (thumbnailImg) {
-			thumbnailImg.src = currentBG;
-
-			// 이미지가 더 이상 필요 없을 때 메모리 해제 (선택 사항)
-			thumbnailImg.onload = () => {};
-		} else {
-			console.error('Thumbnail image element not found');
-		}
-	}
-
-	// 32의 배수로 비율 변환
-	function convert32ratio(width, height) {
-		// 원본 종횡비 계산
-		const aspectRatio = width / height;
-
-		// 원본 치수에 가장 가까운 32의 배수 계산
-		// 전략 1: 너비를 32의 배수로 반올림, 높이 조정
-		let newWidth1 = Math.round(width / 32) * 32;
-		let newHeight1 = Math.round(newWidth1 / aspectRatio / 32) * 32;
-
-		// 전략 2: 높이를 32의 배수로 반올림, 너비 조정
-		let newHeight2 = Math.round(height / 32) * 32;
-		let newWidth2 = Math.round((newHeight2 * aspectRatio) / 32) * 32;
-
-		// 적어도 하나의 차원이 768 이상이어야 함
-		const minSize = 768;
-
-		// 필요한 경우 전략 1의 치수 스케일업
-		if (newWidth1 < minSize && newHeight1 < minSize) {
-			const scale = Math.ceil(minSize / Math.max(newWidth1, newHeight1));
-			newWidth1 = Math.round((newWidth1 * scale) / 32) * 32;
-			newHeight1 = Math.round((newHeight1 * scale) / 32) * 32;
-		}
-
-		// 필요한 경우 전략 2의 치수 스케일업
-		if (newWidth2 < minSize && newHeight2 < minSize) {
-			const scale = Math.ceil(minSize / Math.max(newWidth2, newHeight2));
-			newWidth2 = Math.round((newWidth2 * scale) / 32) * 32;
-			newHeight2 = Math.round((newHeight2 * scale) / 32) * 32;
-		}
-
-		// 각 결과가 원래 종횡비에서 얼마나 벗어나는지 계산
-		const ratio1 = newWidth1 / newHeight1;
-		const ratio2 = newWidth2 / newHeight2;
-
-		const error1 = Math.abs(ratio1 - aspectRatio);
-		const error2 = Math.abs(ratio2 - aspectRatio);
-
-		// 종횡비를 더 잘 보존하는 전략 선택
-		if (error1 <= error2) {
-			return {
-				width: newWidth1,
-				height: newHeight1
-			};
-		} else {
-			return {
-				width: newWidth2,
-				height: newHeight2
-			};
-		}
-	}
 
 	// 렌더링 실행
 	function render() {
@@ -1957,28 +1887,22 @@
 {/if}
 
 <!-- 생성된 이미지 미리보기 -->
-{#if cachedImageUrl && !isGenerating && onPreview}
+{#if generatedImageUrl && !isGenerating && onPreview}
 	<div class="generated-image-preview-backdrop"></div>
 	<div class="generated-image-preview" transition:fade>
-		<img src={cachedImageUrl} alt="Generated image" />
+		<img src={generatedImageUrl} alt="Generated image" />
 		<div class="image-actions">
 			<button
 				class="main-action-btn"
 				onclick={() => {
 					// 캐시된 이미지를 배경으로 설정
-					if (cachedImageBlob) {
-						// 캐시된 blob에서 새 파일 생성
-						const file = new File([cachedImageBlob], 'generated-image.png', {
-							type: cachedImageBlob.type || 'image/png'
-						});
-
+					if (generatedImageUrl) {
+				
 						// 로컬 상태 업데이트
 						isBG = true;
-						currentBG = cachedImageUrl;
-
+						currentBG = generatedImageUrl;
 						// 배경으로 설정
 						BGfromURL(currentBG);
-
 						// 미리보기 닫기
 						onPreview = false;
 					} else {

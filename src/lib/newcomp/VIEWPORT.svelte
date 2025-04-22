@@ -24,7 +24,8 @@ import { toBase64, toBlobURL, getImageDimensions, revokeBlobURL, getDimensionsFr
         newBrushSize,
         newEraserSize,
         updateMaskImage,
-        updateViewportSize
+        updateViewportSize,
+        syncBGdata
     } = $props();
 
     
@@ -194,6 +195,8 @@ function sendMaskingData(data){
     currentViewportBG(texture.image);
     console.log('Current viewport background updated', texture.image);
 }
+
+//현재 제거할때만 쓰임
   export async function changeBG(file) {
     if (!viewportRenderer) return;
 
@@ -226,7 +229,7 @@ function sendMaskingData(data){
 }
    export async function changeBGfromURL(url) {
     if (!viewportRenderer) return;
-
+    console.log('changeBGfromURL',url)
     // URL이 없으면 기본 HDRI 재설정
     if (!url) {
         viewportRenderer.resetHDRI();
@@ -242,7 +245,7 @@ function sendMaskingData(data){
             setAsBackground: true,
             setAsEnvironment: true
         });
-        
+        console.log('loadBackground', texture)
         // 종횡비 업데이트
         if (texture && texture.image) {
             aspectRatio = texture.image.width / texture.image.height;

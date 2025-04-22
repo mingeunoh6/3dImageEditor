@@ -21,7 +21,6 @@
 		uploadError,
 		BGimport,
 		BGfromURL,
-		BGfromPrompt,
 		sceneObjects = [],
 		onObjectSelect = (id) => console.log(`Object selected: ${id}`),
 		onObjectVisibilityToggle = (id) => console.log(`Toggle visibility: ${id}`),
@@ -29,21 +28,19 @@
 		onChangeFOV,
 		onChangeLight,
 		onChangeEnvSetting,
-		open3dgen
+		open3dgen,
+		syncBGdata
 	} = $props();
 
-	// BGfromPrompt가 변경되면 현재 백그라운드 업데이트
-	$effect(() => {
-		updateBG(BGfromPrompt);
-	});
-
-	// 백그라운드 업데이트 함수
-	function updateBG(image) {
-		if (image) {
-			currentBG = image;
-			isBG = true;
+	
+	$effect(()=>{
+		if(syncBGdata){
+			currentBG = syncBGdata.src
+			console.log(syncBGdata.src)
 		}
-	}
+	})
+
+
 
 	// 업로드 상태
 	let isUploading = $state(false);
@@ -84,13 +81,7 @@
 	let filllightColor = $state('#ffffff');
 	let lightRotation = $state(0)
 
-	$effect(() => {
-		console.log(bgRotation);
-	});
-
-	$effect(() => {
-		console.log(bgBrightness);
-	});
+	
 
 	// 부모 컴포넌트의 로딩 상태 모니터링
 	$effect(() => {
@@ -383,7 +374,8 @@ onChangeEnvSetting('intensity',bgBrightness)
 			isBG = true;
 
 			// 부모 컴포넌트에 씬 업데이트 요청
-			BGimport(file);
+			// BGimport(file);
+			BGfromURL(currentBG)
 
 			console.log('Background image loaded:', currentBG);
 		} catch (error) {
@@ -435,6 +427,7 @@ onChangeEnvSetting('intensity',bgBrightness)
 		currentBG = '';
 
 		// 부모 컴포넌트에 배경 제거 알림
+
 		BGimport(null);
 	}
 

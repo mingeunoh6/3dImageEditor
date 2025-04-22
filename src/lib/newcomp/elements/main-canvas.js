@@ -1238,8 +1238,15 @@ export class mainRenderer {
                 const startTime = performance.now();
 
                 // 카메라 상태 저장
+                // Store original camera and renderer state
                 const originalAspect = this.camera.aspect;
                 const originalMatrix = this.camera.projectionMatrix.clone();
+                const originalRenderTarget = this.renderer.getRenderTarget();
+                const originalPixelRatio = this.renderer.getPixelRatio();
+
+                // Increase pixel ratio for high-res rendering
+                const renderPixelRatio = Math.min(2, window.devicePixelRatio || 1);
+                this.renderer.setPixelRatio(renderPixelRatio);
 
                 // 카메라 종횡비 조정
                 this.camera.aspect = targetWidth / targetHeight;
@@ -1260,10 +1267,11 @@ export class mainRenderer {
                         minFilter: THREE.LinearFilter,
                         magFilter: THREE.LinearFilter,
                         format: THREE.RGBAFormat,
-                        colorSpace: THREE.SRGBColorSpace, // THREE.js r152+ 사용 시
+                        colorSpace: THREE.SRGBColorSpace,
                         type: THREE.UnsignedByteType,
                         depthBuffer: true,
-                        stencilBuffer: false
+                        stencilBuffer: false,
+                        samples: 4 // Enable MSAA if supported by the GPU
                     });
                 }
 
@@ -1272,7 +1280,7 @@ export class mainRenderer {
                 this.hideUIElements();
 
                 // 렌더러 상태 저장
-                const originalRenderTarget = this.renderer.getRenderTarget();
+
                 const originalToneMapping = this.renderer.toneMapping;
                 const originalToneMappingExposure = this.renderer.toneMappingExposure;
                 const originalOutputColorSpace = this.renderer.outputColorSpace;
@@ -1286,7 +1294,9 @@ export class mainRenderer {
                 this.renderer.render(this.scene, this.camera);
 
                 // 픽셀 데이터 버퍼 생성 (재사용 가능)
-                if (!this._pixelBuffer || this._pixelBuffer.length !== targetWidth * targetHeight * 4) {
+                if (!this._pixelBuffer ||
+                    this._pixelBuffer.length !== targetWidth * targetHeight * 4
+                ) {
                     this._pixelBuffer = new Uint8Array(targetWidth * targetHeight * 4);
                 }
 
@@ -1315,7 +1325,10 @@ export class mainRenderer {
                     this._imageData.width !== targetWidth ||
                     this._imageData.height !== targetHeight
                 ) {
-                    this._imageData = this._screenshotContext.createImageData(targetWidth, targetHeight);
+                    this._imageData = this._screenshotContext.createImageData(
+                        targetWidth,
+                        targetHeight
+                    );
                 }
 
                 // Y축 뒤집기 (WebGL과 Canvas의 좌표계 차이)
@@ -1339,7 +1352,7 @@ export class mainRenderer {
                 this.renderer.toneMapping = originalToneMapping;
                 this.renderer.toneMappingExposure = originalToneMappingExposure;
                 this.renderer.outputColorSpace = originalOutputColorSpace;
-
+                this.renderer.setPixelRatio(originalPixelRatio);
                 // 카메라 상태 복원
                 this.camera.aspect = originalAspect;
                 this.camera.projectionMatrix.copy(originalMatrix);

@@ -14,6 +14,7 @@ import TUTORIAL from '$lib/newcomp/TUTORIAL.svelte';
 import Icon from '@iconify/svelte';
 
 
+
 let viewportWidth =$state(0)
 let viewportHeight = $state(0)
 
@@ -81,6 +82,11 @@ function addModelToScene(file, metadata) {
 async function getCurrentViewportAsImg(data) {
 
   let currentRatio = data.currentBGratio
+  
+  if(data.currentBG === currentViewportBG){
+    console.log('프롬프트 설정의 현재 배경과 글로벌 배경정보가 일치')
+    currentViewportBG = datacatalog.currentBG
+  }
   let bginfo = {
     currentBG: currentViewportBG,
     currentRatio: currentRatio
@@ -126,9 +132,14 @@ function updateDrawingMode(mode, brushSize, eraserSize){
 
 
 function updateCurrentBG(data){
-  currentViewportBG = data;
+
   if (data) {
+     currentViewportBG = data;
+      console.log('Current viewport background passed to the main component', data);
     console.log('currentBGsize', currentViewportBG.width, currentViewportBG.height);
+  
+  } else if(!data){
+    console.log('background removed')
   }
 }
 
@@ -167,14 +178,18 @@ function handleObjectDelete(objectId) {
 
   function changeBG(file){
     console.log('new hdr', file);
+
+     if (file === null) {
+      currentViewportBG = null;
+      currentBG = null;
+    }
+
+
     if (viewportRef) {
       viewportRef.changeBG(file, true);
     }
 
-    if (file === null) {
-      currentViewportBG = null;
-      currentBG = null;
-    }
+   
   }
 
   function changeBGfromURL(url){
@@ -188,6 +203,7 @@ function handleObjectDelete(objectId) {
      if (viewportRef) {
     viewportRef.changeBGfromURL(url)
      }
+     updateCurrentBG(url)
 
 
   }
@@ -368,7 +384,6 @@ onMount(() => {
         {uploadError}
         BGimport={(image)=>changeBG(image)}
         BGfromURL={(url)=>changeBGfromURL(url)}
-        BGfromPrompt={currentBG}
            {sceneObjects} 
     onObjectSelect={handleObjectSelect}
     onObjectVisibilityToggle={handleObjectVisibilityToggle}
@@ -377,6 +392,7 @@ onMount(() => {
     onChangeLight={handleLight}
     onChangeEnvSetting = {handleEnvSetting}
     open3dgen = {open3dgen}
+    syncBGdata = {currentViewportBG}
       />
     </div>
     <div class="viewport-wrapper">
@@ -397,6 +413,7 @@ onMount(() => {
         {newEraserSize}
         updateMaskImage={(maskImage)=>updateMaskImage(maskImage)}
         updateViewportSize={(viewportsize)=>updateViewportSize(viewportsize)}
+          syncBGdata = {currentViewportBG}
       />
     </div>
     <div class="prompt-wrapper">
@@ -413,6 +430,7 @@ onMount(() => {
         updateDrawingMode={updateDrawingMode}
         {currentMaskImage}
         {castingStatus}
+        syncBGdata = {currentViewportBG}
       />
     </div>
   </div>
