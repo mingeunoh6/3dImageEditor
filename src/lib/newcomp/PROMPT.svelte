@@ -17,7 +17,7 @@
 		getBase64FileSize,
 		getDimensionsFromRatio,
 		generateImageFilename,
-		matchDimension  
+		matchDimension
 	} from '$lib/utils/imageUtils';
 
 	// Props from parent
@@ -34,29 +34,28 @@
 		updateDrawingMode,
 		currentMaskImage,
 		castingStatus,
-		  syncBGdata
+		syncBGdata
 	} = $props();
 
-	$effect(()=>{
-		if(syncBGdata){
-			currentBG = syncBGdata.src
+	$effect(() => {
+		if (syncBGdata) {
+			currentBG = syncBGdata.src;
 		}
-	})
+	});
 
 	$effect(() => {
-  if (castingStatus) {
-    console.log(`Casting status changed: ${castingStatus.training_status}`);
-    
-    if (castingStatus.training_status === 'Done') {
-      // If training is done, reload the castingList after a short delay
-      // to ensure the API has time to update
-      setTimeout(async () => {
-        await getLoLAlist();
-      }, 2000);
-    }
-  }
-});
+		if (castingStatus) {
+			console.log(`Casting status changed: ${castingStatus.training_status}`);
 
+			if (castingStatus.training_status === 'Done') {
+				// If training is done, reload the castingList after a short delay
+				// to ensure the API has time to update
+				setTimeout(async () => {
+					await getLoLAlist();
+				}, 2000);
+			}
+		}
+	});
 
 	// UI 상태
 	let openImagePrompt = $state(false);
@@ -73,6 +72,9 @@
 	let cachedImageBlob = $state(null); // 실제 이미지 blob 저장
 	let cachedImageUrl = $state(''); // 로컬 blob URL 저장
 	let currentRefMode = $state('style-ref');
+	let originalImgWidth = $state('');
+	let originalImgHeight = $state('');
+	let imageResized = $state(false);
 
 	// FLUX API 관련 상태
 	let taskId = $state('');
@@ -121,7 +123,6 @@
 	let brushSize = $state(20);
 	let eraserSize = $state(20);
 
-
 	//Caster 옵션
 	let castingListLoading = $state(false);
 	let currentCasting = $state('');
@@ -140,9 +141,6 @@
 	let isBG = $state(false);
 	let currentBG = $state('');
 	let currentBGratio = $state('1:1');
-
-
-	
 
 	// 부모 컴포넌트의 로딩 상태 모니터링
 	$effect(() => {
@@ -187,62 +185,58 @@
 	function setMaskCanvas() {
 		maskingMode = !maskingMode;
 		if (maskingMode) {
-			
-				updateDrawingMode(activeDrawingMode, brushSize, eraserSize);
+			updateDrawingMode(activeDrawingMode, brushSize, eraserSize);
 		} else {
-			
 		}
 
 		console.log('maskingMode', maskingMode);
 		toggleMaskingMode();
 	}
 
-
-
-	function updateBrushSize(newValue) {	
+	function updateBrushSize(newValue) {
 		brushSize = newValue;
-		console.log('브러쉬사이즈변경',brushSize)
+		console.log('브러쉬사이즈변경', brushSize);
 		updateDrawingMode(activeDrawingMode, brushSize, eraserSize);
 	}
 
 	function updateEraserSize(newValue) {
 		eraserSize = newValue;
-		console.log('지우개 사이즈 변경',eraserSize)
+		console.log('지우개 사이즈 변경', eraserSize);
 		updateDrawingMode(activeDrawingMode, brushSize, eraserSize);
 	}
 
 	//LoLA 데이터 가져오기
 	async function getLoLAlist() {
-  console.log('Loading LoRA list...');
-  castingListLoading = true;
-  
-  try {
-    const response = await fetch('api/getTrain', {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    });
+		console.log('Loading LoRA list...');
+		castingListLoading = true;
 
-    if (!response.ok) {
-      throw new Error(`Failed to fetch LoRA list: ${response.statusText}`);
-    }
+		try {
+			const response = await fetch('api/getTrain', {
+				method: 'GET',
+				headers: {
+					'Content-Type': 'application/json'
+				}
+			});
 
-    const data = await response.json();
-    
-    if (!data || !data.data || !Array.isArray(data.data)) {
-      console.warn('Received invalid castingList data format', data);
-      return;
-    }
-    
-    castingList = data.data;
-    console.log(`LoRA list loaded: ${castingList.length} items`);
-  } catch (error) {
-    console.error('Error fetching LoRA list:', error);
-  } finally {
-    castingListLoading = false;
-  }
-}
+			if (!response.ok) {
+				throw new Error(`Failed to fetch LoRA list: ${response.statusText}`);
+			}
+
+			const data = await response.json();
+
+			if (!data || !data.data || !Array.isArray(data.data)) {
+				console.warn('Received invalid castingList data format', data);
+				return;
+			}
+
+			castingList = data.data;
+			console.log(`LoRA list loaded: ${castingList.length} items`);
+		} catch (error) {
+			console.error('Error fetching LoRA list:', error);
+		} finally {
+			castingListLoading = false;
+		}
+	}
 
 	//imageprompt 모드 스위쳐
 	function switchImagePromptMode(event) {
@@ -433,8 +427,8 @@
 			}
 		}
 
-		if(maskingMode && currentMaskImage !== null){
-			console.log('masking 모드로 생성합니다.')
+		if (maskingMode && currentMaskImage !== null) {
+			console.log('masking 모드로 생성합니다.');
 			try {
 				fluxPrompt.image = await GetCurrentScreenAsImageRef();
 			} catch (error) {
@@ -496,10 +490,19 @@
 				const estimatedSize = getBase64FileSize(fluxPrompt.image_prompt);
 				console.log(`Estimated image size: ${formatFileSize(estimatedSize)}`);
 
+				// Create an image element to check dimensions of the base64 image
+				const img = new Image();
+				img.onload = () => {
+					console.log('이미지 체크', { width: img.width, height: img.height });
+					originalImgHeight = img.height;
+					originalImgWidth = img.width;
+				};
+				img.src = `data:image/jpeg;base64,${fluxPrompt.image_prompt}`;
+
 				// If image is larger than 4MB, compress it
 				if (estimatedSize > 4 * 1024 * 1024) {
 					console.log('Image prompt is too large, compressing...');
-
+					imageResized = true;
 					try {
 						// Create a Blob from the base64 string
 						const byteString = atob(fluxPrompt.image_prompt);
@@ -574,103 +577,109 @@
 
 			// Check if we have an image prompt to include
 			if (fluxPrompt.image && maskingMode && currentMaskImage) {
-    console.log('Mask detected, checking size...');
+				console.log('Mask detected, checking size...');
+				const img = new Image();
+				img.onload = () => {
+					console.log('이미지 체크', { width: img.width, height: img.height });
+					originalImgHeight = img.height;
+					originalImgWidth = img.width;
+				};
+				img.src = `data:image/jpeg;base64,${fluxPrompt.image}`;
+				// Calculate the size of the base64 string
+				const estimatedSize = getBase64FileSize(fluxPrompt.image);
+				console.log(`Estimated image size: ${formatFileSize(estimatedSize)}`);
 
-    // Calculate the size of the base64 string
-    const estimatedSize = getBase64FileSize(fluxPrompt.image);
-    console.log(`Estimated image size: ${formatFileSize(estimatedSize)}`);
+				// If image is larger than 4MB, compress it
+				if (estimatedSize > 4 * 1024 * 1024) {
+					console.log('Image prompt is too large, compressing...');
+					imageResized = true;
+					try {
+						// Create a Blob from the base64 string
+						const byteString = atob(fluxPrompt.image);
+						const ab = new ArrayBuffer(byteString.length);
+						const ia = new Uint8Array(ab);
 
-    // If image is larger than 4MB, compress it
-    if (estimatedSize > 4 * 1024 * 1024) {
-        console.log('Image prompt is too large, compressing...');
+						for (let i = 0; i < byteString.length; i++) {
+							ia[i] = byteString.charCodeAt(i);
+						}
 
-        try {
-            // Create a Blob from the base64 string
-            const byteString = atob(fluxPrompt.image);
-            const ab = new ArrayBuffer(byteString.length);
-            const ia = new Uint8Array(ab);
+						const blob = new Blob([ab], { type: 'image/jpeg' });
+						const imageFile = new File([blob], 'image-prompt.jpg', { type: 'image/jpeg' });
 
-            for (let i = 0; i < byteString.length; i++) {
-                ia[i] = byteString.charCodeAt(i);
-            }
+						// First compression attempt (moderate)
+						let compressedBase64 = await compressAndConvertToBase64(imageFile, 1024, 1024, 0.8);
+						let compressedSize = getBase64FileSize(compressedBase64);
+						console.log(`Compressed image size (first pass): ${formatFileSize(compressedSize)}`);
 
-            const blob = new Blob([ab], { type: 'image/jpeg' });
-            const imageFile = new File([blob], 'image-prompt.jpg', { type: 'image/jpeg' });
+						// If still too large, compress more aggressively
+						if (compressedSize > 4 * 1024 * 1024) {
+							console.log('Image still too large, compressing more aggressively...');
+							compressedBase64 = await compressAndConvertToBase64(imageFile, 600, 600, 0.5);
+							compressedSize = getBase64FileSize(compressedBase64);
+							console.log(`Compressed image size (second pass): ${formatFileSize(compressedSize)}`);
 
-            // First compression attempt (moderate)
-            let compressedBase64 = await compressAndConvertToBase64(imageFile, 1024, 1024, 0.8);
-            let compressedSize = getBase64FileSize(compressedBase64);
-            console.log(`Compressed image size (first pass): ${formatFileSize(compressedSize)}`);
+							// If still too large after second compression, try one last time
+							if (compressedSize > 4 * 1024 * 1024) {
+								console.log('Final compression attempt...');
+								compressedBase64 = await compressAndConvertToBase64(imageFile, 400, 400, 0.4);
+								compressedSize = getBase64FileSize(compressedBase64);
+								console.log(
+									`Compressed image size (final pass): ${formatFileSize(compressedSize)}`
+								);
+							}
+						}
 
-            // If still too large, compress more aggressively
-            if (compressedSize > 4 * 1024 * 1024) {
-                console.log('Image still too large, compressing more aggressively...');
-                compressedBase64 = await compressAndConvertToBase64(imageFile, 600, 600, 0.5);
-                compressedSize = getBase64FileSize(compressedBase64);
-                console.log(`Compressed image size (second pass): ${formatFileSize(compressedSize)}`);
+						// Update the image prompt with the compressed version and match mask dimensions
+						apiRequestData.image = compressedBase64;
+						genMode = 'fill';
 
-                // If still too large after second compression, try one last time
-                if (compressedSize > 4 * 1024 * 1024) {
-                    console.log('Final compression attempt...');
-                    compressedBase64 = await compressAndConvertToBase64(imageFile, 400, 400, 0.4);
-                    compressedSize = getBase64FileSize(compressedBase64);
-                    console.log(
-                        `Compressed image size (final pass): ${formatFileSize(compressedSize)}`
-                    );
-                }
-            }
+						try {
+							// Match the mask dimensions to the image dimensions
+							const dataPrefix = 'data:image/jpeg;base64,';
+							const fullImageData = dataPrefix + compressedBase64;
+							const matchedMask = await matchDimension(fullImageData, currentMaskImage);
+							apiRequestData.mask = matchedMask.split(',')[1]; // Remove data URL prefix if needed
+							console.log('Mask dimensions matched to image');
+						} catch (error) {
+							console.error('Error matching dimension of mask image', error);
+							apiRequestData.mask = currentMaskImage;
+							console.log('Using original mask as fallback');
+						}
+					} catch (error) {
+						console.error('Error compressing image:', error);
+						// If compression fails, just use the original and hope for the best
+						apiRequestData.image = fluxPrompt.image;
+						try {
+							// Still try to match dimensions with original image
+							const dataPrefix = 'data:image/jpeg;base64,';
+							const fullImageData = dataPrefix + fluxPrompt.image;
+							const matchedMask = await matchDimension(fullImageData, currentMaskImage);
+							apiRequestData.mask = matchedMask.split(',')[1];
+						} catch (e) {
+							console.error('Fallback dimension matching failed:', e);
+							apiRequestData.mask = currentMaskImage;
+						}
+						genMode = 'fill';
+					}
+				} else {
+					// Image is small enough, use as is
+					apiRequestData.image = fluxPrompt.image;
+					genMode = 'fill';
 
-            // Update the image prompt with the compressed version and match mask dimensions
-            apiRequestData.image = compressedBase64;
-            genMode = 'fill';
-            
-            try {
-                // Match the mask dimensions to the image dimensions
-                const dataPrefix = 'data:image/jpeg;base64,';
-                const fullImageData = dataPrefix + compressedBase64;
-                const matchedMask = await matchDimension(fullImageData, currentMaskImage);
-                apiRequestData.mask = matchedMask.split(',')[1]; // Remove data URL prefix if needed
-                console.log('Mask dimensions matched to image');
-            } catch (error) {
-                console.error('Error matching dimension of mask image', error);
-                apiRequestData.mask = currentMaskImage;
-                console.log('Using original mask as fallback');
-            }
-        } catch (error) {
-            console.error('Error compressing image:', error);
-            // If compression fails, just use the original and hope for the best
-            apiRequestData.image = fluxPrompt.image;
-            try {
-                // Still try to match dimensions with original image
-                const dataPrefix = 'data:image/jpeg;base64,';
-                const fullImageData = dataPrefix + fluxPrompt.image;
-                const matchedMask = await matchDimension(fullImageData, currentMaskImage);
-                apiRequestData.mask = matchedMask.split(',')[1];
-            } catch (e) {
-                console.error('Fallback dimension matching failed:', e);
-                apiRequestData.mask = currentMaskImage;
-            }
-            genMode = 'fill';
-        }
-    } else {
-        // Image is small enough, use as is
-        apiRequestData.image = fluxPrompt.image;
-        genMode = 'fill';
-        
-        try {
-            // Match the mask dimensions to the image dimensions
-            const dataPrefix = 'data:image/jpeg;base64,';
-            const fullImageData = dataPrefix + fluxPrompt.image;
-            const matchedMask = await matchDimension(fullImageData, currentMaskImage);
-            apiRequestData.mask = matchedMask.split(',')[1]; // Remove data URL prefix if needed
-            console.log('Mask dimensions matched to image');
-        } catch (error) {
-            console.error('Error matching dimension of mask image', error);
-            apiRequestData.mask = currentMaskImage;
-            console.log('Using original mask as fallback');
-        }
-    }
-}
+					try {
+						// Match the mask dimensions to the image dimensions
+						const dataPrefix = 'data:image/jpeg;base64,';
+						const fullImageData = dataPrefix + fluxPrompt.image;
+						const matchedMask = await matchDimension(fullImageData, currentMaskImage);
+						apiRequestData.mask = matchedMask.split(',')[1]; // Remove data URL prefix if needed
+						console.log('Mask dimensions matched to image');
+					} catch (error) {
+						console.error('Error matching dimension of mask image', error);
+						apiRequestData.mask = currentMaskImage;
+						console.log('Using original mask as fallback');
+					}
+				}
+			}
 
 			console.log('API 요청 데이터:', apiRequestData);
 
@@ -830,25 +839,63 @@
 			// 이미지를 blob으로 가져와 캐시
 			cachedImageBlob = await response.blob();
 
-			// 이전 URL이 있으면 해제
-			if (cachedImageUrl) {
-				revokeBlobURL(cachedImageUrl);
+			if (imageResized) {
+				const img = document.createElement('img');
+				img.onload = async () => {
+					const canvas = document.createElement('canvas');
+					canvas.width = originalImgWidth;
+					canvas.height = originalImgHeight;
+					const ctx = canvas.getContext('2d');
+					ctx.drawImage(img, 0, 0, originalImgWidth, originalImgHeight);
+
+					//리사이징된 이미지를 blob으로 변환
+					canvas.toBlob(
+						(resizedBlob) => {
+							// 이전 URL이 있으면 해제
+							if (cachedImageUrl) {
+								revokeBlobURL(cachedImageUrl);
+							}
+
+							//새 blob에 대한 로컬 url 생성
+							cachedImageUrl = URL.createObjectURL(resizedBlob);
+							cachedImageBlob = resizedBlob;
+
+							//생성된 이미지 url 업데이트
+							generatedImageUrl = cachedImageUrl;
+							console.log('Image successfully resized and cached locally', generatedImageUrl);
+							// 생성 완료
+							isGenerating = false;
+							onPreview = true;
+
+							// UI 활성화
+							enableUI();
+						},
+						'image/png',
+						0.95
+					);
+				};
+				img.src = URL.createObjectURL(cachedImageBlob);
+			} else {
+				// 이전 URL이 있으면 해제
+				if (cachedImageUrl) {
+					revokeBlobURL(cachedImageUrl);
+				}
+
+				// blob에 대한 로컬 URL 생성
+				cachedImageUrl = URL.createObjectURL(cachedImageBlob);
+
+				// 생성된 이미지 URL 업데이트
+				generatedImageUrl = cachedImageUrl;
+
+				console.log('Image successfully cached locally', generatedImageUrl);
+
+				// 생성 완료
+				isGenerating = false;
+				onPreview = true;
+
+				// UI 활성화
+				enableUI();
 			}
-
-			// blob에 대한 로컬 URL 생성
-			cachedImageUrl = URL.createObjectURL(cachedImageBlob);
-
-			// 생성된 이미지 URL 업데이트
-			generatedImageUrl = cachedImageUrl;
-
-			console.log('Image successfully cached locally', generatedImageUrl);
-
-			// 생성 완료
-			isGenerating = false;
-			onPreview = true;
-
-			// UI 활성화
-			enableUI();
 		} catch (error) {
 			console.error('Error caching image:', error);
 			generationError = `Failed to load generated image: ${error.message}`;
@@ -1150,8 +1197,6 @@
 		}
 	}
 
-
-
 	// 렌더링 실행
 	function render() {
 		console.log('Rendering...');
@@ -1230,45 +1275,45 @@
 		console.log('Image reference removed');
 	}
 
-	async function downloadCurrentScreen(){
-		console.log('현재 화면 캡쳐 후 다운로드')
+	async function downloadCurrentScreen() {
+		console.log('현재 화면 캡쳐 후 다운로드');
 		let newImage = await GetCurrentScreenAsImageRef();
-		
+
 		// Create a temporary anchor element for download
 		const downloadLink = document.createElement('a');
-		
+
 		// Set the href to the image data
 		downloadLink.href = `data:image/png;base64,${newImage}`;
-		
+
 		// Set download attribute with filename
 		downloadLink.download = `otrai-img-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.png`;
-		
+
 		// Append to body, click and remove
 		document.body.appendChild(downloadLink);
 		downloadLink.click();
 		document.body.removeChild(downloadLink);
-		
+
 		console.log('Screen capture downloaded successfully');
 	}
 
 	onMount(async () => {
 		//loRA 데이터 불러오기
-		 try {
-    // Load LoRA data with retry mechanism
-    await getLoLAlist();
-    
-    // If the list is empty after initial load, try once more
-    if (castingList.length === 0) {
-      console.log('Initial castingList empty, retrying...');
-      setTimeout(async () => {
-        await getLoLAlist();
-      }, 1000);
-    }
-  } catch (error) {
-    console.error('Failed to load casting list on mount:', error);
-  } finally {
-    castingListLoading = false;
-  }
+		try {
+			// Load LoRA data with retry mechanism
+			await getLoLAlist();
+
+			// If the list is empty after initial load, try once more
+			if (castingList.length === 0) {
+				console.log('Initial castingList empty, retrying...');
+				setTimeout(async () => {
+					await getLoLAlist();
+				}, 1000);
+			}
+		} catch (error) {
+			console.error('Failed to load casting list on mount:', error);
+		} finally {
+			castingListLoading = false;
+		}
 
 		return () => {
 			clearPollingTimers();
@@ -1513,138 +1558,147 @@
 									<ToggleBtn checked={maskingMode} onToggle={setMaskCanvas} />
 								</div>
 								{#if maskingMode}
-								<div class="drawing-mode-wrapper" transition:slide>
-									<button id="draw-btn" onclick={handleDrawingMode} class={activeDrawingMode === 'draw' ? 'selected' : ''}>
-										<Icon class="tool-icon-mid" icon="ph:paint-brush-fill" />
-									</button>
-								<button id="eraser-btn" onclick={handleDrawingMode} class={activeDrawingMode === 'eraser' ? 'selected' : ''}>
-									<Icon class="tool-icon-mid" icon="fluent:eraser-24-filled" />
-								</button>
-								
-								</div>
-								
-								<div class="brush-size-wrapper" transition:slide>
-									{#if activeDrawingMode === 'draw'}
-										<Slider
-											value={brushSize}
-											min={1}
-											max={100}
-											scale={1}
-											name="Brush Size"
-											unit="px"
-											onValueChange={(newValue) => updateBrushSize(newValue)}
-										/>
-									{:else if activeDrawingMode === 'eraser'}
-										<Slider
-											value={eraserSize}
-											min={1}
-											max={100}
-											scale={1}
-											name="Eraser Size"
-											unit="px"
-											onValueChange={(newValue) => updateEraserSize(newValue)}
-										/>
-									{/if}
-								</div>
+									<div class="drawing-mode-wrapper" transition:slide>
+										<button
+											id="draw-btn"
+											onclick={handleDrawingMode}
+											class={activeDrawingMode === 'draw' ? 'selected' : ''}
+										>
+											<Icon class="tool-icon-mid" icon="ph:paint-brush-fill" />
+										</button>
+										<button
+											id="eraser-btn"
+											onclick={handleDrawingMode}
+											class={activeDrawingMode === 'eraser' ? 'selected' : ''}
+										>
+											<Icon class="tool-icon-mid" icon="fluent:eraser-24-filled" />
+										</button>
+									</div>
+
+									<div class="brush-size-wrapper" transition:slide>
+										{#if activeDrawingMode === 'draw'}
+											<Slider
+												value={brushSize}
+												min={1}
+												max={100}
+												scale={1}
+												name="Brush Size"
+												unit="px"
+												onValueChange={(newValue) => updateBrushSize(newValue)}
+											/>
+										{:else if activeDrawingMode === 'eraser'}
+											<Slider
+												value={eraserSize}
+												min={1}
+												max={100}
+												scale={1}
+												name="Eraser Size"
+												unit="px"
+												onValueChange={(newValue) => updateEraserSize(newValue)}
+											/>
+										{/if}
+									</div>
 								{/if}
 							</div>
 						</div>
 					{/if}
 				</div>
-	<div id="casting-model" class="toolbtn casting-model" onclick={menuToggle}>
-  <Icon
-    class={`tool-icon-mid ${castingStatus && ['Queue', 'Waiting', 'Training'].includes(castingStatus.training_status) ? 'casting-active' : ''}`}
-    icon="mage:scan-user-fill"
-    style={currentCasting ? 'color: var(--highlight-color)' : ''}
-  />
-  {#if activeMenu === 'casting-model'}
-    <div class="casting-panel" transition:slide>
-      <div class="title">Casting model</div>
+				<div id="casting-model" class="toolbtn casting-model" onclick={menuToggle}>
+					<Icon
+						class={`tool-icon-mid ${castingStatus && ['Queue', 'Waiting', 'Training'].includes(castingStatus.training_status) ? 'casting-active' : ''}`}
+						icon="mage:scan-user-fill"
+						style={currentCasting ? 'color: var(--highlight-color)' : ''}
+					/>
+					{#if activeMenu === 'casting-model'}
+						<div class="casting-panel" transition:slide>
+							<div class="title">Casting model</div>
 
- <div class="refresh-btn-wrapper">
-        <button class="refresh-btn" onclick={() => getLoLAlist()} disabled={castingListLoading}>
-          <Icon icon="mdi:refresh" width="16" height="16" class={castingListLoading ? 'rotating' : ''} />
-          Refresh Casting List
-        </button>
-      </div>
-      {#if castingStatus}
-        <div class="casting-status status-{castingStatus.training_status.toLowerCase()}">
-          {#if castingStatus.training_status === 'Queue'}
-            <span class="status-indicator queue"></span>
-            <strong>{castingStatus.modelName}</strong> is in queue for training...
-          {:else if castingStatus.training_status === 'Waiting'}
-            <span class="status-indicator waiting"></span>
-            <strong>{castingStatus.modelName}</strong> is waiting to start training...
-          {:else if castingStatus.training_status === 'Training'}
-            <span class="status-indicator training"></span>
-            <strong>{castingStatus.modelName}</strong> is training... 
-            {#if castingStatus.progress}
-              ({castingStatus.progress}% complete)
-            {/if}
-          {:else if castingStatus.training_status === 'Done'}
-            <span class="status-indicator done"></span>
-            <strong>{castingStatus.modelName}</strong> training has completed successfully!
-          {:else if castingStatus.training_status === 'Failed'}
-            <span class="status-indicator failed"></span>
-            <strong>{castingStatus.modelName}</strong> training has failed.
-          {/if}
-        </div>
-      {/if}
+							<div class="refresh-btn-wrapper">
+								<button
+									class="refresh-btn"
+									onclick={() => getLoLAlist()}
+									disabled={castingListLoading}
+								>
+									<Icon
+										icon="mdi:refresh"
+										width="16"
+										height="16"
+										class={castingListLoading ? 'rotating' : ''}
+									/>
+									Refresh Casting List
+								</button>
+							</div>
+							{#if castingStatus}
+								<div class="casting-status status-{castingStatus.training_status.toLowerCase()}">
+									{#if castingStatus.training_status === 'Queue'}
+										<span class="status-indicator queue"></span>
+										<strong>{castingStatus.modelName}</strong> is in queue for training...
+									{:else if castingStatus.training_status === 'Waiting'}
+										<span class="status-indicator waiting"></span>
+										<strong>{castingStatus.modelName}</strong> is waiting to start training...
+									{:else if castingStatus.training_status === 'Training'}
+										<span class="status-indicator training"></span>
+										<strong>{castingStatus.modelName}</strong> is training...
+										{#if castingStatus.progress}
+											({castingStatus.progress}% complete)
+										{/if}
+									{:else if castingStatus.training_status === 'Done'}
+										<span class="status-indicator done"></span>
+										<strong>{castingStatus.modelName}</strong> training has completed successfully!
+									{:else if castingStatus.training_status === 'Failed'}
+										<span class="status-indicator failed"></span>
+										<strong>{castingStatus.modelName}</strong> training has failed.
+									{/if}
+								</div>
+							{/if}
 
-      <div class="casting-selection">
-        {#if castingListLoading}
-          <div class="casting-loading">
-            <div class="spinner"></div>
-            Loading models...
-          </div>
-        {:else}
-          <Dropdown
-            label=""
-            placeholder={castingList.length > 0 ? "Select a model" : "No models available"}
-            options={castingList.map((item) => ({
-              label: `- ${item.name} (${item.triggerWord})`,
-              value: item.id
-            }))}
-            selected={currentCasting}
-            onChange={(option) => (currentCasting = option.value)}
-            labelPosition="left"
-          />
-        {/if}
-      </div>
-  
-      {#if currentCasting}
-        <div class="slider-setting-group" transition:fade>
-          <Slider
-            value={finetune_strength}
-            min={0}
-            max={2}
-            scale={0.1}
-            name="Strength"
-            unit=""
-            onValueChange={(newValue) => (finetune_strength = newValue)}
-          />
-        </div>
-		
-        <div class="casting-btn-wrapper">
-          <button onclick={() => (currentCasting = '')}>Cancel Casting</button>
-        </div>
-      {/if}
-      <div class="casting-btn-wrapper">
-        <button onclick={openCastingPanel}>Casting new model</button>
-      </div>
-   
-    </div>
-  {/if}
-</div>
-<div class="toolbtn"  onclick={downloadCurrentScreen}>
+							<div class="casting-selection">
+								{#if castingListLoading}
+									<div class="casting-loading">
+										<div class="spinner"></div>
+										Loading models...
+									</div>
+								{:else}
+									<Dropdown
+										label=""
+										placeholder={castingList.length > 0 ? 'Select a model' : 'No models available'}
+										options={castingList.map((item) => ({
+											label: `- ${item.name} (${item.triggerWord})`,
+											value: item.id
+										}))}
+										selected={currentCasting}
+										onChange={(option) => (currentCasting = option.value)}
+										labelPosition="left"
+									/>
+								{/if}
+							</div>
 
-		 <Icon
-    class="tool-icon-mid"
-    icon="material-symbols:download"
-   
-  />
-	
-</div>
+							{#if currentCasting}
+								<div class="slider-setting-group" transition:fade>
+									<Slider
+										value={finetune_strength}
+										min={0}
+										max={2}
+										scale={0.1}
+										name="Strength"
+										unit=""
+										onValueChange={(newValue) => (finetune_strength = newValue)}
+									/>
+								</div>
+
+								<div class="casting-btn-wrapper">
+									<button onclick={() => (currentCasting = '')}>Cancel Casting</button>
+								</div>
+							{/if}
+							<div class="casting-btn-wrapper">
+								<button onclick={openCastingPanel}>Casting new model</button>
+							</div>
+						</div>
+					{/if}
+				</div>
+				<div class="toolbtn" onclick={downloadCurrentScreen}>
+					<Icon class="tool-icon-mid" icon="material-symbols:download" />
+				</div>
 
 				<!-- <div id="bg-set" class="toolbtn BG" onclick={menuToggle}>
 					{#if activeMenu === 'bg-set'}
@@ -1897,7 +1951,6 @@
 				onclick={() => {
 					// 캐시된 이미지를 배경으로 설정
 					if (generatedImageUrl) {
-				
 						// 로컬 상태 업데이트
 						isBG = true;
 						currentBG = generatedImageUrl;
@@ -3130,7 +3183,7 @@
 	}
 	.casting-selection {
 		position: relative;
-		
+
 		border-top: 1px solid var(--dim-color);
 		border-bottom: 1px solid var(--dim-color);
 		width: 100%;
@@ -3189,10 +3242,9 @@
 		justify-content: center;
 		align-items: center;
 		width: 100%;
-		
 	}
 
-	.masking-toggle-wrapper{
+	.masking-toggle-wrapper {
 		width: 100%;
 		display: flex;
 		flex-direction: column;
@@ -3201,8 +3253,8 @@
 		border-bottom: 1px solid var(--dim-color);
 	}
 
-	.masking-title{
-			width: 100%;
+	.masking-title {
+		width: 100%;
 		text-align: center;
 		display: flex;
 		flex-direction: row;
@@ -3242,19 +3294,24 @@
 		background-color: var(--highlight-color);
 	}
 
-	
 	/* Blinking animation for the casting icon */
 	@keyframes blink {
-		0% { opacity: 0.4; }
-		50% { opacity: 1; }
-		100% { opacity: 0.4; }
+		0% {
+			opacity: 0.4;
+		}
+		50% {
+			opacity: 1;
+		}
+		100% {
+			opacity: 0.4;
+		}
 	}
 
 	.casting-active {
 		animation: blink 1.5s ease-in-out infinite;
 		color: var(--highlight-color) !important;
 	}
-	
+
 	.casting-status {
 		margin: 10px 0;
 		padding: 8px;
@@ -3262,27 +3319,27 @@
 		font-size: 0.9rem;
 		line-height: 1.4;
 	}
-	
+
 	.status-queue {
 		color: #ffb74d;
 	}
-	
+
 	.status-waiting {
 		color: #64b5f6;
 	}
-	
+
 	.status-training {
 		color: #4fc3f7;
 	}
-	
+
 	.status-done {
 		color: #81c784;
 	}
-	
+
 	.status-failed {
 		color: #e57373;
 	}
-	
+
 	/* Status indicators */
 	.status-indicator {
 		display: inline-block;
@@ -3291,32 +3348,32 @@
 		border-radius: 50%;
 		margin-right: 8px;
 	}
-	
+
 	.status-indicator.queue {
 		background-color: #ffb74d;
 		box-shadow: 0 0 5px rgba(255, 183, 77, 0.5);
 	}
-	
+
 	.status-indicator.waiting {
 		background-color: #64b5f6;
 		box-shadow: 0 0 5px rgba(100, 181, 246, 0.5);
 	}
-	
+
 	.status-indicator.training {
 		background-color: #4fc3f7;
 		box-shadow: 0 0 5px rgba(79, 195, 247, 0.5);
 	}
-	
+
 	.status-indicator.done {
 		background-color: #81c784;
 		box-shadow: 0 0 5px rgba(129, 199, 132, 0.5);
 	}
-	
+
 	.status-indicator.failed {
 		background-color: #e57373;
 		box-shadow: 0 0 5px rgba(229, 115, 115, 0.5);
 	}
-	
+
 	/* Progress display styling */
 	.progress-display {
 		display: flex;
@@ -3325,65 +3382,67 @@
 		margin-top: 8px;
 		font-size: 0.85rem;
 	}
-	
+
 	.progress-display .percentage {
 		font-weight: bold;
 		color: var(--highlight-color);
 	}
 
 	.casting-loading {
-    padding: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    color: var(--dim-color);
-    font-style: italic;
-  }
-  
-  .spinner {
-    width: 16px;
-    height: 16px;
-    border: 2px solid var(--dim-color);
-    border-top-color: var(--highlight-color);
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-  }
-  
-  @keyframes spin {
-    to { transform: rotate(360deg); }
-  }
-  
-  .refresh-btn-wrapper {
-    padding: 8px;
-    display: flex;
-    justify-content: center;
-  }
-  
-  .refresh-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    background: none;
-    border: none;
-    font-size: 0.8rem;
-    color: var(--dim-color);
-    padding: 4px 8px;
-    cursor: pointer;
-    transition: color 0.2s ease;
-  }
-  
-  .refresh-btn:hover:not(:disabled) {
-    color: var(--text-color-bright);
-  }
-  
-  .refresh-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-  
-  .rotating {
-    animation: spin 1s linear infinite;
-  }
+		padding: 10px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 10px;
+		color: var(--dim-color);
+		font-style: italic;
+	}
+
+	.spinner {
+		width: 16px;
+		height: 16px;
+		border: 2px solid var(--dim-color);
+		border-top-color: var(--highlight-color);
+		border-radius: 50%;
+		animation: spin 1s linear infinite;
+	}
+
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
+	}
+
+	.refresh-btn-wrapper {
+		padding: 8px;
+		display: flex;
+		justify-content: center;
+	}
+
+	.refresh-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 6px;
+		background: none;
+		border: none;
+		font-size: 0.8rem;
+		color: var(--dim-color);
+		padding: 4px 8px;
+		cursor: pointer;
+		transition: color 0.2s ease;
+	}
+
+	.refresh-btn:hover:not(:disabled) {
+		color: var(--text-color-bright);
+	}
+
+	.refresh-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.rotating {
+		animation: spin 1s linear infinite;
+	}
 </style>
