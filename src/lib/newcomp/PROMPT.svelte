@@ -1,7 +1,7 @@
 <!-- PROMPT.svelte -->
 
 <script>
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import Icon from '@iconify/svelte';
 	import { fade, slide } from 'svelte/transition';
 	import Slider from '$lib/newcomp/elements/menu-slider.svelte';
@@ -809,7 +809,16 @@
 						generationProgress = 5;
 					}
 					console.log('Image generation in progress:', generationProgress);
-				} else {
+				} else if (data.status === 'Content Moderated') {
+					// 검열에 걸림
+						generationError = error.message || 'The prompt or image contained inappropriate content and was automatically moderated.';
+				isGenerating = false;
+				isPending = false;
+				clearPollingTimers();
+				} 
+				
+				
+				else {
 					console.log('Polling status:', data.status);
 				}
 			} catch (error) {
@@ -852,16 +861,16 @@
 					canvas.toBlob(
 						(resizedBlob) => {
 							// 이전 URL이 있으면 해제
-							if (cachedImageUrl) {
-								revokeBlobURL(cachedImageUrl);
-							}
+							 if (cachedImageUrl && !currentBG) {
+                            revokeBlobURL(cachedImageUrl);
+                        }
+
 
 							//새 blob에 대한 로컬 url 생성
 							cachedImageUrl = URL.createObjectURL(resizedBlob);
 							cachedImageBlob = resizedBlob;
 
-							//생성된 이미지 url 업데이트
-							generatedImageUrl = cachedImageUrl;
+						
 							console.log('Image successfully resized and cached locally', generatedImageUrl);
 							// 생성 완료
 							isGenerating = false;
@@ -876,17 +885,15 @@
 				};
 				img.src = URL.createObjectURL(cachedImageBlob);
 			} else {
-				// 이전 URL이 있으면 해제
-				if (cachedImageUrl) {
-					revokeBlobURL(cachedImageUrl);
-				}
+				 // 이전 URL이 있으면 해제 (다른 사용 사례에 영향을 주지 않도록 조건부로 변경)
+            if (cachedImageUrl && !currentBG) {
+                revokeBlobURL(cachedImageUrl);
+            }
 
 				// blob에 대한 로컬 URL 생성
 				cachedImageUrl = URL.createObjectURL(cachedImageBlob);
 
-				// 생성된 이미지 URL 업데이트
-				generatedImageUrl = cachedImageUrl;
-
+				
 				console.log('Image successfully cached locally', generatedImageUrl);
 
 				// 생성 완료
@@ -919,12 +926,13 @@
 
 	// 이미지 캐시 정리
 	function cleanupImageCache() {
-		if (cachedImageUrl) {
-			revokeBlobURL(cachedImageUrl);
-			cachedImageUrl = '';
-		}
-		cachedImageBlob = null;
-	}
+    // 미리보기가 닫히고 사용자가 이미지를 수락하지 않은 경우에만 URL 해제
+    if (cachedImageUrl && !isBG) {
+        revokeBlobURL(cachedImageUrl);
+        cachedImageUrl = '';
+    }
+    cachedImageBlob = null;
+}
 
 	// 이미지 생성 취소
 	function cancelGeneration() {
@@ -1329,6 +1337,26 @@
 			}
 		};
 	});
+
+	// onDestroy 함수 수정
+onDestroy(() => {
+    clearPollingTimers();
+    
+    // Blob URL 정리 로직 수정
+    // 현재 배경으로 사용 중인 URL은 삭제하지 않음
+    if (currentBG && currentBG.startsWith('blob:') && currentBG !== cachedImageUrl) {
+        revokeBlobURL(currentBG);
+    }
+
+    if (imagePrompt && imagePrompt.startsWith('blob:')) {
+        revokeBlobURL(imagePrompt);
+    }
+    
+    // 추가: 마운트 해제 시 캐시 정리
+    if (cachedImageUrl && cachedImageUrl !== currentBG) {
+        revokeBlobURL(cachedImageUrl);
+    }
+});
 </script>
 
 <div class="main">
@@ -1941,15 +1969,18 @@
 {/if}
 
 <!-- 생성된 이미지 미리보기 -->
-{#if generatedImageUrl && !isGenerating && onPreview}
+{#if cachedImageUrl && !isGenerating && onPreview}
 	<div class="generated-image-preview-backdrop"></div>
 	<div class="generated-image-preview" transition:fade>
-		<img src={generatedImageUrl} alt="Generated image" />
+		<img src={cachedImageUrl} alt="Generated image" />
 		<div class="image-actions">
 			<button
 				class="main-action-btn"
 				onclick={() => {
 					// 캐시된 이미지를 배경으로 설정
+					// 생성된 이미지 URL 업데이트
+				generatedImageUrl = cachedImageUrl;
+
 					if (generatedImageUrl) {
 						// 로컬 상태 업데이트
 						isBG = true;

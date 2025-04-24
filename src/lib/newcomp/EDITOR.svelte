@@ -37,6 +37,10 @@
 		if(syncBGdata){
 			currentBG = syncBGdata.src
 			console.log(syncBGdata.src)
+			if(currentBG){
+				isBG = true
+			}
+		
 		}
 	})
 
@@ -387,24 +391,39 @@ onChangeEnvSetting('intensity',bgBrightness)
 
 	// 배경 이미지 다운로드
 	async function downloadBG() {
+		console.log('downloadBG', currentBG, isBG)
 		if (currentBG === '' || !isBG) {
 			return;
 		}
 
 		try {
-			// 파일명 생성
-			const filename = generateImageFilename('otr-ai-bg');
+			// Create canvas and draw blob image
+			const img = new Image();
+			img.src = currentBG;
+			await new Promise((resolve) => (img.onload = resolve));
 
-			// 다운로드 링크 생성
+			const canvas = document.createElement('canvas');
+			canvas.width = img.width;
+			canvas.height = img.height;
+			const ctx = canvas.getContext('2d');
+			ctx.drawImage(img, 0, 0);
+
+			// Convert to PNG and download
+			const filename = generateImageFilename('otr-ai-bg');
+			const pngUrl = canvas.toDataURL('image/png');
+
 			const link = document.createElement('a');
-			link.href = currentBG;
+			link.href = pngUrl;
 			link.download = filename;
 			document.body.appendChild(link);
 			link.click();
 			document.body.removeChild(link);
+
+			// Cleanup
+			URL.revokeObjectURL(pngUrl);
 		} catch (error) {
 			console.error('Failed to download background:', error);
-			fileValidationError = 'Failed to download background image';
+			
 		}
 	}
 
@@ -464,7 +483,9 @@ onChangeEnvSetting('intensity',bgBrightness)
 
 	// 컴포넌트 소멸 시 메모리 정리
 	onMount(() => {
+		console.log('EDITOR mount')
 		return () => {
+			console.log('EDITOR unmount')
 			// Blob URL 정리
 			if (currentBG && currentBG.startsWith('blob:')) {
 				revokeBlobURL(currentBG);
