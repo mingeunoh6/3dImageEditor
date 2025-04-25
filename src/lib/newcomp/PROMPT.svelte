@@ -500,7 +500,7 @@
 				img.src = `data:image/jpeg;base64,${fluxPrompt.image_prompt}`;
 
 				// If image is larger than 4MB, compress it
-				if (estimatedSize > 4 * 1024 * 1024) {
+				if (estimatedSize > 3 * 1024 * 1024) {
 					console.log('Image prompt is too large, compressing...');
 					imageResized = true;
 					try {
@@ -522,14 +522,14 @@
 						console.log(`Compressed image size (first pass): ${formatFileSize(compressedSize)}`);
 
 						// If still too large, compress more aggressively
-						if (compressedSize > 4 * 1024 * 1024) {
+						if (compressedSize > 3 * 1024 * 1024) {
 							console.log('Image still too large, compressing more aggressively...');
 							compressedBase64 = await compressAndConvertToBase64(imageFile, 600, 600, 0.5);
 							compressedSize = getBase64FileSize(compressedBase64);
 							console.log(`Compressed image size (second pass): ${formatFileSize(compressedSize)}`);
 
 							// If still too large after second compression, try one last time
-							if (compressedSize > 4 * 1024 * 1024) {
+							if (compressedSize > 3 * 1024 * 1024) {
 								console.log('Final compression attempt...');
 								compressedBase64 = await compressAndConvertToBase64(imageFile, 400, 400, 0.4);
 								compressedSize = getBase64FileSize(compressedBase64);
@@ -590,7 +590,7 @@
 				console.log(`Estimated image size: ${formatFileSize(estimatedSize)}`);
 
 				// If image is larger than 4MB, compress it
-				if (estimatedSize > 4 * 1024 * 1024) {
+				if (estimatedSize > 3 * 1024 * 1024) {
 					console.log('Image prompt is too large, compressing...');
 					imageResized = true;
 					try {
@@ -612,14 +612,14 @@
 						console.log(`Compressed image size (first pass): ${formatFileSize(compressedSize)}`);
 
 						// If still too large, compress more aggressively
-						if (compressedSize > 4 * 1024 * 1024) {
+						if (compressedSize > 3 * 1024 * 1024) {
 							console.log('Image still too large, compressing more aggressively...');
 							compressedBase64 = await compressAndConvertToBase64(imageFile, 600, 600, 0.5);
 							compressedSize = getBase64FileSize(compressedBase64);
 							console.log(`Compressed image size (second pass): ${formatFileSize(compressedSize)}`);
 
 							// If still too large after second compression, try one last time
-							if (compressedSize > 4 * 1024 * 1024) {
+							if (compressedSize > 3 * 1024 * 1024) {
 								console.log('Final compression attempt...');
 								compressedBase64 = await compressAndConvertToBase64(imageFile, 400, 400, 0.4);
 								compressedSize = getBase64FileSize(compressedBase64);
