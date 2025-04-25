@@ -762,6 +762,17 @@
 
 		// 폴링 인터벌 설정
 		pollingInterval = setInterval(async () => {
+
+			//생성이 취소되었을때는 polling 중지
+			if (!isGenerating) {
+				console.log('Generation canceled, stopping polling');
+				clearPollingTimers();
+				isPending = false;
+					enableUI();
+				return;
+			}
+
+
 			try {
 				const response = await fetch(proxyPollingUrl);
 				if (!response.ok) {
