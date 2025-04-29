@@ -599,7 +599,7 @@ export class mainRenderer {
         return new Promise((resolve, reject) => {
             // URL이 이미 프록시되었거나 로컬/데이터 URL인 경우 직접 사용
             let textureUrl = url;
-
+            console.log('textuer from URL: ', url);
             // 외부 URL이 프록시가 필요한지 확인
             if (
                 url.startsWith('http') &&

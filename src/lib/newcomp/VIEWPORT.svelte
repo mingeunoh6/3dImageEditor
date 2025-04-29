@@ -189,11 +189,25 @@ function sendMaskingData(data){
         
         return 'object';
     }
-
-  function updateCurrentBGinfo(texture) {
-    // 부모 컴포넌트에 현재 배경 정보 업데이트
-    currentViewportBG(texture.image);
-    console.log('Current viewport background updated', texture.image);
+function updateCurrentBGinfo(texture) {
+  // 유효한 텍스처 확인
+  if (!texture || !texture.image) {
+    console.warn('Invalid texture or texture without image provided to updateCurrentBGinfo');
+    // currentViewportBG(null);
+    return;
+  }
+  
+  // 이미지 객체에 필요한 속성이 있는지 확인
+  const imageInfo = {
+    src: texture.image.src || 'texture-without-src',
+    width: texture.image.width || 0,
+    height: texture.image.height || 0,
+    type: texture.image.type || 'unknown'
+  };
+  
+  // 부모 컴포넌트에 현재 배경 정보 업데이트
+  currentViewportBG(imageInfo);
+  console.log('Current viewport background updated with complete info', imageInfo);
 }
 
 //현재 제거할때만 쓰임
@@ -227,39 +241,54 @@ function sendMaskingData(data){
         console.error('Error loading background:', error);
     }
 }
-   export async function changeBGfromURL(url) {
-    if (!viewportRenderer) return;
-    console.log('changeBGfromURL',url)
-    // URL이 없으면 기본 HDRI 재설정
-    if (!url) {
-        viewportRenderer.resetHDRI();
-        aspectRatio = 1; // 종횡비 재설정
-        setViewport();
-        currentViewportBG(null);
-        return;
-    }
+ export async function changeBGfromURL(url) {
+  if (!viewportRenderer) return;
+  console.log('changeBGfromURL', url);
+  
+  // URL이 없으면 기본 HDRI 재설정
+  if (!url) {
+    viewportRenderer.resetHDRI();
+    aspectRatio = 1; // 종횡비 재설정
+    setViewport();
+    currentViewportBG(null);
+    return;
+  }
+  
+  try {
+    // 로딩 시작을 표시할 수 있음
+    const loadingTexture = { 
+      isLoading: true, 
+      src: url 
+    };
     
-    try {
-        // URL에서 배경 로드 - 통합 메서드 사용
-        const texture = await viewportRenderer.loadBackground(url, true, {
-            setAsBackground: true,
-            setAsEnvironment: true
-        });
-        console.log('loadBackground', texture)
-        // 종횡비 업데이트
-        if (texture && texture.image) {
-            aspectRatio = texture.image.width / texture.image.height;
-            setViewport();
-            
-            // 현재 뷰포트 배경 정보 업데이트
-            updateCurrentBGinfo(texture);
-        }
-    } catch (error) {
-        console.error('Error loading background from URL:', error);
+    // 먼저 로딩 상태로 알림
+    currentViewportBG(loadingTexture);
+    
+    // URL에서 배경 로드 - 통합 메서드 사용
+    const texture = await viewportRenderer.loadBackground(url, true, {
+      setAsBackground: true,
+      setAsEnvironment: true
+    });
+    
+    console.log('loadBackground completed', texture);
+    
+    // 종횡비 업데이트
+    if (texture && texture.image) {
+      aspectRatio = texture.image.width / texture.image.height;
+      setViewport();
+      
+      // 현재 뷰포트 배경 정보 업데이트 - 로드 완료 후
+      updateCurrentBGinfo(texture);
+    } else {
+      console.warn('Texture loaded but has no valid image property');
+      currentViewportBG({ src: url, width: 0, height: 0, error: 'No valid image in texture' });
     }
+  } catch (error) {
+    console.error('Error loading background from URL:', error);
+    // 오류 시에도 정보 전달
+    currentViewportBG({ src: url, error: error.message });
+  }
 }
-
-
 export async function renderCurrentViewportAsImg(data) {
     console.log('Getting current viewport as image', data);
 

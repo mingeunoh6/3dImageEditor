@@ -32,17 +32,30 @@
 		syncBGdata
 	} = $props();
 
-	
-	$effect(()=>{
-		if(syncBGdata){
-			currentBG = syncBGdata.src
-			console.log(syncBGdata.src)
-			if(currentBG){
-				isBG = true
-			}
-		
-		}
-	})
+$effect(() => {
+  if (syncBGdata) {
+    // 객체 구조와 필요한 속성 확인
+    if (typeof syncBGdata === 'object' && syncBGdata !== null) {
+      // src가 있는 경우에만 처리
+      if (syncBGdata.src) {
+        currentBG = syncBGdata.src;
+        console.log('Background updated from sync data:', currentBG);
+        if (currentBG) {
+          isBG = true;
+        }
+      } else {
+        console.warn('syncBGdata exists but has no src property:', syncBGdata);
+      }
+    } else if (typeof syncBGdata === 'string') {
+      // 문자열인 경우 직접 URL로 사용
+      currentBG = syncBGdata;
+      console.log('Background updated from string sync data:', currentBG);
+      if (currentBG) {
+        isBG = true;
+      }
+    }
+  }
+});
 
 
 

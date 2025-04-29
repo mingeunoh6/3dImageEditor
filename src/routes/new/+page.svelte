@@ -131,15 +131,29 @@ function updateDrawingMode(mode, brushSize, eraserSize){
 }
 
 
-function updateCurrentBG(data){
-
+function updateCurrentBG(data) {
   if (data) {
-     currentViewportBG = data;
-      console.log('Current viewport background passed to the main component', data);
-    console.log('currentBGsize', currentViewportBG.width, currentViewportBG.height);
-  
-  } else if(!data){
-    console.log('background removed')
+    // 데이터 구조 검증 및 표준화
+    let standardizedData = data;
+    
+    // 문자열(URL)인 경우, 적절한 객체로 변환
+    if (typeof data === 'string') {
+      standardizedData = { src: data };
+    } 
+    // Image 객체인 경우, 필요한 속성이 있는지 확인
+    else if (data instanceof HTMLImageElement) {
+      standardizedData = {
+        src: data.src,
+        width: data.width || 0,
+        height: data.height || 0
+      };
+    }
+    
+    currentViewportBG = standardizedData;
+    console.log('Current viewport background updated with standard format', currentViewportBG);
+  } else {
+    // currentViewportBG = null;
+    console.log('Background removed');
   }
 }
 
@@ -377,23 +391,23 @@ onMount(() => {
   <RT />
   <div class="main-container">
           <div class="tool-wrapper">
-      <EDITOR 
-        add3dModel={(file, metadata) => addModelToScene(file, metadata)} 
-        pathTracingRender={(state)=>startPathTracing(state)} 
-        {viewportLoading}
-        {uploadError}
-        BGimport={(image)=>changeBG(image)}
-        BGfromURL={(url)=>changeBGfromURL(url)}
-           {sceneObjects} 
-    onObjectSelect={handleObjectSelect}
-    onObjectVisibilityToggle={handleObjectVisibilityToggle}
-    onObjectDelete={handleObjectDelete}
-    onChangeFOV={handleFOV}
-    onChangeLight={handleLight}
-    onChangeEnvSetting = {handleEnvSetting}
-    open3dgen = {open3dgen}
-    syncBGdata = {currentViewportBG}
-      />
+     <EDITOR 
+  add3dModel={(file, metadata) => addModelToScene(file, metadata)} 
+  pathTracingRender={(state) => startPathTracing(state)} 
+  {viewportLoading}
+  {uploadError}
+  BGimport={(image) => changeBG(image)}
+  BGfromURL={(url) => changeBGfromURL(url)}
+  {sceneObjects} 
+  onObjectSelect={handleObjectSelect}
+  onObjectVisibilityToggle={handleObjectVisibilityToggle}
+  onObjectDelete={handleObjectDelete}
+  onChangeFOV={handleFOV}
+  onChangeLight={handleLight}
+  onChangeEnvSetting={handleEnvSetting}
+  open3dgen={open3dgen}
+  syncBGdata={currentViewportBG ? currentViewportBG : null}
+/>
     </div>
     <div class="viewport-wrapper">
   <!-- <TUTORIAL viewportWidth={viewportWidth} viewportHeight={viewportHeight}/> -->
