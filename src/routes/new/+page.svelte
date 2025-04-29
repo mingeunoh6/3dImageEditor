@@ -9,7 +9,7 @@ import VIEWPORT from '$lib/newcomp/VIEWPORT.svelte';
 import EDITOR from '$lib/newcomp/EDITOR.svelte';
 import CASTER from '$lib/newcomp/CASTER.svelte'
 import MODELGEN from '$lib/newcomp/MODELGEN.svelte'
-import TUTORIAL from '$lib/newcomp/TUTORIAL.svelte';
+
 
 import Icon from '@iconify/svelte';
 

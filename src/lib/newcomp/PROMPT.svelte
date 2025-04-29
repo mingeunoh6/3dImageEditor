@@ -94,7 +94,7 @@
 		aspect_ratio: '1:1',
 		width: 1024,
 		height: 1024,
-		prompt_upsampling: false,
+		prompt_upsampling: true,
 		seed: 930331,
 		safety_tolerance: 2,
 		output_format: 'png',

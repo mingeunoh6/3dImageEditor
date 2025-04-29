@@ -276,7 +276,7 @@ function updateCurrentBGinfo(texture) {
     if (texture && texture.image) {
       aspectRatio = texture.image.width / texture.image.height;
       setViewport();
-      
+      console.log(texture, '비율',aspectRatio)
       // 현재 뷰포트 배경 정보 업데이트 - 로드 완료 후
       updateCurrentBGinfo(texture);
     } else {
