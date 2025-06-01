@@ -20,21 +20,29 @@
 		matchDimension
 	} from '$lib/utils/imageUtils';
 
+	// 글로벌 캔버스 상태 import
+	import { 
+		canvasState, 
+		updateFluxImageSize,
+		updateBackgroundInfo,
+		getDimensionsFromRatio as getGlobalDimensionsFromRatio
+	} from '$lib/stores/globalState.svelte.js';
+
 	// Props from parent
 	let {
 		add3dModel,
 		pathTracingRender = (state) => console.log(`render: ${state}`),
-		viewportLoading,
-		uploadError,
-		BGfromURL,
-		requestCurrentViewportImg,
-		liveRenderImage,
-		handleCasting,
-		toggleMaskingMode,
-		updateDrawingMode,
-		currentMaskImage,
-		castingStatus,
-		syncBGdata
+			viewportLoading,
+			uploadError,
+			BGfromURL,
+			requestCurrentViewportImg,
+			liveRenderImage,
+			handleCasting,
+			toggleMaskingMode,
+			updateDrawingMode,
+			currentMaskImage,
+			castingStatus,
+			syncBGdata
 	} = $props();
 
 	$effect(() => {
@@ -859,30 +867,40 @@
 			// 이미지를 blob으로 가져와 캐시
 			cachedImageBlob = await response.blob();
 
-			if (imageResized) {
-				const img = document.createElement('img');
-				img.onload = async () => {
-					const canvas = document.createElement('canvas');
-					canvas.width = originalImgWidth;
-					canvas.height = originalImgHeight;
-					const ctx = canvas.getContext('2d');
-					ctx.drawImage(img, 0, 0, originalImgWidth, originalImgHeight);
+			// 생성된 이미지의 실제 크기 확인
+			const img = document.createElement('img');
+			img.onload = async () => {
+				const actualWidth = img.width;
+				const actualHeight = img.height;
+				console.log('Generated image actual size:', { actualWidth, actualHeight });
+				console.log('Expected size:', { width: fluxPrompt.width, height: fluxPrompt.height });
 
-					//리사이징된 이미지를 blob으로 변환
+				// 압축으로 인해 리사이징이 필요한 경우에만 처리 (단, 캔버스는 이미지 크기에 맞춤)
+				if (imageResized) {
+					console.log('Resizing image but keeping original proportions');
+					
+					const canvas = document.createElement('canvas');
+					// 캔버스 크기를 실제 이미지 크기에 맞춤 (여백 없음)
+					canvas.width = actualWidth;
+					canvas.height = actualHeight;
+					const ctx = canvas.getContext('2d');
+					
+					// 이미지를 캔버스 전체에 그리기 (1:1 비율, 여백 없음)
+					ctx.drawImage(img, 0, 0, actualWidth, actualHeight);
+
+					// 리사이징된 이미지를 blob으로 변환
 					canvas.toBlob(
 						(resizedBlob) => {
 							// 이전 URL이 있으면 해제
-							 if (cachedImageUrl && !currentBG) {
-                            revokeBlobURL(cachedImageUrl);
-                        }
+							if (cachedImageUrl && !currentBG) {
+								revokeBlobURL(cachedImageUrl);
+							}
 
-
-							//새 blob에 대한 로컬 url 생성
+							// 새 blob에 대한 로컬 url 생성
 							cachedImageUrl = URL.createObjectURL(resizedBlob);
 							cachedImageBlob = resizedBlob;
 
-						
-							console.log('Image successfully resized and cached locally', generatedImageUrl);
+							console.log('Image processed with original proportions maintained');
 							// 생성 완료
 							isGenerating = false;
 							onPreview = true;
@@ -893,27 +911,35 @@
 						'image/png',
 						0.95
 					);
-				};
-				img.src = URL.createObjectURL(cachedImageBlob);
-			} else {
-				 // 이전 URL이 있으면 해제 (다른 사용 사례에 영향을 주지 않도록 조건부로 변경)
-            if (cachedImageUrl && !currentBG) {
-                revokeBlobURL(cachedImageUrl);
-            }
+				} else {
+					// 리사이징이 필요하지 않은 경우 그대로 사용
+					// 이전 URL이 있으면 해제 (다른 사용 사례에 영향을 주지 않도록 조건부로 변경)
+					if (cachedImageUrl && !currentBG) {
+						revokeBlobURL(cachedImageUrl);
+					}
 
-				// blob에 대한 로컬 URL 생성
-				cachedImageUrl = URL.createObjectURL(cachedImageBlob);
+					// blob에 대한 로컬 URL 생성
+					cachedImageUrl = URL.createObjectURL(cachedImageBlob);
 
-				
-				console.log('Image successfully cached locally', generatedImageUrl);
+					console.log('Image used without resizing, actual size:', { actualWidth, actualHeight });
 
-				// 생성 완료
+					// 생성 완료
+					isGenerating = false;
+					onPreview = true;
+
+					// UI 활성화
+					enableUI();
+				}
+			};
+			
+			img.onerror = () => {
+				console.error('Failed to load generated image');
+				generationError = 'Failed to load generated image';
 				isGenerating = false;
-				onPreview = true;
-
-				// UI 활성화
 				enableUI();
-			}
+			};
+			
+			img.src = URL.createObjectURL(cachedImageBlob);
 		} catch (error) {
 			console.error('Error caching image:', error);
 			generationError = `Failed to load generated image: ${error.message}`;

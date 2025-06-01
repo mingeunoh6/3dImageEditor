@@ -12,6 +12,16 @@
     import { mainRenderer } from '$lib/newcomp/elements/main-canvas.js';
     import MASK from '$lib/newcomp/MASK.svelte';
 import { toBase64, toBlobURL, getImageDimensions, revokeBlobURL, getDimensionsFromRatio } from '$lib/utils/imageUtils';
+
+// 글로벌 캔버스 상태 import
+import { 
+    canvasState, 
+    updateViewportSize, 
+    updateAspectRatio, 
+    updateContainerSize,
+    updateBackgroundInfo 
+} from '$lib/stores/globalState.svelte.js';
+
     // Props from parent component
   let { 
         newModel, 
@@ -24,21 +34,26 @@ import { toBase64, toBlobURL, getImageDimensions, revokeBlobURL, getDimensionsFr
         newBrushSize,
         newEraserSize,
         updateMaskImage,
-        updateViewportSize,
+        updateViewportSize: legacyUpdateViewportSize,
         syncBGdata
     } = $props();
 
     
     // Component state
     let viewport;
-    let viewportWidth = $state(0);
-    let viewportHeight = $state(0);
+    // 글로벌 상태 사용으로 로컬 상태 제거
+    // let viewportWidth = $state(0);
+    // let viewportHeight = $state(0);
     let isPortrait = $state(false);
     let viewportRenderer;
     let objectHighlighter;
     let edgeHighlighter;
     let aspectRatio = $state(1)
     let resizeObserver;
+
+    // 글로벌 상태를 반응형 변수로 참조
+    let viewportWidth = $derived(canvasState.viewportWidth);
+    let viewportHeight = $derived(canvasState.viewportHeight);
 
     //Mask image state
     let maskImage = $state(null)
@@ -913,8 +928,8 @@ function isHighlightObject(object) {
 }
 //function to return current viewport width and height
 export function getCurrentViewportSize(){
-    let width = viewportWidth;
-    let height = viewportHeight;
+    let width = canvasState.viewportWidth;
+    let height = canvasState.viewportHeight;
     return {width, height};
 }
 
@@ -929,6 +944,9 @@ export function getCurrentViewportSize(){
     const containerWidth = containerRect.width;
     const containerHeight = containerRect.height;
     
+    // 글로벌 상태에 컨테이너 크기 업데이트
+    updateContainerSize(containerWidth, containerHeight);
+    
     // Use 90% of container dimensions as maximum bounds
     const maxWidth = containerWidth * 0.9;
     const maxHeight = containerHeight * 0.9;
@@ -937,6 +955,8 @@ export function getCurrentViewportSize(){
     isPortrait = containerHeight > containerWidth;
     
     // Calculate dimensions based on aspect ratio and available space
+    let viewportWidth, viewportHeight;
+    
     if (aspectRatio === 1) {
         // Square image
         viewportWidth = Math.min(maxWidth, maxHeight);
@@ -969,9 +989,13 @@ export function getCurrentViewportSize(){
     viewport.style.width = `${viewportWidth}px`;
     viewport.style.height = `${viewportHeight}px`;
     
+    // 글로벌 상태에 뷰포트 크기 업데이트
+    updateViewportSize(viewportWidth, viewportHeight);
 
-    updateViewportSize({viewportWidth,viewportHeight })
-
+    // 기존 부모 컴포넌트와의 호환성을 위해 유지
+    if (legacyUpdateViewportSize) {
+        legacyUpdateViewportSize({viewportWidth, viewportHeight});
+    }
 
     // Update renderer if it exists
     if (viewportRenderer) {

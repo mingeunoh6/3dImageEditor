@@ -4,15 +4,23 @@ import MaskCanvas from "$lib/newcomp/elements/mask-canvas";
 import MenuSlider from "$lib/newcomp/elements/menu-slider.svelte";
 import { fade } from "svelte/transition";
 
+// 글로벌 캔버스 상태 import
+import { canvasState } from '$lib/stores/globalState.svelte.js';
+
 let {
     maskingMode,
-    viewportWidth,
-    viewportHeight,
+    // viewportWidth, viewportHeight를 props에서 제거하고 글로벌 상태 사용
+    // viewportWidth,
+    // viewportHeight,
     activeDrawingMode,
     newBrushSize,
     newEraserSize,
     sendMaskingData,
 } = $props();
+
+// 글로벌 상태에서 뷰포트 크기 참조
+let viewportWidth = $derived(canvasState.viewportWidth);
+let viewportHeight = $derived(canvasState.viewportHeight);
 
 let brushHelper; 
 let eraserHelper;

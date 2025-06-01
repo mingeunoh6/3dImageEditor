@@ -10,14 +10,19 @@ import EDITOR from '$lib/newcomp/EDITOR.svelte';
 import CASTER from '$lib/newcomp/CASTER.svelte'
 import MODELGEN from '$lib/newcomp/MODELGEN.svelte'
 
+// 글로벌 캔버스 상태 import
+import { 
+  canvasState, 
+  initializeCanvasState, 
+  updateBackgroundInfo,
+  logCanvasState 
+} from '$lib/stores/globalState.svelte.js';
 
 import Icon from '@iconify/svelte';
 
-
-
-let viewportWidth =$state(0)
-let viewportHeight = $state(0)
-
+// 글로벌 상태에서 뷰포트 크기 참조
+let viewportWidth = $derived(canvasState.viewportWidth);
+let viewportHeight = $derived(canvasState.viewportHeight);
 
 // Model loading states
 let newModel = $state(null);
@@ -66,7 +71,7 @@ function addModelToScene(file, metadata) {
     name: file.name,
     size: file.size,
     type: file.type || 'model/gltf-binary',
-    lastModified: new Date(file.lastModified)
+    lastModified: file.lastModified ? new Date(file.lastModified) : null
   };
   
   // Reset any previous errors
@@ -85,7 +90,7 @@ async function getCurrentViewportAsImg(data) {
   
   if(data.currentBG === currentViewportBG){
     console.log('프롬프트 설정의 현재 배경과 글로벌 배경정보가 일치')
-    currentViewportBG = datacatalog.currentBG
+    currentViewportBG = data.currentBG
   }
   let bginfo = {
     currentBG: currentViewportBG,
@@ -151,8 +156,14 @@ function updateCurrentBG(data) {
     
     currentViewportBG = standardizedData;
     console.log('Current viewport background updated with standard format', currentViewportBG);
+    
+    // 글로벌 상태에도 배경 정보 업데이트
+    if (standardizedData.src) {
+      updateBackgroundInfo(standardizedData.src);
+    }
   } else {
     // currentViewportBG = null;
+    updateBackgroundInfo('');
     console.log('Background removed');
   }
 }
@@ -196,14 +207,12 @@ function handleObjectDelete(objectId) {
      if (file === null) {
       currentViewportBG = null;
       currentBG = null;
+      updateBackgroundInfo('');
     }
-
 
     if (viewportRef) {
       viewportRef.changeBG(file, true);
     }
-
-   
   }
 
   function changeBGfromURL(url){
@@ -212,14 +221,16 @@ function handleObjectDelete(objectId) {
      if(url === null){
       currentViewportBG = null;
       currentBG = null;
+      updateBackgroundInfo('');
+     } else {
+       updateBackgroundInfo(url);
      }
+     
     currentBG = url;
      if (viewportRef) {
     viewportRef.changeBGfromURL(url)
      }
      updateCurrentBG(url)
-
-
   }
 
    function setVhVariable() {
@@ -353,13 +364,16 @@ function updateTrainStatus(status){
   castingStatus = status;
 }
 
+// 기존 updateViewportSize 함수는 호환성을 위해 유지하되, 로그만 출력
 function updateViewportSize(viewport){
-  viewportWidth = viewport.viewportWidth
-  viewportHeight = viewport.viewportHeight
-  console.log('캔버스 글로벌 업데이트 기록', viewportWidth,viewportHeight)
+  console.log('Legacy updateViewportSize called, using global state instead', viewport);
+  // 글로벌 상태를 사용하므로 실제 업데이트는 필요 없음
 }
 
 onMount(() => {
+    // 글로벌 캔버스 상태 초기화
+    initializeCanvasState();
+    
     // Run the function on initial load and resize
   window.addEventListener('resize', setVhVariable);
   window.addEventListener('orientationchange', setVhVariable);
@@ -374,7 +388,9 @@ onMount(() => {
     ];
   }
 
-
+  // 디버깅용 글로벌 상태 로깅
+  console.log('Initial canvas state:');
+  logCanvasState();
 });
 </script>
 
@@ -426,7 +442,7 @@ onMount(() => {
         {newBrushSize}
         {newEraserSize}
         updateMaskImage={(maskImage)=>updateMaskImage(maskImage)}
-        updateViewportSize={(viewportsize)=>updateViewportSize(viewportsize)}
+        updateViewportSize={updateViewportSize}
           syncBGdata = {currentViewportBG}
       />
     </div>
